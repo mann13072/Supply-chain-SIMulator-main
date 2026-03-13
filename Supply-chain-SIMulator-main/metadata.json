@@ -1,0 +1,5 @@
+{
+  "name": "SolarChain Twin",
+  "description": "A decision-grade Digital Twin for the Solar Industry Supply Chain. Features real-time node monitoring, scenario simulation, and multi-objective optimization analysis powered by Gemini.",
+  "requestFramePermissions": []
+}
