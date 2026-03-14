@@ -148,22 +148,6 @@ function App() {
               </div>
 
               <div className="flex flex-col gap-4 flex-1">
-                <div className="flex gap-4 overflow-x-auto pb-2 custom-scrollbar">
-                  {nodes.map(node => (
-                    <div 
-                      key={node.id}
-                      draggable
-                      onDragStart={(e) => e.dataTransfer.setData('nodeId', node.id)}
-                      className="flex-shrink-0 bg-white/5 border border-white/10 rounded-xl p-4 cursor-grab active:cursor-grabbing hover:bg-white/10 transition-all min-w-[150px]"
-                    >
-                      <div className="flex items-center gap-2 mb-1">
-                        <div className="w-2 h-2 rounded-full" style={{ backgroundColor: node.status === 'OPTIMAL' ? '#10b981' : node.status === 'WARNING' ? '#f59e0b' : '#ef4444' }} />
-                        <span className="text-sm font-bold text-white truncate">{node.name}</span>
-                      </div>
-                      <p className="text-xs text-white/40 truncate">{node.location}</p>
-                    </div>
-                  ))}
-                </div>
                 <div className="flex-1 min-h-[500px] relative">
                   <Globe 
                     nodes={nodes} 
@@ -184,7 +168,7 @@ function App() {
 
             {/* Right Column: Node Details & Activity */}
             <div className="col-span-12 lg:col-span-4 flex flex-col gap-8">
-              <div className="bg-[#050505] rounded-3xl border border-white/5 p-8 flex-1 flex flex-col">
+              <div className="bg-[#050505] rounded-3xl border border-white/5 p-8 h-full flex flex-col">
                 <div className="flex items-center justify-between mb-8">
                   <h3 className="text-white font-semibold flex items-center gap-2">
                     <Activity className="w-5 h-5 text-white/40" />
@@ -261,10 +245,28 @@ function App() {
                       </button>
                     </motion.div>
                   ) : (
-                    <div className="flex-1 flex flex-col items-center justify-center text-center p-8 opacity-20">
-                      <GlobeIcon className="w-16 h-16 mb-4" />
-                      <p className="text-sm font-medium">Select a node on the globe to view real-time telemetry</p>
-                    </div>
+                    <motion.div 
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      className="flex-1 flex flex-col"
+                    >
+                      <p className="text-[10px] text-white/40 uppercase tracking-[0.2em] font-bold mb-4">Select Node for Telemetry</p>
+                      <div className="flex-1 overflow-y-auto space-y-3 pr-2 custom-scrollbar">
+                        {nodes.map(node => (
+                          <div 
+                            key={node.id}
+                            onClick={() => setSelectedNode(node)}
+                            className="bg-white/5 border border-white/10 rounded-2xl p-4 cursor-pointer hover:bg-white/10 hover:border-white/20 transition-all"
+                          >
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-sm font-bold text-white truncate">{node.name}</span>
+                              <div className="w-2 h-2 rounded-full" style={{ backgroundColor: node.status === 'OPTIMAL' ? '#10b981' : node.status === 'WARNING' ? '#f59e0b' : '#ef4444' }} />
+                            </div>
+                            <p className="text-xs text-white/40 truncate">{node.location} • {node.type}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </motion.div>
                   )}
                 </AnimatePresence>
               </div>
