@@ -3,6 +3,7 @@ import * as d3 from 'd3';
 import * as topojson from 'topojson-client';
 import { SupplyNode, NodeStatus, Route } from '../types';
 import { reverseGeocode } from '../utils/geocoding';
+import { Play, Pause, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
 
 interface GlobeProps {
   nodes: SupplyNode[];
@@ -17,8 +18,41 @@ const Globe: React.FC<GlobeProps> = ({ nodes, routes, onNodeSelect, selectedNode
   const [worldData, setWorldData] = useState<any>(null);
   const rotationRef = useRef([0, -30]);
   const isDragging = useRef(false);
+  const [manualPaused, setManualPaused] = useState(false);
+  const isAutoPaused = useRef(false);
+  const targetZoom = useRef(1);
   const lastMousePos = useRef({ x: 0, y: 0 });
   const projectionRef = useRef<d3.GeoProjection | null>(null);
+
+  // Handle zooming to selected node
+  useEffect(() => {
+    if (selectedNodeId) {
+      const node = nodes.find(n => n.id === selectedNodeId);
+      if (node && node.coordinates.lat && node.coordinates.lng) {
+        isAutoPaused.current = true;
+        const targetRotation = [-node.coordinates.lng, -node.coordinates.lat];
+        
+        let frameId: number;
+        const animate = () => {
+          const dx = targetRotation[0] - rotationRef.current[0];
+          const dy = targetRotation[1] - rotationRef.current[1];
+          
+          rotationRef.current[0] += dx * 0.05;
+          rotationRef.current[1] += dy * 0.05;
+          targetZoom.current = 2.5;
+
+          if (Math.abs(dx) > 0.1 || Math.abs(dy) > 0.1) {
+            frameId = requestAnimationFrame(animate);
+          }
+        };
+        animate();
+        return () => cancelAnimationFrame(frameId);
+      }
+    } else {
+      isAutoPaused.current = false;
+      targetZoom.current = 1;
+    }
+  }, [selectedNodeId, nodes]);
 
   useEffect(() => {
     fetch('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json')
@@ -88,8 +122,13 @@ const Globe: React.FC<GlobeProps> = ({ nodes, routes, onNodeSelect, selectedNode
     const render = () => {
       context.clearRect(0, 0, width, height);
 
-      // Auto-rotate only if not dragging
-      if (!isDragging.current) {
+      // Interpolate zoom
+      const currentScale = projection.scale();
+      const targetScale = (width / 2.2) * targetZoom.current;
+      projection.scale(currentScale + (targetScale - currentScale) * 0.05);
+
+      // Auto-rotate only if not dragging and not paused
+      if (!isDragging.current && !manualPaused && !isAutoPaused.current) {
         rotationRef.current[0] += 0.1;
       }
       
@@ -153,14 +192,12 @@ const Globe: React.FC<GlobeProps> = ({ nodes, routes, onNodeSelect, selectedNode
         const coords = projection([node.coordinates.lng, node.coordinates.lat]);
         if (!coords) return;
 
-        // Check if node is on the visible side of the globe
         const isVisible = d3.geoDistance([node.coordinates.lng, node.coordinates.lat], [-rotationRef.current[0], -rotationRef.current[1]]) < Math.PI / 2;
         
         if (isVisible) {
           const isSelected = selectedNodeId === node.id;
           const color = getNodeColor(node.status);
 
-          // Glow effect
           if (isSelected || node.status === NodeStatus.CRITICAL) {
             context.beginPath();
             context.arc(coords[0], coords[1], isSelected ? 8 : 6, 0, 2 * Math.PI);
@@ -193,7 +230,7 @@ const Globe: React.FC<GlobeProps> = ({ nodes, routes, onNodeSelect, selectedNode
     render();
 
     return () => cancelAnimationFrame(animationFrameId);
-  }, [worldData, nodes, routes, selectedNodeId]);
+  }, [worldData, nodes, routes, selectedNodeId, manualPaused]);
 
   const getNodeColor = (status: NodeStatus) => {
     switch (status) {
@@ -214,7 +251,6 @@ const Globe: React.FC<GlobeProps> = ({ nodes, routes, onNodeSelect, selectedNode
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
 
-    // Scale coordinates to match canvas internal resolution
     const scaleX = canvasRef.current.width / rect.width;
     const scaleY = canvasRef.current.height / rect.height;
     
@@ -225,7 +261,6 @@ const Globe: React.FC<GlobeProps> = ({ nodes, routes, onNodeSelect, selectedNode
     
     if (coords && onNodeDrop) {
       const [lng, lat] = coords;
-      // Reverse geocode to get the location name
       const locationName = await reverseGeocode(lat, lng) || `${lat.toFixed(2)}, ${lng.toFixed(2)}`;
       onNodeDrop(nodeId, lat, lng, locationName);
     }
@@ -247,10 +282,49 @@ const Globe: React.FC<GlobeProps> = ({ nodes, routes, onNodeSelect, selectedNode
         height={800} 
         className="w-full h-full max-w-full max-h-full cursor-grab active:cursor-grabbing"
       />
-      <div className="absolute top-6 left-6 pointer-events-none">
+      
+      {/* Globe Controls */}
+      <div className="absolute top-6 left-6 flex flex-col gap-1 pointer-events-none">
         <h3 className="text-white font-medium tracking-tight">Global Network</h3>
         <p className="text-slate-500 text-xs">Live Telemetry Feed</p>
       </div>
+
+      <div className="absolute bottom-6 left-6 flex items-center gap-2 bg-black/40 backdrop-blur-md p-2 rounded-xl border border-white/10 opacity-0 group-hover:opacity-100 transition-opacity">
+        <button 
+          onClick={() => setManualPaused(!manualPaused)}
+          className="p-2 hover:bg-white/10 rounded-lg text-white transition-all"
+          title={manualPaused ? "Play Rotation" : "Pause Rotation"}
+        >
+          {manualPaused ? <Play className="w-4 h-4" /> : <Pause className="w-4 h-4" />}
+        </button>
+        <div className="w-px h-4 bg-white/10 mx-1" />
+        <button 
+          onClick={() => targetZoom.current = Math.min(targetZoom.current + 0.5, 5)}
+          className="p-2 hover:bg-white/10 rounded-lg text-white transition-all"
+          title="Zoom In"
+        >
+          <ZoomIn className="w-4 h-4" />
+        </button>
+        <button 
+          onClick={() => targetZoom.current = Math.max(targetZoom.current - 0.5, 0.5)}
+          className="p-2 hover:bg-white/10 rounded-lg text-white transition-all"
+          title="Zoom Out"
+        >
+          <ZoomOut className="w-4 h-4" />
+        </button>
+        <button 
+          onClick={() => {
+            targetZoom.current = 1;
+            rotationRef.current = [0, -30];
+            setManualPaused(false);
+          }}
+          className="p-2 hover:bg-white/10 rounded-lg text-white transition-all"
+          title="Reset View"
+        >
+          <RotateCcw className="w-4 h-4" />
+        </button>
+      </div>
+
       <div className="absolute bottom-6 right-6 flex flex-col gap-2 bg-black/40 backdrop-blur-md p-3 rounded-xl border border-white/10">
         <div className="flex items-center gap-2 text-[10px] text-slate-400 uppercase tracking-widest">
             <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></div>

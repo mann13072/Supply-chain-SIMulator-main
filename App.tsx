@@ -12,54 +12,8 @@ import { SupplyNode, NodeType, NodeStatus, Route, TransportMode, KPI, Simulation
 import { motion, AnimatePresence } from 'framer-motion';
 import { LayoutDashboard, Network, PlayCircle, BarChart3, Settings, Layers, Zap, ShieldAlert, Activity, Globe as GlobeIcon } from 'lucide-react';
 
-const INITIAL_NODES: SupplyNode[] = [
-  { 
-    id: '1', name: 'Silicon Valley Supplier', type: NodeType.SUPPLIER, status: NodeStatus.OPTIMAL, location: 'USA', 
-    inventoryLevel: 8000, maxCapacity: 10000, reorderPoint: 2000, orderQuantity: 5000, safetyStock: 1000,
-    targetServiceLevel: 98, reviewFrequency: 7, moq: 100, holdingCost: 5, obsolescenceRate: 0.01, shelfLife: 365,
-    coordinates: { x: 150, y: 150, lat: 37.7749, lng: -122.4194 },
-    operatingCost: 1200
-  },
-  { 
-    id: '2', name: 'Shenzhen Assembly', type: NodeType.FACTORY, status: NodeStatus.OPTIMAL, location: 'China', 
-    inventoryLevel: 4000, maxCapacity: 8000, reorderPoint: 1000, orderQuantity: 4000, safetyStock: 500,
-    targetServiceLevel: 95, reviewFrequency: 1, moq: 50, holdingCost: 3, obsolescenceRate: 0.02, shelfLife: 180,
-    productionCapacity: 500, utilizationRate: 80, batchSize: 100, setupTime: 4, setupCost: 500, cycleTime: 2, yieldRate: 98, defectRate: 2, reworkRate: 1,
-    coordinates: { x: 750, y: 180, lat: 22.5431, lng: 114.0579 },
-    operatingCost: 2500
-  },
-  { 
-    id: '3', name: 'Berlin Distribution', type: NodeType.DISTRIBUTION_CENTER, status: NodeStatus.OPTIMAL, location: 'Germany', 
-    inventoryLevel: 2000, maxCapacity: 5000, reorderPoint: 500, orderQuantity: 2000, safetyStock: 200,
-    targetServiceLevel: 99, reviewFrequency: 1, moq: 10, holdingCost: 4, obsolescenceRate: 0.01, shelfLife: 90,
-    storageCapacity: 5000, throughputCapacity: 1000, pickingRate: 100, packingRate: 80, handlingCost: 2, laborAvailability: 0.95, crossDocking: true, automationLevel: 3,
-    coordinates: { x: 510, y: 120, lat: 52.5200, lng: 13.4050 },
-    operatingCost: 1800
-  },
-  { 
-    id: '4', name: 'London Retail', type: NodeType.RETAIL, status: NodeStatus.OPTIMAL, location: 'UK', 
-    inventoryLevel: 800, maxCapacity: 2000, reorderPoint: 300, orderQuantity: 1000, safetyStock: 100,
-    targetServiceLevel: 99.9, reviewFrequency: 1, moq: 1, holdingCost: 6, obsolescenceRate: 0.05, shelfLife: 30,
-    demandVolume: 120, demandVariability: 15, demandSeasonality: 1.2, demandGrowthRate: 0.05, orderFrequency: 1, orderSizeDistribution: 'Normal', leadTimeTolerance: 2, backorderRate: 0.1, priceElasticity: -1.5,
-    coordinates: { x: 480, y: 110, lat: 51.5074, lng: -0.1278 },
-    operatingCost: 900
-  },
-  { 
-    id: '5', name: 'Paris Retail', type: NodeType.RETAIL, status: NodeStatus.OPTIMAL, location: 'France', 
-    inventoryLevel: 600, maxCapacity: 1500, reorderPoint: 200, orderQuantity: 800, safetyStock: 80,
-    targetServiceLevel: 99, reviewFrequency: 1, moq: 1, holdingCost: 6, obsolescenceRate: 0.05, shelfLife: 30,
-    demandVolume: 90, demandVariability: 10, demandSeasonality: 1.1, demandGrowthRate: 0.04, orderFrequency: 1, orderSizeDistribution: 'Normal', leadTimeTolerance: 2, backorderRate: 0.1, priceElasticity: -1.4,
-    coordinates: { x: 490, y: 125, lat: 48.8566, lng: 2.3522 },
-    operatingCost: 850
-  },
-];
-
-const INITIAL_ROUTES: Route[] = [
-  { id: 'r1', fromId: '1', toId: '2', mode: TransportMode.AIR, distance: 11000, baseLeadTime: 2, leadTimeVariability: 0.5, costPerUnitDistance: 0.005, vehicleCapacity: 500, shipmentFrequency: 7, fuelPrice: 1.2, customsTime: 0.5, disruptionProb: 0.01 },
-  { id: 'r2', fromId: '2', toId: '3', mode: TransportMode.SEA, distance: 20000, baseLeadTime: 25, leadTimeVariability: 5, costPerUnitDistance: 0.0005, vehicleCapacity: 2000, shipmentFrequency: 2, fuelPrice: 0.8, customsTime: 2, disruptionProb: 0.05 },
-  { id: 'r3', fromId: '3', toId: '4', mode: TransportMode.ROAD, distance: 1100, baseLeadTime: 2, leadTimeVariability: 0.2, costPerUnitDistance: 0.004, vehicleCapacity: 100, shipmentFrequency: 1, fuelPrice: 1.5, customsTime: 0.1, disruptionProb: 0.02 },
-  { id: 'r4', fromId: '3', toId: '5', mode: TransportMode.ROAD, distance: 1000, baseLeadTime: 1, leadTimeVariability: 0.1, costPerUnitDistance: 0.004, vehicleCapacity: 100, shipmentFrequency: 1, fuelPrice: 1.5, customsTime: 0.1, disruptionProb: 0.01 },
-];
+const INITIAL_NODES: SupplyNode[] = [];
+const INITIAL_ROUTES: Route[] = [];
 
 const INITIAL_PARAMS: SimulationParams = {
   unitProductionCost: 100,
