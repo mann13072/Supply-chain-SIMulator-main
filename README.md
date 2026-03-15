@@ -2,19 +2,67 @@
 <img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
 </div>
 
-# Run and deploy your AI Studio app
+# SolarChain Twin: High-Performance Supply Chain Simulator
 
-This contains everything you need to run your app locally.
+SolarChain Twin is a professional-grade logistics digital twin and simulation engine. It combines a modern React frontend with a high-fidelity Python routing backend to provide real-world supply chain topology modeling, pathfinding, and lead-time analysis.
 
-View your app in AI Studio: https://ai.studio/apps/681f1797-e4e0-49ae-bdbe-7a8357603bfd
+## 🚀 Key Features
 
-## Run Locally
+- **Global Routing Engine**: Powered by a Python backend using Dijkstra's algorithm and the Haversine formula for precise global distance calculations.
+- **Multi-Modal Intelligence**: Smart routing that distinguishes between Sea and Air modalities, automatically resolving inland locations to the nearest maritime ports.
+- **Interactive 3D Globe**: Real-time D3.js visualization with smooth zoom-to-node transitions, rotation controls, and live telemetry overlays.
+- **Smart Hub Picker**: Integrated global atlas of the Top 100 airports and seaports with fuzzy-search suggestions and geospatial "snapping."
+- **State Persistence**: Automatic saving and loading of network configurations via JSON, ensuring your supply chain topology survives restarts.
+- **High Fidelity Scheduling**: Factors in transit speeds (40km/h for ships, 850km/h for planes) and docking lead times (e.g., 48h per maritime port stop).
 
-**Prerequisites:**  Node.js
+## 🛠 Architecture
 
+- **Frontend**: React 19, TypeScript, Vite, Tailwind CSS, Framer Motion, D3.js (Globe).
+- **Backend**: Python 3.10+, FastAPI, Uvicorn, Pydantic (Input Validation).
+- **Communication**: Seamless bridge via Vite Proxy and `concurrently` for one-click startup.
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+## 💻 Local Setup
+
+### Prerequisites
+- **Node.js** (v18+)
+- **Python** (v3.10+)
+
+### Installation
+
+1. **Clone the repository**:
+   ```bash
+   git clone <your-repo-url>
+   cd Supply-chain-SIMulator-main
+   ```
+
+2. **Install Frontend Dependencies**:
+   ```bash
+   npm install
+   ```
+
+3. **Install Backend Dependencies**:
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+4. **Environment Configuration**:
+   Create a `.env.local` file and add your Gemini API Key:
+   ```env
+   GEMINI_API_KEY=your_api_key_here
+   ```
+
+### Running the App
+
+Start both the React UI and Python Routing Engine with a single command:
+```bash
+npm run dev
+```
+- **Frontend**: http://localhost:3000
+- **Backend API**: http://localhost:8000
+
+## 🧪 Deployment
+
+This app is configured for Vercel (Frontend) and can be coupled with any Python hosting service (FastAPI) for the backend routing logic.
+
+---
+*Built for resilient global logistics modeling.*
