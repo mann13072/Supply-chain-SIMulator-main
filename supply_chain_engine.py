@@ -13,6 +13,8 @@ class Node:
     lon: float
     type: str
     stay_time_hours: float
+    is_hub: bool = False
+    metadata: Dict = None
 
 class Edge(NamedTuple):
     to_node: str
@@ -56,7 +58,10 @@ class TransitNetwork:
                 self._nodes = {}
                 self._adj = {}
                 for n in data.get("nodes", []):
-                    self.add_node(n["id"], n["name"], n["lat"], n["lon"], n["type"], persist=False)
+                    self.add_node(
+                        n["id"], n["name"], n["lat"], n["lon"], n["type"], 
+                        is_hub=n.get("is_hub", False), metadata=n.get("metadata"), persist=False
+                    )
                 for r in data.get("routes", []):
                     self.add_route(r["u"], r["v"], r["mode"], persist=False)
         except Exception as e:
@@ -68,10 +73,13 @@ class TransitNetwork:
         a = (math.sin(dphi / 2)**2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda / 2)**2)
         return self._EARTH_RADIUS_KM * (2 * math.atan2(math.sqrt(a), math.sqrt(1 - a)))
 
-    def add_node(self, node_id: str, name: str, lat: float, lon: float, node_type: str, persist: bool = True) -> None:
+    def add_node(self, node_id: str, name: str, lat: float, lon: float, node_type: str, is_hub: bool = False, metadata: Dict = None, persist: bool = True) -> None:
         clean_id = str(node_id).strip().upper()
         stay_time = 48.0 if node_type == "Sea" else 6.0
-        self._nodes[clean_id] = Node(id=clean_id, name=name, lat=lat, lon=lon, type=node_type, stay_time_hours=stay_time)
+        self._nodes[clean_id] = Node(
+            id=clean_id, name=name, lat=lat, lon=lon, 
+            type=node_type, stay_time_hours=stay_time, is_hub=is_hub, metadata=metadata or {}
+        )
         if clean_id not in self._adj: self._adj[clean_id] = []
         if persist: self.save_state()
 
@@ -86,9 +94,11 @@ class TransitNetwork:
     def get_nearby_hubs(self, lat: float, lon: float, limit: int = 5) -> List[Dict]:
         nearby = []
         for node in self._nodes.values():
+            if not node.is_hub: continue
             dist = self._haversine(lat, lon, node.lat, node.lon)
             nearby.append({"id": node.id, "name": node.name, "type": node.type, "lat": node.lat, "lon": node.lon, "dist": round(dist, 1)})
         return sorted(nearby, key=lambda x: x["dist"])[:limit]
+
 
     def _find_node(self, query: str) -> Optional[str]:
         query = query.upper().strip()
@@ -129,41 +139,67 @@ class TransitNetwork:
         return path[::-1], round(distances[v_id], 2), round(times[v_id] / 24, 2)
 
     def auto_mesh_network(self) -> None:
-        nodes = list(self._nodes.values())
-        for i in range(len(nodes)):
-            for j in range(i + 1, len(nodes)):
-                u, v = nodes[i], nodes[j]
-                if u.type != v.type: continue
-                dist = self._haversine(u.lat, u.lon, v.lat, v.lon)
-                if (u.type == "Air" and dist <= 12000) or (u.type == "Sea" and dist <= 10000):
-                    self.add_route(u.id, v.id, u.type)
+        """Automatic meshing is disabled to allow for manual routing only."""
+        pass
+
+def seed_default_scenario(network: TransitNetwork) -> None:
+    """Injects the Global Solar Supply Chain scenario with unique node data."""
+    # Nodes: (ID, Name, Lat, Lon, Type, Metadata)
+    solar_nodes = [
+        ("BAOTOU_SILICON", "Baotou Silicon", 40.65, 109.84, "Air", {
+            "node_type": "SUPPLIER", "inventory": 15000, "capacity": 20000, "lead_time": 5, "reliability": 98, "cost": 45
+        }),
+        ("SHANGHAI_CELL", "Shanghai Cell Mfg", 31.23, 121.47, "Air", {
+            "node_type": "FACTORY", "inventory": 5000, "capacity": 10000, "yield_rate": 96, "setup_time": 12, "batch_size": 500
+        }),
+        ("HAIPHONG_ASSY", "Haiphong Assembly", 20.84, 106.68, "Sea", {
+            "node_type": "FACTORY", "inventory": 2000, "capacity": 8000, "yield_rate": 99, "setup_time": 8, "batch_size": 1000
+        }),
+        ("SINGAPORE_DC", "Singapore Nexus", 1.35, 103.82, "Sea", {
+            "node_type": "DISTRIBUTION_CENTER", "inventory": 8000, "capacity": 25000, "throughput": 5000, "automation": 4
+        }),
+        ("ROTTERDAM_WH", "Rotterdam Gateway", 51.92, 4.48, "Sea", {
+            "node_type": "WAREHOUSE", "inventory": 12000, "capacity": 30000, "throughput": 3000, "automation": 3
+        }),
+        ("BERLIN_RETAIL", "Berlin Solar Store", 52.52, 13.40, "Air", {
+            "node_type": "RETAIL", "inventory": 500, "capacity": 1000, "demand": 200, "variability": 15, "elasticity": -1.5
+        }),
+        ("LONDON_RETAIL", "London Eco Hub", 51.50, -0.12, "Sea", {
+            "node_type": "RETAIL", "inventory": 300, "capacity": 800, "demand": 150, "variability": 25, "elasticity": -1.2
+        }),
+    ]
+    for id, name, lat, lon, t, meta in solar_nodes:
+        network.add_node(id, name, lat, lon, t, is_hub=False, metadata=meta, persist=False)
+    
+    # Routes: (U, V, Mode)
+    solar_routes = [
+        ("BAOTOU_SILICON", "SHANGHAI_CELL", "Air"),
+        ("SHANGHAI_CELL", "HAIPHONG_ASSY", "Sea"),
+        ("HAIPHONG_ASSY", "SINGAPORE_DC", "Sea"),
+        ("SINGAPORE_DC", "ROTTERDAM_WH", "Sea"),
+        ("ROTTERDAM_WH", "BERLIN_RETAIL", "Air"),
+        ("ROTTERDAM_WH", "LONDON_RETAIL", "Sea"),
+    ]
+    for u, v, m in solar_routes:
+        network.add_route(u, v, m, persist=False)
+    
+    network.save_state()
 
 def seed_prototype_data(network: TransitNetwork) -> None:
     """
-    ALWAYS seeds the global hub atlas (Reference) 
-    AND loads saved simulation state (Persistence).
+    CLEAN SLATE: Only seeds the Global Solar Supply Chain scenario.
+    No longer seeds the 24 global hub atlas to prevent clutter.
     """
-    # 1. Global Hub Atlas (Foundational infrastructure)
-    hubs = [
-        ("SIN", "Singapore Changi", 1.35, 103.99, "Air"), ("SGSIN", "Singapore Port", 1.26, 103.83, "Sea"),
-        ("BOM", "Mumbai Intl", 19.09, 72.87, "Air"), ("INBOM", "Mumbai Port", 18.95, 72.95, "Sea"),
-        ("DXB", "Dubai Intl", 25.25, 55.37, "Air"), ("AEJEA", "Jebel Ali Port", 25.01, 55.06, "Sea"),
-        ("PVG", "Shanghai Pudong", 31.14, 121.81, "Air"), ("CNSHA", "Shanghai Port", 30.62, 122.06, "Sea"),
-        ("LHR", "London Heathrow", 51.47, -0.45, "Air"), ("GBLON", "Port of London", 51.50, 0.05, "Sea"),
-        ("LAX", "Los Angeles Intl", 33.94, -118.41, "Air"), ("USLAX", "Port of LA", 33.73, -118.26, "Sea"),
-        ("AMS", "Amsterdam Schiphol", 52.31, 4.77, "Air"), ("NLRTM", "Rotterdam Port", 51.95, 4.05, "Sea"),
-        ("HKG", "Hong Kong Intl", 22.31, 113.91, "Air"), ("HKHKG", "Hong Kong Port", 22.33, 114.19, "Sea"),
-        ("CDG", "Paris CDG", 49.01, 2.55, "Air"), ("FRMRS", "Marseille Port", 43.30, 5.37, "Sea"),
-        ("HND", "Tokyo Haneda", 35.55, 139.78, "Air"), ("JPTOK", "Tokyo Port", 35.62, 139.77, "Sea"),
-        ("SYD", "Sydney Intl", -33.94, 151.18, "Air"), ("AUSYD", "Sydney Port", -33.85, 151.21, "Sea"),
-        ("FRA", "Frankfurt Airport", 50.04, 8.56, "Air"), ("DEHAM", "Hamburg Port", 53.54, 10.00, "Sea"),
-    ]
-    for id, name, lat, lon, t in hubs: 
-        network.add_node(id, name, lat, lon, t, persist=False)
-    
-    # 2. Saved Simulation State (User nodes/routes)
-    if os.path.exists(network.state_file):
+    # 1. Saved Simulation State (User nodes/routes)
+    state_exists = os.path.exists(network.state_file)
+    if state_exists:
         network.load_state()
     
-    # 3. Finalize
+    # 2. Seed Default Scenario if state is new/empty
+    # We check if there are any nodes at all
+    if not state_exists or len(network._nodes) == 0:
+        seed_default_scenario(network)
+    
+    # 3. Finalize (Auto-mesh is disabled)
     network.auto_mesh_network()
+

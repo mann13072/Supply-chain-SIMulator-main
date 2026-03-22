@@ -5,17 +5,29 @@ import NetworkBuilder from './components/NetworkBuilder';
 import SimulationEngine from './components/SimulationEngine';
 import AnalyticsView from './components/AnalyticsView';
 import SettingsView from './components/SettingsView';
-import ScenariosView from './components/ScenariosView';
+import ResilienceHub from './components/ResilienceHub';
 import OptimizationView from './components/OptimizationView';
-import RiskAnalysisView from './components/RiskAnalysisView';
 import { SupplyNode, NodeType, NodeStatus, Route, TransportMode, KPI, SimulationParams } from './types';
+import { routingService } from './services/routingService';
 import { motion, AnimatePresence } from 'framer-motion';
 import { LayoutDashboard, Network, PlayCircle, BarChart3, Settings, Layers, Zap, ShieldAlert, Activity, Globe as GlobeIcon } from 'lucide-react';
+
+interface InTransitShipment {
+  id: string;
+  toId: string;
+  quantity: number;
+  remainingDays: number;
+}
 
 const INITIAL_NODES: SupplyNode[] = [];
 const INITIAL_ROUTES: Route[] = [];
 
 const INITIAL_PARAMS: SimulationParams = {
+  polysiliconPriceChange: 0,
+  silverPriceChange: 0,
+  aluminumPriceChange: 0,
+  yieldRateDegradation: 0,
+  energyCostChange: 0,
   unitProductionCost: 100,
   procurementCost: 50,
   transportationCost: 20,
@@ -45,7 +57,15 @@ const INITIAL_PARAMS: SimulationParams = {
   forecastAccuracy: 85,
   forecastUpdateFrequency: 30,
   bullwhipFactor: 1.2,
-  collaborationLevel: 50
+  collaborationLevel: 50,
+  demandSurge: 0,
+  tariffImposition: false,
+  subsidyLevel: 0,
+  interestRateChange: 0,
+  weatherEvent: false,
+  geopoliticalTension: false,
+  freightCostIndex: 100,
+  logisticDisruption: false
 };
 
 function App() {
@@ -54,12 +74,150 @@ function App() {
   const [routes, setRoutes] = useState<Route[]>(INITIAL_ROUTES);
   const [params, setParams] = useState<SimulationParams>(INITIAL_PARAMS);
   const [selectedNode, setSelectedNode] = useState<SupplyNode | null>(null);
+  const [history, setHistory] = useState<any[]>([]);
 
-  // Dynamic KPI Calculations
+  // --- SESSION-LIVE SIMULATION ENGINE ---
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [day, setDay] = useState(0);
+  const [speed, setSpeed] = useState(1);
+  const [logs, setLogs] = useState<string[]>([]);
+  const [shipments, setShipments] = useState<InTransitShipment[]>([]);
+
+  // Core Simulation Loop (The Heartbeat)
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (isPlaying) {
+      interval = setInterval(() => {
+        setDay(d => {
+          const nextDay = d + 1;
+          setNodes(prevNodes => {
+            const nextNodes = [...prevNodes.map(n => ({ ...n }))];
+            
+            // Record Telemetry
+            const dailySnapshot = {
+              day: nextDay,
+              nodes: nextNodes.map(n => ({ id: n.id, inv: n.inventoryLevel, status: n.status }))
+            };
+            setHistory(prev => [...prev, dailySnapshot].slice(-100));
+
+            setShipments(prevShipments => {
+              const remaining: InTransitShipment[] = [];
+              const processedArriving: string[] = [];
+
+              prevShipments.forEach(s => {
+                if (s.remainingDays <= 1) {
+                  const targetNode = nextNodes.find(n => n.id === s.toId);
+                  if (targetNode) {
+                    targetNode.inventoryLevel = Math.min(targetNode.maxCapacity, targetNode.inventoryLevel + s.quantity);
+                    processedArriving.push(`Day ${nextDay}: Shipment arrived at ${targetNode.name} (${s.quantity} units)`);
+                  }
+                } else {
+                  remaining.push({ ...s, remainingDays: s.remainingDays - 1 });
+                }
+              });
+
+              nextNodes.forEach(node => {
+                if (node.type === NodeType.RETAIL) {
+                  const surgeFactor = 1 + (params.demandSurge / 100);
+                  const baseDemand = (node.demandVolume || 20) * surgeFactor;
+                  const isShocked = Math.random() < (params.demandShockProb / 100);
+                  const demand = Math.max(0, Math.floor(baseDemand * (isShocked ? 2 : 1)));
+                  node.inventoryLevel = Math.max(0, node.inventoryLevel - demand);
+                  node.status = node.inventoryLevel < (node.reorderPoint || 20) ? NodeStatus.WARNING : NodeStatus.OPTIMAL;
+                  if (node.inventoryLevel === 0 && demand > 0) {
+                    processedArriving.push(`Day ${nextDay}: STOCKOUT at ${node.name}!`);
+                    node.status = NodeStatus.CRITICAL;
+                  }
+                } else if (node.type === NodeType.FACTORY) {
+                  const yieldRate = ((node.yieldRate || 100) - params.yieldRateDegradation) / 100;
+                  const netProduction = Math.floor((node.productionCapacity || 100) * yieldRate);
+                  node.inventoryLevel = Math.min(node.maxCapacity, node.inventoryLevel + netProduction);
+                }
+
+                if (node.inventoryLevel < (node.reorderPoint || 50)) {
+                  const route = routes.find(r => r.toId === node.id);
+                  if (route) {
+                    const source = nextNodes.find(n => n.id === route.fromId);
+                    if (source && source.inventoryLevel >= (node.orderQuantity || 100)) {
+                      let delayDays = 0;
+                      if (params.geopoliticalTension) delayDays += 5;
+                      if (Math.random() < (params.portCongestionProb / 100)) delayDays += 3;
+                      source.inventoryLevel -= (node.orderQuantity || 100);
+                      remaining.push({
+                        id: Math.random().toString(36).substr(2, 9),
+                        toId: node.id,
+                        quantity: (node.orderQuantity || 100),
+                        remainingDays: Math.ceil(route.baseLeadTime + delayDays)
+                      });
+                      processedArriving.push(`Day ${nextDay}: ${source.name} shipped replenishment to ${node.name}`);
+                    }
+                  }
+                }
+              });
+
+              if (processedArriving.length > 0) {
+                setLogs(prev => [...processedArriving, ...prev].slice(0, 50));
+              }
+              return remaining;
+            });
+            return nextNodes;
+          });
+          return nextDay;
+        });
+      }, 1000 / speed);
+    }
+    return () => clearInterval(interval);
+  }, [isPlaying, speed, routes, params]);
+
+  const resetSimulation = () => {
+    setIsPlaying(false);
+    setDay(0);
+    setLogs([]);
+    setShipments([]);
+    setHistory([]);
+  };
+
+  useEffect(() => {
+    const loadState = async () => {
+      const state = await routingService.getState();
+      if (state.nodes && state.nodes.length > 0) {
+        const mappedNodes: SupplyNode[] = state.nodes.map((n: any) => {
+          const meta = n.metadata || {};
+          return {
+            id: n.id, name: n.name, location: n.name,
+            type: (meta.node_type as NodeType) || NodeType.WAREHOUSE,
+            status: NodeStatus.OPTIMAL, inventoryLevel: meta.inventory || 50,
+            maxCapacity: meta.capacity || 100, reorderPoint: 20,
+            orderQuantity: 50, safetyStock: 10, targetServiceLevel: 95,
+            reviewFrequency: 1, moq: 1, holdingCost: 1, obsolescenceRate: 0.01, shelfLife: 365,
+            supplierLeadTime: meta.lead_time || 14, supplierReliability: meta.reliability || 95,
+            supplierCostPerUnit: meta.cost || 10, yieldRate: meta.yield_rate || 98,
+            setupTime: meta.setup_time || 4, batchSize: meta.batch_size || 50,
+            throughputCapacity: meta.throughput || 500, automationLevel: meta.automation || 2,
+            demandVolume: meta.demand || 100, demandVariability: meta.variability || 10,
+            priceElasticity: meta.elasticity || -1.2,
+            coordinates: { x: (n.lon + 180) * (800 / 360), y: (90 - n.lat) * (400 / 180), lat: n.lat, lng: n.lon }
+          };
+        });
+        setNodes(mappedNodes);
+      }
+      if (state.routes && state.routes.length > 0) {
+        const mappedRoutes: Route[] = state.routes.map((r: any) => ({
+          id: Math.random().toString(36).substr(2, 9), fromId: r.fromId, toId: r.toId,
+          mode: r.mode as TransportMode, distance: r.distance, baseLeadTime: 2,
+          leadTimeVariability: 0.1, costPerUnitDistance: 0.004, vehicleCapacity: 100,
+          shipmentFrequency: 1, fuelPrice: 1.5, customsTime: 0, disruptionProb: 0.01
+        }));
+        setRoutes(mappedRoutes);
+      }
+    };
+    loadState();
+  }, []);
+
   const networkHealth = Math.round(
     (nodes.filter(n => n.status === NodeStatus.OPTIMAL).length / nodes.length) * 100
   );
-  const activeShipments = routes.length * 123; // Simulated dynamic count
+  const activeShipments = shipments.length;
   const riskLevel = nodes.some(n => n.status === NodeStatus.CRITICAL) ? 'HIGH' : 
                    nodes.some(n => n.status === NodeStatus.WARNING) ? 'MED' : 'LOW';
 
@@ -68,177 +226,57 @@ function App() {
       case 'dashboard':
         return (
           <div className="grid grid-cols-12 gap-8 h-full animate-in fade-in slide-in-from-bottom-4 duration-700">
-            {/* Left Column: Stats & Globe */}
             <div className="col-span-12 lg:col-span-8 flex flex-col gap-8">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="bg-white/5 rounded-3xl border border-white/5 p-8 hover:border-white/10 transition-all group">
+                <div className="bg-white/5 rounded-3xl border border-white/5 p-8">
                   <p className="text-[10px] text-white/40 uppercase tracking-[0.2em] font-bold mb-2">Network Health</p>
-                  <div className="flex items-end gap-2">
-                    <h3 className="text-4xl font-bold text-white tracking-tighter">{networkHealth}<span className="text-white/20 text-xl">%</span></h3>
-                    <div className="mb-1 text-emerald-400 text-xs font-medium flex items-center gap-1">
-                      <Zap className="w-3 h-3 fill-emerald-400" />
-                      {networkHealth > 90 ? '+2.4%' : '-1.2%'}
-                    </div>
-                  </div>
+                  <h3 className="text-4xl font-bold text-white tracking-tighter">{networkHealth}%</h3>
                 </div>
-                <div className="bg-white/5 rounded-3xl border border-white/5 p-8 hover:border-white/10 transition-all group">
+                <div className="bg-white/5 rounded-3xl border border-white/5 p-8">
                   <p className="text-[10px] text-white/40 uppercase tracking-[0.2em] font-bold mb-2">Active Shipments</p>
-                  <div className="flex items-end gap-2">
-                    <h3 className="text-4xl font-bold text-white tracking-tighter">{activeShipments.toLocaleString()}</h3>
-                    <div className="mb-1 text-white/40 text-xs font-medium">In Transit</div>
-                  </div>
+                  <h3 className="text-4xl font-bold text-white tracking-tighter">{activeShipments}</h3>
                 </div>
-                <div className="bg-white/5 rounded-3xl border border-white/5 p-8 hover:border-white/10 transition-all group">
+                <div className="bg-white/5 rounded-3xl border border-white/5 p-8">
                   <p className="text-[10px] text-white/40 uppercase tracking-[0.2em] font-bold mb-2">Risk Level</p>
-                  <div className="flex items-end gap-2">
-                    <h3 className={`text-4xl font-bold tracking-tighter ${riskLevel === 'HIGH' ? 'text-red-500' : riskLevel === 'MED' ? 'text-amber-500' : 'text-white'}`}>
-                      {riskLevel}
-                    </h3>
-                    <div className={`mb-1 text-xs font-medium ${riskLevel === 'LOW' ? 'text-emerald-400' : 'text-white/40'}`}>
-                      {riskLevel === 'LOW' ? 'Stable' : 'Unstable'}
-                    </div>
-                  </div>
+                  <h3 className={`text-4xl font-bold tracking-tighter ${riskLevel === 'HIGH' ? 'text-red-500' : 'text-white'}`}>{riskLevel}</h3>
                 </div>
               </div>
-
-              <div className="flex flex-col gap-4 flex-1">
-                <div className="flex-1 min-h-[500px] relative">
-                  <Globe 
-                    nodes={nodes} 
-                    routes={routes}
-                    onNodeSelect={setSelectedNode} 
-                    selectedNodeId={selectedNode?.id || null} 
-                    onNodeDrop={(nodeId, lat, lng, locationName) => {
-                      setNodes(prev => prev.map(n => 
-                        n.id === nodeId 
-                          ? { ...n, coordinates: { ...n.coordinates, lat, lng }, location: locationName }
-                          : n
-                      ));
-                    }}
-                  />
-                </div>
+              <div className="flex-1 min-h-[500px] relative">
+                <Globe nodes={nodes} routes={routes} onNodeSelect={setSelectedNode} selectedNodeId={selectedNode?.id || null} />
               </div>
             </div>
-
-            {/* Right Column: Node Details & Activity */}
-            <div className="col-span-12 lg:col-span-4 flex flex-col gap-8">
-              <div className="bg-[#050505] rounded-3xl border border-white/5 p-8 h-full flex flex-col">
-                <div className="flex items-center justify-between mb-8">
-                  <h3 className="text-white font-semibold flex items-center gap-2">
-                    <Activity className="w-5 h-5 text-white/40" />
-                    System Telemetry
-                  </h3>
-                  <div className="px-3 py-1 bg-white/5 rounded-full border border-white/10 text-[10px] text-white/60 font-mono">
-                    LIVE FEED
+            <div className="col-span-12 lg:col-span-4 h-full overflow-hidden">
+               <div className="bg-[#050505] rounded-3xl border border-white/5 p-8 h-full flex flex-col">
+                  <h3 className="text-white font-semibold flex items-center gap-2 mb-8"><Activity className="w-5 h-5" /> Telemetry</h3>
+                  <div className="flex-1 overflow-y-auto space-y-3 custom-scrollbar">
+                    {nodes.map(node => (
+                      <div key={node.id} onClick={() => setSelectedNode(node)} className="bg-white/5 border border-white/10 rounded-2xl p-4 cursor-pointer">
+                        <div className="flex justify-between items-center"><span className="text-sm font-bold text-white">{node.name}</span><div className={`w-2 h-2 rounded-full ${node.status === 'OPTIMAL' ? 'bg-emerald-500' : 'bg-red-500'}`} /></div>
+                        <p className="text-xs text-white/40">{node.type} • {node.inventoryLevel} units</p>
+                      </div>
+                    ))}
                   </div>
-                </div>
-
-                <AnimatePresence mode="wait">
-                  {selectedNode ? (
-                    <motion.div 
-                      key={selectedNode.id}
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -20 }}
-                      className="space-y-8"
-                    >
-                      <div className="flex items-center gap-4">
-                        <div className="w-16 h-16 rounded-2xl bg-white flex items-center justify-center shadow-[0_0_30px_rgba(255,255,255,0.1)]">
-                          <GlobeIcon className="w-8 h-8 text-black" />
-                        </div>
-                        <div>
-                          <h4 className="text-2xl font-bold text-white tracking-tight">{selectedNode.name}</h4>
-                          <p className="text-white/40 text-sm">{selectedNode.location} • {selectedNode.type}</p>
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="bg-white/5 rounded-2xl p-6 border border-white/5">
-                          <p className="text-[10px] text-white/40 uppercase tracking-widest mb-1">Inventory</p>
-                          <p className="text-2xl font-bold text-white">{selectedNode.inventoryLevel.toLocaleString()}</p>
-                          <div className="mt-3 h-1 w-full bg-white/10 rounded-full overflow-hidden">
-                            <div 
-                              className="h-full bg-white transition-all duration-1000" 
-                              style={{ width: `${(selectedNode.inventoryLevel / selectedNode.maxCapacity) * 100}%` }} 
-                            />
-                          </div>
-                        </div>
-                        <div className="bg-white/5 rounded-2xl p-6 border border-white/5">
-                          <p className="text-[10px] text-white/40 uppercase tracking-widest mb-1">Utilization</p>
-                          <p className="text-2xl font-bold text-white">
-                            {Math.round((selectedNode.inventoryLevel / selectedNode.maxCapacity) * 100)}%
-                          </p>
-                          <div className="mt-3 h-1 w-full bg-white/10 rounded-full overflow-hidden">
-                            <div 
-                              className="h-full bg-white transition-all duration-1000" 
-                              style={{ width: `${(selectedNode.inventoryLevel / selectedNode.maxCapacity) * 100}%` }} 
-                            />
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="space-y-4">
-                        <h5 className="text-[10px] text-white/40 uppercase tracking-widest">Performance Metrics</h5>
-                        {[
-                          { label: 'Safety Stock', value: selectedNode.safetyStock },
-                          { label: 'Reorder Point', value: selectedNode.reorderPoint },
-                          { label: 'Target Service', value: `${selectedNode.targetServiceLevel}%` },
-                        ].map((stat, i) => (
-                          <div key={i} className="flex items-center justify-between py-3 border-b border-white/5">
-                            <span className="text-sm text-white/60">{stat.label}</span>
-                            <span className="text-sm text-white font-mono">{stat.value}</span>
-                          </div>
-                        ))}
-                      </div>
-
-                      <button 
-                        onClick={() => setSelectedNode(null)}
-                        className="w-full py-4 bg-white/5 hover:bg-white/10 text-white rounded-2xl border border-white/10 transition-all text-sm font-medium"
-                      >
-                        Deselect Node
-                      </button>
-                    </motion.div>
-                  ) : (
-                    <motion.div 
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      className="flex-1 flex flex-col"
-                    >
-                      <p className="text-[10px] text-white/40 uppercase tracking-[0.2em] font-bold mb-4">Select Node for Telemetry</p>
-                      <div className="flex-1 overflow-y-auto space-y-3 pr-2 custom-scrollbar">
-                        {nodes.map(node => (
-                          <div 
-                            key={node.id}
-                            onClick={() => setSelectedNode(node)}
-                            className="bg-white/5 border border-white/10 rounded-2xl p-4 cursor-pointer hover:bg-white/10 hover:border-white/20 transition-all"
-                          >
-                            <div className="flex items-center justify-between mb-1">
-                              <span className="text-sm font-bold text-white truncate">{node.name}</span>
-                              <div className="w-2 h-2 rounded-full" style={{ backgroundColor: node.status === 'OPTIMAL' ? '#10b981' : node.status === 'WARNING' ? '#f59e0b' : '#ef4444' }} />
-                            </div>
-                            <p className="text-xs text-white/40 truncate">{node.location} • {node.type}</p>
-                          </div>
-                        ))}
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
+               </div>
             </div>
           </div>
         );
       case 'builder':
         return <NetworkBuilder nodes={nodes} routes={routes} setNodes={setNodes} setRoutes={setRoutes} />;
       case 'simulation':
-        return <SimulationEngine nodes={nodes} routes={routes} setNodes={setNodes} />;
+        return (
+          <SimulationEngine 
+            nodes={nodes} routes={routes} setNodes={setNodes} 
+            day={day} isPlaying={isPlaying} setIsPlaying={setIsPlaying}
+            speed={speed} setSpeed={setSpeed} logs={logs} 
+            shipments={shipments} resetSimulation={resetSimulation}
+          />
+        );
       case 'analytics':
-        return <AnalyticsView />;
-      case 'scenarios':
-        return <ScenariosView nodes={nodes} routes={routes} setNodes={setNodes} setRoutes={setRoutes} params={params} setParams={setParams} />;
+        return <AnalyticsView history={history} />;
+      case 'resilience':
+        return <ResilienceHub nodes={nodes} routes={routes} params={params} setParams={setParams} setIsPlaying={setIsPlaying} setActiveTab={setActiveTab} />;
       case 'optimization':
         return <OptimizationView nodes={nodes} routes={routes} />;
-      case 'risk':
-        return <RiskAnalysisView nodes={nodes} routes={routes} />;
       case 'settings':
         return <SettingsView />;
       default:
@@ -247,35 +285,31 @@ function App() {
   };
 
   return (
-    <div className="flex min-h-screen bg-black selection:bg-white selection:text-black">
-      <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
-      
-      <main className="flex-1 flex flex-col h-screen overflow-hidden">
-        {/* Header */}
-        <header className="h-20 border-b border-white/5 flex items-center justify-between px-12 shrink-0">
-          <div className="flex items-center gap-4">
-            <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            <p className="text-[10px] text-white/40 uppercase tracking-[0.3em] font-bold">Production Environment • v4.2.0</p>
-          </div>
-          <div className="flex items-center gap-6">
-            <div className="flex -space-x-2">
-              {[1, 2, 3].map(i => (
-                <div key={i} className="w-8 h-8 rounded-full border-2 border-black bg-white/10" />
-              ))}
-              <div className="w-8 h-8 rounded-full border-2 border-black bg-white flex items-center justify-center text-[10px] font-bold text-black">
-                +12
-              </div>
-            </div>
-            <button className="px-6 py-2 bg-white text-black text-xs font-bold rounded-full hover:scale-105 transition-transform">
-              DEPLOY CHANGES
+    <div className="flex min-h-screen bg-black">
+      <nav className="w-20 lg:w-64 border-r border-white/5 flex flex-col shrink-0">
+        <div className="p-8"><h1 className="text-white font-black text-2xl tracking-tighter flex items-center gap-2"><Zap className="w-8 h-8 fill-white" />SolarChain</h1></div>
+        <div className="flex-1 px-4 space-y-2">
+          {[
+            { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+            { id: 'builder', label: 'Builder', icon: Network },
+            { id: 'simulation', label: 'Simulation', icon: PlayCircle },
+            { id: 'resilience', label: 'Resilience', icon: ShieldAlert },
+            { id: 'analytics', label: 'Analytics', icon: BarChart3 },
+            { id: 'optimization', label: 'Optimization', icon: Zap },
+            { id: 'settings', label: 'Settings', icon: Settings },
+          ].map(item => (
+            <button key={item.id} onClick={() => setActiveTab(item.id)} className={`w-full flex items-center gap-4 px-4 py-4 rounded-2xl transition-all ${activeTab === item.id ? 'bg-white text-black' : 'text-white/40'}`}>
+              <item.icon className="w-5 h-5" /><span className="hidden lg:block text-[10px] font-bold uppercase">{item.label}</span>
             </button>
-          </div>
-        </header>
-
-        {/* View Content */}
-        <div className="flex-1 overflow-y-auto p-12 custom-scrollbar">
-          {renderContent()}
+          ))}
         </div>
+      </nav>
+      <main className="flex-1 flex flex-col h-screen overflow-hidden">
+        <header className="h-20 border-b border-white/5 flex items-center justify-between px-12 shrink-0">
+          <p className="text-[10px] text-white/40 uppercase tracking-[0.3em] font-bold">Session Active • v4.2.0</p>
+          <button className="px-6 py-2 bg-white text-black text-xs font-bold rounded-full">DEPLOY</button>
+        </header>
+        <div className="flex-1 overflow-y-auto p-12 custom-scrollbar">{renderContent()}</div>
       </main>
     </div>
   );

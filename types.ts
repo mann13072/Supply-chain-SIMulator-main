@@ -77,6 +77,7 @@ export interface SupplyNode {
   processingTime?: number;
   automationLevel?: number;
   fulfillmentAccuracy?: number;
+  warehouseCapabilities?: string[];
 
   // Demand & Market Variables (if Retail)
   demandVolume?: number;
@@ -111,6 +112,13 @@ export interface Route {
 }
 
 export interface SimulationParams {
+  // Solar-Specific Commodities
+  polysiliconPriceChange: number;
+  silverPriceChange: number;
+  aluminumPriceChange: number;
+  yieldRateDegradation: number;
+  energyCostChange: number;
+
   // Financial Variables
   unitProductionCost: number;
   procurementCost: number;
@@ -146,6 +154,18 @@ export interface SimulationParams {
   forecastUpdateFrequency: number;
   bullwhipFactor: number;
   collaborationLevel: number;
+  
+  // Market & Policy
+  demandSurge: number;
+  tariffImposition: boolean;
+  subsidyLevel: number;
+  interestRateChange: number;
+  
+  // Risks
+  weatherEvent: boolean;
+  geopoliticalTension: boolean;
+  freightCostIndex: number;
+  logisticDisruption: boolean;
 }
 
 export interface SimulationResult {

@@ -132,6 +132,7 @@ const NetworkBuilder: React.FC<NetworkBuilderProps> = ({ nodes, routes, setNodes
     processingTime: 1,
     automationLevel: 2,
     fulfillmentAccuracy: 99,
+    warehouseCapabilities: [],
     // Demand defaults
     demandVolume: 100,
     demandVariability: 10,
@@ -279,7 +280,14 @@ const NetworkBuilder: React.FC<NetworkBuilderProps> = ({ nodes, routes, setNodes
     };
 
     setNodes([...nodes, node]);
-    routingService.persistNode({ id: node.id, name: node.name, lat: node.coordinates.lat, lon: node.coordinates.lng, type: node.type === NodeType.RETAIL || node.type === NodeType.SUPPLIER || node.type === NodeType.FACTORY ? 'Air' : 'Sea' });
+    routingService.persistNode({ 
+      id: node.id, 
+      name: node.name, 
+      lat: node.coordinates.lat, 
+      lon: node.coordinates.lng, 
+      type: node.type === NodeType.RETAIL || node.type === NodeType.SUPPLIER || node.type === NodeType.FACTORY ? 'Air' : 'Sea',
+      is_hub: false 
+    });
     
     // RESET FORM
     setNewNode({
@@ -453,6 +461,377 @@ const NetworkBuilder: React.FC<NetworkBuilderProps> = ({ nodes, routes, setNodes
                       />
                     </div>
                   </div>
+
+                  <div className="space-y-4">
+                    <h4 className="text-[10px] text-white/40 uppercase tracking-widest border-b border-white/5 pb-2">Inventory Policy</h4>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="bg-white/5 rounded-xl p-3 border border-white/5">
+                        <p className="text-[9px] text-white/40 uppercase block mb-1">Safety Stock</p>
+                        <input 
+                          type="number"
+                          className="text-sm font-bold text-white bg-transparent border-none p-0 w-full focus:ring-0"
+                          value={selectedNode.safetyStock}
+                          onChange={(e) => handleUpdateNode(selectedNode.id, { safetyStock: parseInt(e.target.value) || 0 })}
+                        />
+                      </div>
+                      <div className="bg-white/5 rounded-xl p-3 border border-white/5">
+                        <p className="text-[9px] text-white/40 uppercase block mb-1">Reorder Point</p>
+                        <input 
+                          type="number"
+                          className="text-sm font-bold text-white bg-transparent border-none p-0 w-full focus:ring-0"
+                          value={selectedNode.reorderPoint}
+                          onChange={(e) => handleUpdateNode(selectedNode.id, { reorderPoint: parseInt(e.target.value) || 0 })}
+                        />
+                      </div>
+                      <div className="bg-white/5 rounded-xl p-3 border border-white/5">
+                        <p className="text-[9px] text-white/40 uppercase block mb-1">Order Quantity</p>
+                        <input 
+                          type="number"
+                          className="text-sm font-bold text-white bg-transparent border-none p-0 w-full focus:ring-0"
+                          value={selectedNode.orderQuantity}
+                          onChange={(e) => handleUpdateNode(selectedNode.id, { orderQuantity: parseInt(e.target.value) || 0 })}
+                        />
+                      </div>
+                      <div className="bg-white/5 rounded-xl p-3 border border-white/5">
+                        <p className="text-[9px] text-white/40 uppercase block mb-1">Target Service %</p>
+                        <input 
+                          type="number"
+                          className="text-sm font-bold text-white bg-transparent border-none p-0 w-full focus:ring-0"
+                          value={selectedNode.targetServiceLevel}
+                          onChange={(e) => handleUpdateNode(selectedNode.id, { targetServiceLevel: parseInt(e.target.value) || 0 })}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    <h4 className="text-[10px] text-white/40 uppercase tracking-widest border-b border-white/5 pb-2">Constraints & Costs</h4>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="bg-white/5 rounded-xl p-3 border border-white/5">
+                        <p className="text-[9px] text-white/40 uppercase block mb-1">Holding Cost</p>
+                        <input 
+                          type="number"
+                          className="text-sm font-bold text-white bg-transparent border-none p-0 w-full focus:ring-0"
+                          value={selectedNode.holdingCost}
+                          onChange={(e) => handleUpdateNode(selectedNode.id, { holdingCost: parseInt(e.target.value) || 0 })}
+                        />
+                      </div>
+                      <div className="bg-white/5 rounded-xl p-3 border border-white/5">
+                        <p className="text-[9px] text-white/40 uppercase block mb-1">Obs. Rate %</p>
+                        <input 
+                          type="number"
+                          step="0.01"
+                          className="text-sm font-bold text-white bg-transparent border-none p-0 w-full focus:ring-0"
+                          value={selectedNode.obsolescenceRate}
+                          onChange={(e) => handleUpdateNode(selectedNode.id, { obsolescenceRate: parseFloat(e.target.value) || 0 })}
+                        />
+                      </div>
+                      <div className="bg-white/5 rounded-xl p-3 border border-white/5">
+                        <p className="text-[9px] text-white/40 uppercase block mb-1">Shelf Life (d)</p>
+                        <input 
+                          type="number"
+                          className="text-sm font-bold text-white bg-transparent border-none p-0 w-full focus:ring-0"
+                          value={selectedNode.shelfLife}
+                          onChange={(e) => handleUpdateNode(selectedNode.id, { shelfLife: parseInt(e.target.value) || 0 })}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {selectedNode.type === NodeType.SUPPLIER && (
+                    <div className="space-y-4">
+                      <h4 className="text-[10px] text-white/40 uppercase tracking-widest border-b border-white/5 pb-2">Lead Time & Reliability</h4>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="bg-white/5 rounded-xl p-3 border border-white/5">
+                          <p className="text-[9px] text-white/40 uppercase block mb-1">Lead Time (d)</p>
+                          <input 
+                            type="number"
+                            className="text-sm font-bold text-white bg-transparent border-none p-0 w-full focus:ring-0"
+                            value={selectedNode.supplierLeadTime}
+                            onChange={(e) => handleUpdateNode(selectedNode.id, { supplierLeadTime: parseInt(e.target.value) || 0 })}
+                          />
+                        </div>
+                        <div className="bg-white/5 rounded-xl p-3 border border-white/5">
+                          <p className="text-[9px] text-white/40 uppercase block mb-1">LT Var (std)</p>
+                          <input 
+                            type="number"
+                            className="text-sm font-bold text-white bg-transparent border-none p-0 w-full focus:ring-0"
+                            value={selectedNode.supplierLeadTimeVariability}
+                            onChange={(e) => handleUpdateNode(selectedNode.id, { supplierLeadTimeVariability: parseInt(e.target.value) || 0 })}
+                          />
+                        </div>
+                        <div className="bg-white/5 rounded-xl p-3 border border-white/5">
+                          <p className="text-[9px] text-white/40 uppercase block mb-1">Reliability %</p>
+                          <input 
+                            type="number"
+                            className="text-sm font-bold text-white bg-transparent border-none p-0 w-full focus:ring-0"
+                            value={selectedNode.supplierReliability}
+                            onChange={(e) => handleUpdateNode(selectedNode.id, { supplierReliability: parseInt(e.target.value) || 0 })}
+                          />
+                        </div>
+                        <div className="bg-white/5 rounded-xl p-3 border border-white/5">
+                          <p className="text-[9px] text-white/40 uppercase block mb-1">Disruption %</p>
+                          <input 
+                            type="number"
+                            step="0.01"
+                            className="text-sm font-bold text-white bg-transparent border-none p-0 w-full focus:ring-0"
+                            value={selectedNode.supplierDisruptionProb}
+                            onChange={(e) => handleUpdateNode(selectedNode.id, { supplierDisruptionProb: parseFloat(e.target.value) || 0 })}
+                          />
+                        </div>
+                      </div>
+
+                      <h4 className="text-[10px] text-white/40 uppercase tracking-widest border-b border-white/5 pb-2 mt-4">Capacity & Costs</h4>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="bg-white/5 rounded-xl p-3 border border-white/5">
+                          <p className="text-[9px] text-white/40 uppercase block mb-1">Capacity</p>
+                          <input 
+                            type="number"
+                            className="text-sm font-bold text-white bg-transparent border-none p-0 w-full focus:ring-0"
+                            value={selectedNode.supplierCapacity}
+                            onChange={(e) => handleUpdateNode(selectedNode.id, { supplierCapacity: parseInt(e.target.value) || 0 })}
+                          />
+                        </div>
+                        <div className="bg-white/5 rounded-xl p-3 border border-white/5">
+                          <p className="text-[9px] text-white/40 uppercase block mb-1">Cost/Unit ($)</p>
+                          <input 
+                            type="number"
+                            className="text-sm font-bold text-white bg-transparent border-none p-0 w-full focus:ring-0"
+                            value={selectedNode.supplierCostPerUnit}
+                            onChange={(e) => handleUpdateNode(selectedNode.id, { supplierCostPerUnit: parseInt(e.target.value) || 0 })}
+                          />
+                        </div>
+                        <div className="bg-white/5 rounded-xl p-3 border border-white/5">
+                          <p className="text-[9px] text-white/40 uppercase block mb-1">MOQ</p>
+                          <input 
+                            type="number"
+                            className="text-sm font-bold text-white bg-transparent border-none p-0 w-full focus:ring-0"
+                            value={selectedNode.supplierMinOrderQuantity}
+                            onChange={(e) => handleUpdateNode(selectedNode.id, { supplierMinOrderQuantity: parseInt(e.target.value) || 0 })}
+                          />
+                        </div>
+                        <div className="bg-white/5 rounded-xl p-3 border border-white/5">
+                          <p className="text-[9px] text-white/40 uppercase block mb-1">Recovery (d)</p>
+                          <input 
+                            type="number"
+                            className="text-sm font-bold text-white bg-transparent border-none p-0 w-full focus:ring-0"
+                            value={selectedNode.supplierRecoveryTime}
+                            onChange={(e) => handleUpdateNode(selectedNode.id, { supplierRecoveryTime: parseInt(e.target.value) || 0 })}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {selectedNode.type === NodeType.FACTORY && (
+                    <div className="space-y-4">
+                      <h4 className="text-[10px] text-white/40 uppercase tracking-widest border-b border-white/5 pb-2">Efficiency & Output</h4>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="bg-white/5 rounded-xl p-3 border border-white/5">
+                          <p className="text-[9px] text-white/40 uppercase block mb-1">Capacity</p>
+                          <input 
+                            type="number"
+                            className="text-sm font-bold text-white bg-transparent border-none p-0 w-full focus:ring-0"
+                            value={selectedNode.productionCapacity}
+                            onChange={(e) => handleUpdateNode(selectedNode.id, { productionCapacity: parseInt(e.target.value) || 0 })}
+                          />
+                        </div>
+                        <div className="bg-white/5 rounded-xl p-3 border border-white/5">
+                          <p className="text-[9px] text-white/40 uppercase block mb-1">Utilization %</p>
+                          <input 
+                            type="number"
+                            className="text-sm font-bold text-white bg-transparent border-none p-0 w-full focus:ring-0"
+                            value={selectedNode.utilizationRate}
+                            onChange={(e) => handleUpdateNode(selectedNode.id, { utilizationRate: parseInt(e.target.value) || 0 })}
+                          />
+                        </div>
+                        <div className="bg-white/5 rounded-xl p-3 border border-white/5">
+                          <p className="text-[9px] text-white/40 uppercase block mb-1">Yield %</p>
+                          <input 
+                            type="number"
+                            className="text-sm font-bold text-white bg-transparent border-none p-0 w-full focus:ring-0"
+                            value={selectedNode.yieldRate}
+                            onChange={(e) => handleUpdateNode(selectedNode.id, { yieldRate: parseInt(e.target.value) || 0 })}
+                          />
+                        </div>
+                        <div className="bg-white/5 rounded-xl p-3 border border-white/5">
+                          <p className="text-[9px] text-white/40 uppercase block mb-1">Defect %</p>
+                          <input 
+                            type="number"
+                            className="text-sm font-bold text-white bg-transparent border-none p-0 w-full focus:ring-0"
+                            value={selectedNode.defectRate}
+                            onChange={(e) => handleUpdateNode(selectedNode.id, { defectRate: parseInt(e.target.value) || 0 })}
+                          />
+                        </div>
+                      </div>
+
+                      <h4 className="text-[10px] text-white/40 uppercase tracking-widest border-b border-white/5 pb-2 mt-4">Setup & Scheduling</h4>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="bg-white/5 rounded-xl p-3 border border-white/5">
+                          <p className="text-[9px] text-white/40 uppercase block mb-1">Setup Time (h)</p>
+                          <input 
+                            type="number"
+                            className="text-sm font-bold text-white bg-transparent border-none p-0 w-full focus:ring-0"
+                            value={selectedNode.setupTime}
+                            onChange={(e) => handleUpdateNode(selectedNode.id, { setupTime: parseInt(e.target.value) || 0 })}
+                          />
+                        </div>
+                        <div className="bg-white/5 rounded-xl p-3 border border-white/5">
+                          <p className="text-[9px] text-white/40 uppercase block mb-1">Setup Cost ($)</p>
+                          <input 
+                            type="number"
+                            className="text-sm font-bold text-white bg-transparent border-none p-0 w-full focus:ring-0"
+                            value={selectedNode.setupCost}
+                            onChange={(e) => handleUpdateNode(selectedNode.id, { setupCost: parseInt(e.target.value) || 0 })}
+                          />
+                        </div>
+                        <div className="bg-white/5 rounded-xl p-3 border border-white/5 col-span-2">
+                          <p className="text-[9px] text-white/40 uppercase block mb-1">Scheduling Rule</p>
+                          <input 
+                            type="text"
+                            className="text-sm font-bold text-white bg-transparent border-none p-0 w-full focus:ring-0"
+                            value={selectedNode.schedulingRule}
+                            onChange={(e) => handleUpdateNode(selectedNode.id, { schedulingRule: e.target.value })}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {(selectedNode.type === NodeType.WAREHOUSE || selectedNode.type === NodeType.DISTRIBUTION_CENTER) && (
+                    <div className="space-y-4">
+                      <h4 className="text-[10px] text-white/40 uppercase tracking-widest border-b border-white/5 pb-2">Throughput</h4>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="bg-white/5 rounded-xl p-3 border border-white/5">
+                          <p className="text-[9px] text-white/40 uppercase block mb-1">Picking Rate</p>
+                          <input 
+                            type="number"
+                            className="text-sm font-bold text-white bg-transparent border-none p-0 w-full focus:ring-0"
+                            value={selectedNode.pickingRate}
+                            onChange={(e) => handleUpdateNode(selectedNode.id, { pickingRate: parseInt(e.target.value) || 0 })}
+                          />
+                        </div>
+                        <div className="bg-white/5 rounded-xl p-3 border border-white/5">
+                          <p className="text-[9px] text-white/40 uppercase block mb-1">Packing Rate</p>
+                          <input 
+                            type="number"
+                            className="text-sm font-bold text-white bg-transparent border-none p-0 w-full focus:ring-0"
+                            value={selectedNode.packingRate}
+                            onChange={(e) => handleUpdateNode(selectedNode.id, { packingRate: parseInt(e.target.value) || 0 })}
+                          />
+                        </div>
+                        <div className="bg-white/5 rounded-xl p-3 border border-white/5">
+                          <p className="text-[9px] text-white/40 uppercase block mb-1">Automation (1-5)</p>
+                          <input 
+                            type="number"
+                            min="1" max="5"
+                            className="text-sm font-bold text-white bg-transparent border-none p-0 w-full focus:ring-0"
+                            value={selectedNode.automationLevel}
+                            onChange={(e) => handleUpdateNode(selectedNode.id, { automationLevel: parseInt(e.target.value) || 0 })}
+                          />
+                        </div>
+                        <div className="bg-white/5 rounded-xl p-3 border border-white/5">
+                          <p className="text-[9px] text-white/40 uppercase block mb-1">Accuracy %</p>
+                          <input 
+                            type="number"
+                            className="text-sm font-bold text-white bg-transparent border-none p-0 w-full focus:ring-0"
+                            value={selectedNode.fulfillmentAccuracy}
+                            onChange={(e) => handleUpdateNode(selectedNode.id, { fulfillmentAccuracy: parseInt(e.target.value) || 0 })}
+                          />
+                        </div>
+                      </div>
+
+                      <h4 className="text-[10px] text-white/40 uppercase tracking-widest border-b border-white/5 pb-2 mt-4">Capabilities</h4>
+                      <div className="space-y-3">
+                        <label className="flex items-center gap-3 p-3 rounded-xl bg-white/5 border border-white/5 cursor-pointer hover:bg-white/10 transition-all">
+                          <input 
+                            type="checkbox" 
+                            checked={selectedNode.crossDocking}
+                            onChange={(e) => handleUpdateNode(selectedNode.id, { crossDocking: e.target.checked })}
+                            className="w-4 h-4 rounded border-white/10 bg-white/5 text-white focus:ring-0"
+                          />
+                          <span className="text-xs font-bold text-white">Enable Cross-Docking</span>
+                        </label>
+                        <div className="bg-white/5 rounded-xl p-3 border border-white/5">
+                          <p className="text-[9px] text-white/40 uppercase block mb-1">Labor Availability %</p>
+                          <input 
+                            type="number"
+                            className="text-sm font-bold text-white bg-transparent border-none p-0 w-full focus:ring-0"
+                            value={selectedNode.laborAvailability}
+                            onChange={(e) => handleUpdateNode(selectedNode.id, { laborAvailability: parseInt(e.target.value) || 0 })}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {selectedNode.type === NodeType.RETAIL && (
+                    <div className="space-y-4">
+                      <h4 className="text-[10px] text-white/40 uppercase tracking-widest border-b border-white/5 pb-2">Market Dynamics</h4>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="bg-white/5 rounded-xl p-3 border border-white/5">
+                          <p className="text-[9px] text-white/40 uppercase block mb-1">Volume</p>
+                          <input 
+                            type="number"
+                            className="text-sm font-bold text-white bg-transparent border-none p-0 w-full focus:ring-0"
+                            value={selectedNode.demandVolume}
+                            onChange={(e) => handleUpdateNode(selectedNode.id, { demandVolume: parseInt(e.target.value) || 0 })}
+                          />
+                        </div>
+                        <div className="bg-white/5 rounded-xl p-3 border border-white/5">
+                          <p className="text-[9px] text-white/40 uppercase block mb-1">Variability %</p>
+                          <input 
+                            type="number"
+                            className="text-sm font-bold text-white bg-transparent border-none p-0 w-full focus:ring-0"
+                            value={selectedNode.demandVariability}
+                            onChange={(e) => handleUpdateNode(selectedNode.id, { demandVariability: parseInt(e.target.value) || 0 })}
+                          />
+                        </div>
+                        <div className="bg-white/5 rounded-xl p-3 border border-white/5">
+                          <p className="text-[9px] text-white/40 uppercase block mb-1">Seasonality</p>
+                          <input 
+                            type="number"
+                            step="0.1"
+                            className="text-sm font-bold text-white bg-transparent border-none p-0 w-full focus:ring-0"
+                            value={selectedNode.demandSeasonality}
+                            onChange={(e) => handleUpdateNode(selectedNode.id, { demandSeasonality: parseFloat(e.target.value) || 0 })}
+                          />
+                        </div>
+                        <div className="bg-white/5 rounded-xl p-3 border border-white/5">
+                          <p className="text-[9px] text-white/40 uppercase block mb-1">Elasticity</p>
+                          <input 
+                            type="number"
+                            step="0.1"
+                            className="text-sm font-bold text-white bg-transparent border-none p-0 w-full focus:ring-0"
+                            value={selectedNode.priceElasticity}
+                            onChange={(e) => handleUpdateNode(selectedNode.id, { priceElasticity: parseFloat(e.target.value) || 0 })}
+                          />
+                        </div>
+                      </div>
+
+                      <h4 className="text-[10px] text-white/40 uppercase tracking-widest border-b border-white/5 pb-2 mt-4">Customer Behavior</h4>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="bg-white/5 rounded-xl p-3 border border-white/5">
+                          <p className="text-[9px] text-white/40 uppercase block mb-1">LT Tolerance (d)</p>
+                          <input 
+                            type="number"
+                            className="text-sm font-bold text-white bg-transparent border-none p-0 w-full focus:ring-0"
+                            value={selectedNode.leadTimeTolerance}
+                            onChange={(e) => handleUpdateNode(selectedNode.id, { leadTimeTolerance: parseInt(e.target.value) || 0 })}
+                          />
+                        </div>
+                        <div className="bg-white/5 rounded-xl p-3 border border-white/5">
+                          <p className="text-[9px] text-white/40 uppercase block mb-1">Substitution</p>
+                          <input 
+                            type="text"
+                            className="text-sm font-bold text-white bg-transparent border-none p-0 w-full focus:ring-0"
+                            value={selectedNode.substitutionBehavior}
+                            onChange={(e) => handleUpdateNode(selectedNode.id, { substitutionBehavior: e.target.value })}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   <button 
                     onClick={() => setSelectedNode(null)}
@@ -730,7 +1109,161 @@ const NetworkBuilder: React.FC<NetworkBuilderProps> = ({ nodes, routes, setNodes
                     </div>
                   </div>
                 )}
-                {/* ... (rest of the tabs) */}
+
+                {activeNodeTab === 'inventory' && (
+                  <div className="grid grid-cols-2 gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                    <div className="space-y-4">
+                      <h4 className="text-[10px] text-white/40 uppercase tracking-widest border-b border-white/5 pb-2">Levels</h4>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="text-[10px] text-white/40 uppercase tracking-widest mb-1 block">Initial Level</label>
+                          <input type="number" value={newNode.inventoryLevel} onChange={(e) => setNewNode({...newNode, inventoryLevel: parseInt(e.target.value)})} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white" />
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-white/40 uppercase tracking-widest mb-1 block">Max Capacity</label>
+                          <input type="number" value={newNode.maxCapacity} onChange={(e) => setNewNode({...newNode, maxCapacity: parseInt(e.target.value)})} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white" />
+                        </div>
+                      </div>
+                    </div>
+                    <div className="space-y-4">
+                      <h4 className="text-[10px] text-white/40 uppercase tracking-widest border-b border-white/5 pb-2">Replenishment</h4>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="text-[10px] text-white/40 uppercase tracking-widest mb-1 block">Reorder Point</label>
+                          <input type="number" value={newNode.reorderPoint} onChange={(e) => setNewNode({...newNode, reorderPoint: parseInt(e.target.value)})} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white" />
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-white/40 uppercase tracking-widest mb-1 block">Order Qty</label>
+                          <input type="number" value={newNode.orderQuantity} onChange={(e) => setNewNode({...newNode, orderQuantity: parseInt(e.target.value)})} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white" />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {activeNodeTab === 'supplier' && (
+                  <div className="grid grid-cols-2 gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                    <div className="space-y-4">
+                      <h4 className="text-[10px] text-white/40 uppercase tracking-widest border-b border-white/5 pb-2">Lead Times</h4>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="text-[10px] text-white/40 uppercase tracking-widest mb-1 block">Lead Time (d)</label>
+                          <input type="number" value={newNode.supplierLeadTime} onChange={(e) => setNewNode({...newNode, supplierLeadTime: parseInt(e.target.value)})} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white" />
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-white/40 uppercase tracking-widest mb-1 block">Variability %</label>
+                          <input type="number" value={newNode.supplierLeadTimeVariability} onChange={(e) => setNewNode({...newNode, supplierLeadTimeVariability: parseInt(e.target.value)})} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white" />
+                        </div>
+                      </div>
+                    </div>
+                    <div className="space-y-4">
+                      <h4 className="text-[10px] text-white/40 uppercase tracking-widest border-b border-white/5 pb-2">Capability</h4>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="text-[10px] text-white/40 uppercase tracking-widest mb-1 block">Reliability %</label>
+                          <input type="number" value={newNode.supplierReliability} onChange={(e) => setNewNode({...newNode, supplierReliability: parseInt(e.target.value)})} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white" />
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-white/40 uppercase tracking-widest mb-1 block">Unit Cost</label>
+                          <input type="number" value={newNode.supplierCostPerUnit} onChange={(e) => setNewNode({...newNode, supplierCostPerUnit: parseInt(e.target.value)})} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white" />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {activeNodeTab === 'production' && (
+                  <div className="grid grid-cols-2 gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                    <div className="space-y-4">
+                      <h4 className="text-[10px] text-white/40 uppercase tracking-widest border-b border-white/5 pb-2">Output</h4>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="text-[10px] text-white/40 uppercase tracking-widest mb-1 block">Capacity / Day</label>
+                          <input type="number" value={newNode.productionCapacity} onChange={(e) => setNewNode({...newNode, productionCapacity: parseInt(e.target.value)})} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white" />
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-white/40 uppercase tracking-widest mb-1 block">Yield Rate %</label>
+                          <input type="number" value={newNode.yieldRate} onChange={(e) => setNewNode({...newNode, yieldRate: parseInt(e.target.value)})} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white" />
+                        </div>
+                      </div>
+                    </div>
+                    <div className="space-y-4">
+                      <h4 className="text-[10px] text-white/40 uppercase tracking-widest border-b border-white/5 pb-2">Operations</h4>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="text-[10px] text-white/40 uppercase tracking-widest mb-1 block">Batch Size</label>
+                          <input type="number" value={newNode.batchSize} onChange={(e) => setNewNode({...newNode, batchSize: parseInt(e.target.value)})} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white" />
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-white/40 uppercase tracking-widest mb-1 block">Setup Time (h)</label>
+                          <input type="number" value={newNode.setupTime} onChange={(e) => setNewNode({...newNode, setupTime: parseInt(e.target.value)})} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white" />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {activeNodeTab === 'warehouse' && (
+                  <div className="grid grid-cols-2 gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                    <div className="space-y-4">
+                      <h4 className="text-[10px] text-white/40 uppercase tracking-widest border-b border-white/5 pb-2">Space</h4>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="text-[10px] text-white/40 uppercase tracking-widest mb-1 block">Storage Cap</label>
+                          <input type="number" value={newNode.storageCapacity} onChange={(e) => setNewNode({...newNode, storageCapacity: parseInt(e.target.value)})} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white" />
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-white/40 uppercase tracking-widest mb-1 block">Throughput</label>
+                          <input type="number" value={newNode.throughputCapacity} onChange={(e) => setNewNode({...newNode, throughputCapacity: parseInt(e.target.value)})} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white" />
+                        </div>
+                      </div>
+                    </div>
+                    <div className="space-y-4">
+                      <h4 className="text-[10px] text-white/40 uppercase tracking-widest border-b border-white/5 pb-2">Efficiency</h4>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="text-[10px] text-white/40 uppercase tracking-widest mb-1 block">Picking Rate</label>
+                          <input type="number" value={newNode.pickingRate} onChange={(e) => setNewNode({...newNode, pickingRate: parseInt(e.target.value)})} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white" />
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-white/40 uppercase tracking-widest mb-1 block">Labor Avail %</label>
+                          <input type="number" value={newNode.laborAvailability} onChange={(e) => setNewNode({...newNode, laborAvailability: parseInt(e.target.value)})} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white" />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {activeNodeTab === 'demand' && (
+                  <div className="grid grid-cols-2 gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                    <div className="space-y-4">
+                      <h4 className="text-[10px] text-white/40 uppercase tracking-widest border-b border-white/5 pb-2">Volume</h4>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="text-[10px] text-white/40 uppercase tracking-widest mb-1 block">Demand Vol</label>
+                          <input type="number" value={newNode.demandVolume} onChange={(e) => setNewNode({...newNode, demandVolume: parseInt(e.target.value)})} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white" />
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-white/40 uppercase tracking-widest mb-1 block">Variability %</label>
+                          <input type="number" value={newNode.demandVariability} onChange={(e) => setNewNode({...newNode, demandVariability: parseInt(e.target.value)})} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white" />
+                        </div>
+                      </div>
+                    </div>
+                    <div className="space-y-4">
+                      <h4 className="text-[10px] text-white/40 uppercase tracking-widest border-b border-white/5 pb-2">Growth</h4>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="text-[10px] text-white/40 uppercase tracking-widest mb-1 block">Growth Rate %</label>
+                          <input type="number" value={newNode.demandGrowthRate} onChange={(e) => setNewNode({...newNode, demandGrowthRate: parseInt(e.target.value)})} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white" />
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-white/40 uppercase tracking-widest mb-1 block">Backorder %</label>
+                          <input type="number" value={newNode.backorderRate} onChange={(e) => setNewNode({...newNode, backorderRate: parseInt(e.target.value)})} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white" />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="flex gap-3 mt-12">

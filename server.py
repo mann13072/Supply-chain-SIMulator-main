@@ -2,6 +2,7 @@ import uvicorn
 from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict
+from dataclasses import asdict
 import re
 
 # Import our optimized engine
@@ -32,6 +33,7 @@ async def health_check():
 async def list_hubs():
     hubs = {"Air": [], "Sea": []}
     for node_id, node in engine._nodes.items():
+        if not node.is_hub: continue
         hubs[node.type].append({
             "id": node_id,
             "name": node.name,
@@ -50,6 +52,7 @@ class NodeCreate(BaseModel):
     lat: float
     lon: float
     type: str
+    is_hub: bool = False
 
 class RouteCreate(BaseModel):
     u: str
@@ -58,7 +61,7 @@ class RouteCreate(BaseModel):
 
 @app.post("/api/nodes")
 async def add_node(node: NodeCreate):
-    engine.add_node(node.id, node.name, node.lat, node.lon, node.type)
+    engine.add_node(node.id, node.name, node.lat, node.lon, node.type, is_hub=node.is_hub)
     return {"status": "success"}
 
 @app.post("/api/routes")
@@ -94,6 +97,26 @@ async def get_shortest_path(
     except Exception as e:
         print(f"Error: {e}")
         raise HTTPException(status_code=500, detail="Internal routing engine error.")
+
+@app.get("/api/state")
+async def get_state():
+    """Returns the current simulation state (nodes and routes)."""
+    nodes = []
+    for node in engine._nodes.values():
+        if not node.is_hub:
+            nodes.append(asdict(node))
+    
+    # Extract routes from adjacency list
+    routes = []
+    processed_routes = set()
+    for u, edges in engine._adj.items():
+        for edge in edges:
+            route_key = tuple(sorted([u, edge.to_node]) + [edge.mode])
+            if route_key not in processed_routes:
+                routes.append({"fromId": u, "toId": edge.to_node, "mode": edge.mode, "distance": edge.distance})
+                processed_routes.add(route_key)
+                
+    return {"nodes": nodes, "routes": routes}
 
 if __name__ == "__main__":
     uvicorn.run(app, host="127.0.0.1", port=8000)

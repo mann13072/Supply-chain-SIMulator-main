@@ -36,17 +36,24 @@ export const runSimulationAnalysis = async (
     const ai = new GoogleGenAI({ apiKey });
     
     const prompt = `
-      Act as a Digital Twin Simulation Engine for a Global Supply Chain.
-      Analyze the impact of the following configuration:
+      Act as an advanced Digital Twin Simulation Engine.
+      Analyze the provided supply chain network using the following granular data:
       
       Nodes: ${JSON.stringify(nodes)}
       Routes: ${JSON.stringify(routes)}
       Global Parameters: ${JSON.stringify(params)}
 
+      In your analysis, strictly consider:
+      - Inventory Policy: Reorder points, safety stock, holding costs, shelf life, and obsolescence risk.
+      - Supplier Reliability: Lead time variability, reliability %, disruption probabilities, and recovery time.
+      - Production Efficiency: Capacity utilization, yield rates, defect rates, and setup constraints.
+      - Warehouse Performance: Throughput capacity, picking/packing efficiency, automation level, and labor availability.
+      - Market Dynamics: Demand seasonality, variability, price elasticity, and customer lead time tolerance.
+
       Provide a structured JSON output containing:
-      1. A detailed narrative describing the propagation of potential shocks.
-      2. Quantitative impact estimates on KPIs.
-      3. Strategic recommendations for mitigation.
+      1. A detailed narrative describing how these specific variables interact to create risks or efficiencies.
+      2. Quantitative impact estimates on KPIs (Landed Cost, OTIF, Carbon).
+      3. Strategic recommendations for network optimization based on the input data.
       4. Qualitative risk assessment.
       5. Quantitative risk score (0-100).
     `;

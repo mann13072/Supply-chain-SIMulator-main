@@ -83,9 +83,23 @@ export const routingService = {
   },
 
   /**
+   * Fetches the current simulation state from the backend.
+   */
+  async getState(): Promise<{ nodes: any[], routes: any[] }> {
+    try {
+      const response = await fetch('/api/state');
+      if (!response.ok) return { nodes: [], routes: [] };
+      return await response.json();
+    } catch (error) {
+      console.error('Get State Error:', error);
+      return { nodes: [], routes: [] };
+    }
+  },
+
+  /**
    * Persists a new node to the Python engine.
    */
-  async persistNode(node: { id: string, name: string, lat: number, lon: number, type: string }) {
+  async persistNode(node: { id: string, name: string, lat: number, lon: number, type: string, is_hub?: boolean }) {
     try {
       await fetch('/api/nodes', {
         method: 'POST',
