@@ -111,11 +111,34 @@ export interface Route {
   disruptionProb: number;
 }
 
+export interface Commodity {
+  id: string;
+  name: string;
+  unit: string;
+  basePrice: number;
+  color: string;
+}
+
+export interface IndustryConfig {
+  id: string;
+  name: string;
+  commodities: Commodity[];
+  baseCurrency: string;
+  currencySymbol: string;
+  exchangeRates: Record<string, number>;
+}
+
+export interface WorkflowState {
+  industryConfigured: boolean;
+  networkBuilt: boolean;
+  riskConfigured: boolean;
+  simulationRun: boolean;
+  analysisReady: boolean;
+}
+
 export interface SimulationParams {
-  // Solar-Specific Commodities
-  polysiliconPriceChange: number;
-  silverPriceChange: number;
-  aluminumPriceChange: number;
+  // Generic Commodity Price Changes (replaces solar-specific fields)
+  commodityPriceChanges: Record<string, number>;
   yieldRateDegradation: number;
   energyCostChange: number;
 

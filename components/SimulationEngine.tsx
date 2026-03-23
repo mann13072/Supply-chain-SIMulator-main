@@ -1,10 +1,13 @@
 import React from 'react';
-import { Play, Pause, RotateCcw, FastForward, TrendingUp, DollarSign, Package, ShieldAlert, Activity, PlayCircle } from 'lucide-react';
-import { SupplyNode, Route, NodeStatus, NodeType, InTransitShipment } from '../types';
+import { Play, Pause, RotateCcw, FastForward, Activity, PlayCircle } from 'lucide-react';
+import { SupplyNode, Route, NodeStatus, NodeType, InTransitShipment, SimulationParams, IndustryConfig } from '../types';
+import SimulationPanel from './SimulationPanel';
+import { formatCurrencyCompact } from '../utils/formatting';
 
 interface SimulationEngineProps {
   nodes: SupplyNode[];
   routes: Route[];
+  setNodes: (nodes: SupplyNode[]) => void;
   day: number;
   isPlaying: boolean;
   setIsPlaying: (playing: boolean) => void;
@@ -13,17 +16,20 @@ interface SimulationEngineProps {
   logs: string[];
   shipments: InTransitShipment[];
   resetSimulation: () => void;
+  params: SimulationParams;
+  setParams: (params: SimulationParams) => void;
+  industryConfig: IndustryConfig;
 }
 
-const SimulationEngine: React.FC<SimulationEngineProps> = ({ 
-  nodes, routes, day, isPlaying, setIsPlaying, speed, setSpeed, logs, shipments, resetSimulation 
+const SimulationEngine: React.FC<SimulationEngineProps> = ({
+  nodes, routes, day, isPlaying, setIsPlaying, speed, setSpeed, logs, shipments, resetSimulation,
+  params, setParams, industryConfig
 }) => {
-  
-  // Calculations based on live session data
+
   const serviceLevel = nodes.length > 0 ? Math.round(
     (nodes.filter(n => n.status === NodeStatus.OPTIMAL).length / nodes.length) * 100
   ) : 0;
-  
+
   const totalCost = nodes.reduce((acc, n) => {
     const invCost = n.inventoryLevel * (n.holdingCost || 0.5);
     const opCost = n.type === NodeType.FACTORY
@@ -45,9 +51,9 @@ const SimulationEngine: React.FC<SimulationEngineProps> = ({
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-3xl font-bold text-white tracking-tight">Simulation Monitor</h2>
-          <p className="text-white/40 text-sm mt-1">Live tracking of global inventory flow</p>
+          <p className="text-white/40 text-sm mt-1">{industryConfig.name} · Live inventory flow</p>
         </div>
-        
+
         <div className="flex items-center gap-4 bg-white/5 p-2 rounded-2xl border border-white/10">
           <div className="px-4 py-2 text-right">
             <p className="text-[10px] text-white/40 uppercase tracking-widest">Day</p>
@@ -68,22 +74,22 @@ const SimulationEngine: React.FC<SimulationEngineProps> = ({
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="bg-white/5 rounded-3xl border border-white/5 p-8 relative overflow-hidden group">
+          <div className="bg-white/5 rounded-3xl border border-white/5 p-8">
             <p className="text-[10px] text-white/40 uppercase tracking-[0.2em] font-bold mb-2">Service Level</p>
             <h3 className="text-5xl font-bold text-white tracking-tighter mb-4">{serviceLevel}%</h3>
             <p className="text-white/40 text-xs">{serviceLevel > 90 ? 'Healthy' : 'Replenishment Lagging'}</p>
           </div>
-          <div className="bg-white/5 rounded-3xl border border-white/5 p-8 relative overflow-hidden group">
+          <div className="bg-white/5 rounded-3xl border border-white/5 p-8">
             <p className="text-[10px] text-white/40 uppercase tracking-[0.2em] font-bold mb-2">Daily OpEx</p>
-            <h3 className="text-5xl font-bold text-white tracking-tighter mb-4">${(totalCost / 1000).toFixed(1)}K</h3>
+            <h3 className="text-5xl font-bold text-white tracking-tighter mb-4">{formatCurrencyCompact(totalCost, industryConfig)}</h3>
             <p className="text-white/40 text-xs">Dynamic operational costs</p>
           </div>
-          <div className="bg-white/5 rounded-3xl border border-white/5 p-8 relative overflow-hidden group">
+          <div className="bg-white/5 rounded-3xl border border-white/5 p-8">
             <p className="text-[10px] text-white/40 uppercase tracking-[0.2em] font-bold mb-2">Chain Value</p>
-            <h3 className="text-5xl font-bold text-white tracking-tighter mb-4">${((inventoryValue + transitValue) / 1000000).toFixed(2)}M</h3>
+            <h3 className="text-5xl font-bold text-white tracking-tighter mb-4">{formatCurrencyCompact(inventoryValue + transitValue, industryConfig)}</h3>
             <p className="text-white/40 text-xs">{shipments.length} Active Shipments</p>
           </div>
-          <div className="bg-white/5 rounded-3xl border border-white/5 p-8 relative overflow-hidden group">
+          <div className="bg-white/5 rounded-3xl border border-white/5 p-8">
             <p className="text-[10px] text-white/40 uppercase tracking-[0.2em] font-bold mb-2">Network Health</p>
             <h3 className={`text-5xl font-bold tracking-tighter ${serviceLevel < 80 ? 'text-red-500' : 'text-white'}`}>{serviceLevel < 80 ? 'CRITICAL' : 'STABLE'}</h3>
             <p className="text-white/40 text-xs">{nodes.filter(n => n.status !== 'OPTIMAL').length} Warnings</p>
@@ -108,18 +114,21 @@ const SimulationEngine: React.FC<SimulationEngineProps> = ({
             ))}
           </div>
         </div>
+      </div>
 
-        <div className="col-span-12 lg:col-span-3 bg-[#050505] rounded-3xl border border-white/5 p-8 flex flex-col h-[400px]">
-          <h3 className="text-white font-semibold mb-6 flex items-center gap-2"><Activity className="w-5 h-5" /> Operational Log</h3>
-          <div className="flex-1 overflow-y-auto space-y-4 custom-scrollbar">
-            {logs.length === 0 ? (
-              <div className="h-full flex flex-col items-center justify-center opacity-20"><PlayCircle className="w-8 h-8 mb-2" /><p className="text-xs">No active events</p></div>
-            ) : (
-              logs.map((log, i) => (
-                <div key={i} className="text-[10px] font-mono text-white/60 border-l border-white/10 pl-3 py-1">{log}</div>
-              ))
-            )}
-          </div>
+      {/* Simulation Parameters Panel */}
+      <SimulationPanel params={params} setParams={setParams} industryConfig={industryConfig} />
+
+      <div className="bg-[#050505] rounded-3xl border border-white/5 p-8 flex flex-col h-[400px]">
+        <h3 className="text-white font-semibold mb-6 flex items-center gap-2"><Activity className="w-5 h-5" /> Operational Log</h3>
+        <div className="flex-1 overflow-y-auto space-y-4 custom-scrollbar">
+          {logs.length === 0 ? (
+            <div className="h-full flex flex-col items-center justify-center opacity-20"><PlayCircle className="w-8 h-8 mb-2" /><p className="text-xs">No active events</p></div>
+          ) : (
+            logs.map((log, i) => (
+              <div key={i} className="text-[10px] font-mono text-white/60 border-l border-white/10 pl-3 py-1">{log}</div>
+            ))
+          )}
         </div>
       </div>
     </div>

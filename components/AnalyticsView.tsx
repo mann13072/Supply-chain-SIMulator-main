@@ -1,12 +1,14 @@
 import React from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Legend } from 'recharts';
-import { HistorySnapshot } from '../types';
+import { HistorySnapshot, SupplyNode, IndustryConfig } from '../types';
 
 interface AnalyticsViewProps {
   history: HistorySnapshot[];
+  nodes: SupplyNode[];
+  industryConfig: IndustryConfig;
 }
 
-const AnalyticsView: React.FC<AnalyticsViewProps> = ({ history }) => {
+const AnalyticsView: React.FC<AnalyticsViewProps> = ({ history, nodes, industryConfig }) => {
   // Map history to chart-friendly format
   const chartData = history.map(h => {
     const data: Record<string, number | string> = { name: `Day ${h.day}` };
@@ -27,7 +29,7 @@ const AnalyticsView: React.FC<AnalyticsViewProps> = ({ history }) => {
       <div className="flex justify-between items-end">
          <div>
             <h2 className="text-3xl font-bold text-white tracking-tight">Supply Chain Telemetry</h2>
-            <p className="text-white/40 text-sm mt-1">Real-time performance metrics derived from simulation history.</p>
+            <p className="text-white/40 text-sm mt-1">{industryConfig.name} · Real-time performance metrics derived from simulation history.</p>
          </div>
          <div className="flex gap-3">
              <button className="px-4 py-2 bg-white/5 text-sm text-white rounded-xl border border-white/10 hover:bg-white/10 transition-all">Export CSV</button>

@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef } from 'react';
-import Sidebar from './components/Sidebar';
 import Globe from './components/Globe';
 import NetworkBuilder from './components/NetworkBuilder';
 import SimulationEngine from './components/SimulationEngine';
@@ -7,18 +6,16 @@ import AnalyticsView from './components/AnalyticsView';
 import SettingsView from './components/SettingsView';
 import ResilienceHub from './components/ResilienceHub';
 import OptimizationView from './components/OptimizationView';
-import { SupplyNode, NodeType, NodeStatus, Route, TransportMode, KPI, SimulationParams, InTransitShipment, HistorySnapshot } from './types';
+import { SupplyNode, NodeType, NodeStatus, Route, TransportMode, SimulationParams, InTransitShipment, HistorySnapshot, IndustryConfig, WorkflowState } from './types';
 import { routingService } from './services/routingService';
-import { motion, AnimatePresence } from 'framer-motion';
-import { LayoutDashboard, Network, PlayCircle, BarChart3, Settings, Layers, Zap, ShieldAlert, Activity, Globe as GlobeIcon } from 'lucide-react';
+import { PRESET_INDUSTRIES } from './utils/industries';
+import { LayoutDashboard, Network, PlayCircle, BarChart3, Settings, Zap, ShieldAlert, Activity, CheckCircle2, Circle } from 'lucide-react';
 
 const INITIAL_NODES: SupplyNode[] = [];
 const INITIAL_ROUTES: Route[] = [];
 
 const INITIAL_PARAMS: SimulationParams = {
-  polysiliconPriceChange: 0,
-  silverPriceChange: 0,
-  aluminumPriceChange: 0,
+  commodityPriceChanges: {},
   yieldRateDegradation: 0,
   energyCostChange: 0,
   unitProductionCost: 100,
@@ -68,8 +65,12 @@ function computeNextSimulationState(
   prevShipments: InTransitShipment[],
   routes: Route[],
   params: SimulationParams,
-  nextDay: number
+  nextDay: number,
+  industryConfig: IndustryConfig
 ): { nextNodes: SupplyNode[]; nextShipments: InTransitShipment[]; newLogs: string[]; snapshot: HistorySnapshot } {
+  // Compute effective cost multiplier from commodity price changes
+  const commodityMultiplier = Object.values(params.commodityPriceChanges)
+    .reduce((acc, change) => acc * (1 + change / 100), 1.0);
   const nextNodes = prevNodes.map(n => ({ ...n }));
   const newLogs: string[] = [];
   const nextShipments: InTransitShipment[] = [];
@@ -130,10 +131,12 @@ function computeNextSimulationState(
     }
 
     // 4. Production (FACTORY nodes)
+    // Commodity price increases reduce effective production capacity (cost squeeze)
     if (node.type === NodeType.FACTORY && !isOnStrike) {
       const degradation = Math.max(0, params.yieldRateDegradation);
       const yieldRate = Math.max(0, ((node.yieldRate || 100) - degradation)) / 100;
-      const netProduction = Math.floor((node.productionCapacity || 100) * yieldRate);
+      const costSqueeze = Math.max(0.5, 1 / commodityMultiplier); // high commodity cost → lower net production
+      const netProduction = Math.floor((node.productionCapacity || 100) * yieldRate * costSqueeze);
       node.inventoryLevel = Math.min(node.maxCapacity, node.inventoryLevel + netProduction);
     }
   });
@@ -188,6 +191,9 @@ function App() {
   const [params, setParams] = useState<SimulationParams>(INITIAL_PARAMS);
   const [selectedNode, setSelectedNode] = useState<SupplyNode | null>(null);
   const [history, setHistory] = useState<HistorySnapshot[]>([]);
+  const [industryConfig, setIndustryConfig] = useState<IndustryConfig>(PRESET_INDUSTRIES[0]);
+  const [lowStockThreshold, setLowStockThreshold] = useState(20);
+  const [costVarianceThreshold, setCostVarianceThreshold] = useState(15);
 
   // --- SESSION-LIVE SIMULATION ENGINE ---
   const [isPlaying, setIsPlaying] = useState(false);
@@ -202,12 +208,14 @@ function App() {
   const dayRef = useRef<number>(day);
   const routesRef = useRef<Route[]>(routes);
   const paramsRef = useRef<SimulationParams>(params);
+  const industryConfigRef = useRef<IndustryConfig>(industryConfig);
 
   useEffect(() => { nodesRef.current = nodes; }, [nodes]);
   useEffect(() => { shipmentsRef.current = shipments; }, [shipments]);
   useEffect(() => { dayRef.current = day; }, [day]);
   useEffect(() => { routesRef.current = routes; }, [routes]);
   useEffect(() => { paramsRef.current = params; }, [params]);
+  useEffect(() => { industryConfigRef.current = industryConfig; }, [industryConfig]);
 
   // Core Simulation Loop (The Heartbeat) — no nested setState
   useEffect(() => {
@@ -219,7 +227,8 @@ function App() {
         shipmentsRef.current,
         routesRef.current,
         paramsRef.current,
-        nextDay
+        nextDay,
+        industryConfigRef.current
       );
 
       setDay(nextDay);
@@ -279,6 +288,15 @@ function App() {
     loadState();
   }, []);
 
+  // Derive workflow state from existing state — no extra storage
+  const workflowState: WorkflowState = {
+    industryConfigured: industryConfig.id !== 'solar', // solar is the default, anything else means user chose
+    networkBuilt: nodes.length > 0,
+    riskConfigured: params.geopoliticalTension || params.tariffImposition || params.logisticDisruption || params.weatherEvent || params.supplierFailureProb > 0.01,
+    simulationRun: day > 0,
+    analysisReady: history.length >= 30,
+  };
+
   // Fix #6: Guard against NaN when nodes array is empty
   const networkHealth = nodes.length === 0 ? 0 : Math.round(
     (nodes.filter(n => n.status === NodeStatus.OPTIMAL).length / nodes.length) * 100
@@ -287,42 +305,70 @@ function App() {
   const riskLevel = nodes.some(n => n.status === NodeStatus.CRITICAL) ? 'HIGH' :
                    nodes.some(n => n.status === NodeStatus.WARNING) ? 'MED' : 'LOW';
 
+  const workflowSteps = [
+    { label: 'Industry', done: workflowState.industryConfigured, tab: 'settings' },
+    { label: 'Network',  done: workflowState.networkBuilt,       tab: 'builder' },
+    { label: 'Risk',     done: workflowState.riskConfigured,     tab: 'resilience' },
+    { label: 'Simulate', done: workflowState.simulationRun,      tab: 'simulation' },
+    { label: 'Analyze',  done: workflowState.analysisReady,      tab: 'analytics' },
+    { label: 'Optimize', done: false,                            tab: 'optimization' },
+  ];
+
   const renderContent = () => {
     switch (activeTab) {
       case 'dashboard':
         return (
-          <div className="grid grid-cols-12 gap-8 h-full animate-in fade-in slide-in-from-bottom-4 duration-700">
-            <div className="col-span-12 lg:col-span-8 flex flex-col gap-8">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="bg-white/5 rounded-3xl border border-white/5 p-8">
-                  <p className="text-[10px] text-white/40 uppercase tracking-[0.2em] font-bold mb-2">Network Health</p>
-                  <h3 className="text-4xl font-bold text-white tracking-tighter">{networkHealth}%</h3>
-                </div>
-                <div className="bg-white/5 rounded-3xl border border-white/5 p-8">
-                  <p className="text-[10px] text-white/40 uppercase tracking-[0.2em] font-bold mb-2">Active Shipments</p>
-                  <h3 className="text-4xl font-bold text-white tracking-tighter">{activeShipments}</h3>
-                </div>
-                <div className="bg-white/5 rounded-3xl border border-white/5 p-8">
-                  <p className="text-[10px] text-white/40 uppercase tracking-[0.2em] font-bold mb-2">Risk Level</p>
-                  <h3 className={`text-4xl font-bold tracking-tighter ${riskLevel === 'HIGH' ? 'text-red-500' : 'text-white'}`}>{riskLevel}</h3>
-                </div>
-              </div>
-              <div className="flex-1 min-h-[500px] relative">
-                <Globe nodes={nodes} routes={routes} onNodeSelect={setSelectedNode} selectedNodeId={selectedNode?.id || null} />
-              </div>
+          <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+            {/* Workflow Progress Strip */}
+            <div className="bg-white/5 rounded-2xl border border-white/5 p-4 flex items-center justify-between gap-2">
+              {workflowSteps.map((step, i) => (
+                <React.Fragment key={step.tab}>
+                  <button onClick={() => setActiveTab(step.tab)} className="flex flex-col items-center gap-1 group">
+                    {step.done
+                      ? <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+                      : <Circle className="w-5 h-5 text-white/20 group-hover:text-white/40 transition-colors" />}
+                    <span className={`text-[9px] uppercase tracking-widest font-bold ${step.done ? 'text-emerald-400' : 'text-white/30'}`}>{step.label}</span>
+                  </button>
+                  {i < workflowSteps.length - 1 && (
+                    <div className={`flex-1 h-px ${step.done ? 'bg-emerald-400/40' : 'bg-white/10'}`} />
+                  )}
+                </React.Fragment>
+              ))}
             </div>
-            <div className="col-span-12 lg:col-span-4 h-full overflow-hidden">
-               <div className="bg-[#050505] rounded-3xl border border-white/5 p-8 h-full flex flex-col">
-                  <h3 className="text-white font-semibold flex items-center gap-2 mb-8"><Activity className="w-5 h-5" /> Telemetry</h3>
-                  <div className="flex-1 overflow-y-auto space-y-3 custom-scrollbar">
-                    {nodes.map(node => (
-                      <div key={node.id} onClick={() => setSelectedNode(node)} className="bg-white/5 border border-white/10 rounded-2xl p-4 cursor-pointer">
-                        <div className="flex justify-between items-center"><span className="text-sm font-bold text-white">{node.name}</span><div className={`w-2 h-2 rounded-full ${node.status === NodeStatus.OPTIMAL ? 'bg-emerald-500' : node.status === NodeStatus.OFFLINE ? 'bg-gray-500' : 'bg-red-500'}`} /></div>
-                        <p className="text-xs text-white/40">{node.type} • {node.inventoryLevel} units</p>
-                      </div>
-                    ))}
+            <div className="grid grid-cols-12 gap-8">
+              <div className="col-span-12 lg:col-span-8 flex flex-col gap-8">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div className="bg-white/5 rounded-3xl border border-white/5 p-8">
+                    <p className="text-[10px] text-white/40 uppercase tracking-[0.2em] font-bold mb-2">Network Health</p>
+                    <h3 className="text-4xl font-bold text-white tracking-tighter">{networkHealth}%</h3>
                   </div>
-               </div>
+                  <div className="bg-white/5 rounded-3xl border border-white/5 p-8">
+                    <p className="text-[10px] text-white/40 uppercase tracking-[0.2em] font-bold mb-2">Active Shipments</p>
+                    <h3 className="text-4xl font-bold text-white tracking-tighter">{activeShipments}</h3>
+                  </div>
+                  <div className="bg-white/5 rounded-3xl border border-white/5 p-8">
+                    <p className="text-[10px] text-white/40 uppercase tracking-[0.2em] font-bold mb-2">Risk Level</p>
+                    <h3 className={`text-4xl font-bold tracking-tighter ${riskLevel === 'HIGH' ? 'text-red-500' : 'text-white'}`}>{riskLevel}</h3>
+                  </div>
+                </div>
+                <div className="min-h-[500px] relative">
+                  <Globe nodes={nodes} routes={routes} onNodeSelect={setSelectedNode} selectedNodeId={selectedNode?.id || null} />
+                </div>
+              </div>
+              <div className="col-span-12 lg:col-span-4 h-full overflow-hidden">
+                 <div className="bg-[#050505] rounded-3xl border border-white/5 p-8 h-full flex flex-col">
+                    <h3 className="text-white font-semibold flex items-center gap-2 mb-8"><Activity className="w-5 h-5" /> Telemetry</h3>
+                    <p className="text-[10px] text-white/30 uppercase tracking-widest mb-4">{industryConfig.name}</p>
+                    <div className="flex-1 overflow-y-auto space-y-3 custom-scrollbar">
+                      {nodes.map(node => (
+                        <div key={node.id} onClick={() => setSelectedNode(node)} className="bg-white/5 border border-white/10 rounded-2xl p-4 cursor-pointer">
+                          <div className="flex justify-between items-center"><span className="text-sm font-bold text-white">{node.name}</span><div className={`w-2 h-2 rounded-full ${node.status === NodeStatus.OPTIMAL ? 'bg-emerald-500' : node.status === NodeStatus.OFFLINE ? 'bg-gray-500' : 'bg-red-500'}`} /></div>
+                          <p className="text-xs text-white/40">{node.type} • {node.inventoryLevel} units</p>
+                        </div>
+                      ))}
+                    </div>
+                 </div>
+              </div>
             </div>
           </div>
         );
@@ -335,16 +381,17 @@ function App() {
             day={day} isPlaying={isPlaying} setIsPlaying={setIsPlaying}
             speed={speed} setSpeed={setSpeed} logs={logs}
             shipments={shipments} resetSimulation={resetSimulation}
+            params={params} setParams={setParams} industryConfig={industryConfig}
           />
         );
       case 'analytics':
-        return <AnalyticsView history={history} />;
+        return <AnalyticsView history={history} nodes={nodes} industryConfig={industryConfig} />;
       case 'resilience':
         return <ResilienceHub nodes={nodes} routes={routes} params={params} setParams={setParams} setIsPlaying={setIsPlaying} setActiveTab={setActiveTab} resetSimulation={resetSimulation} />;
       case 'optimization':
-        return <OptimizationView nodes={nodes} routes={routes} />;
+        return <OptimizationView nodes={nodes} routes={routes} history={history} params={params} industryConfig={industryConfig} analysisReady={workflowState.analysisReady} />;
       case 'settings':
-        return <SettingsView />;
+        return <SettingsView industryConfig={industryConfig} setIndustryConfig={setIndustryConfig} lowStockThreshold={lowStockThreshold} setLowStockThreshold={setLowStockThreshold} costVarianceThreshold={costVarianceThreshold} setCostVarianceThreshold={setCostVarianceThreshold} />;
       default:
         return <div className="text-white">Coming Soon</div>;
     }
@@ -353,7 +400,7 @@ function App() {
   return (
     <div className="flex min-h-screen bg-black">
       <nav className="w-20 lg:w-64 border-r border-white/5 flex flex-col shrink-0">
-        <div className="p-8"><h1 className="text-white font-black text-2xl tracking-tighter flex items-center gap-2"><Zap className="w-8 h-8 fill-white" />SolarChain</h1></div>
+        <div className="p-8"><h1 className="text-white font-black text-2xl tracking-tighter flex items-center gap-2"><Zap className="w-8 h-8 fill-white" />ChainSim</h1></div>
         <div className="flex-1 px-4 space-y-2">
           {[
             { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },

@@ -12,9 +12,7 @@ interface ScenariosViewProps {
 }
 
 const DEFAULT_PARAMS: SimulationParams = {
-  polysiliconPriceChange: 0,
-  silverPriceChange: 0,
-  aluminumPriceChange: 0,
+  commodityPriceChanges: {},
   yieldRateDegradation: 0,
   energyCostChange: 0,
   unitProductionCost: 100,
