@@ -340,7 +340,7 @@ function App() {
       case 'analytics':
         return <AnalyticsView history={history} />;
       case 'resilience':
-        return <ResilienceHub nodes={nodes} routes={routes} params={params} setParams={setParams} setIsPlaying={setIsPlaying} setActiveTab={setActiveTab} />;
+        return <ResilienceHub nodes={nodes} routes={routes} params={params} setParams={setParams} setIsPlaying={setIsPlaying} setActiveTab={setActiveTab} resetSimulation={resetSimulation} />;
       case 'optimization':
         return <OptimizationView nodes={nodes} routes={routes} />;
       case 'settings':
