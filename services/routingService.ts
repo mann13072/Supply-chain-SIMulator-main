@@ -2,6 +2,7 @@ export interface RouteResponse {
   status: 'success' | 'error';
   path: string[];
   distance_km: number;
+  lead_time_days: number;
   message?: string;
 }
 
@@ -38,6 +39,7 @@ export const routingService = {
           status: 'error',
           path: [],
           distance_km: 0,
+          lead_time_days: 0,
           message: errorData.detail || `API error: ${response.status} ${response.statusText}`
         };
       }
@@ -48,6 +50,7 @@ export const routingService = {
         status: 'error',
         path: [],
         distance_km: 0,
+        lead_time_days: 0,
         message: 'Network Error: Ensure the Python server is running (npm run dev).'
       };
     }

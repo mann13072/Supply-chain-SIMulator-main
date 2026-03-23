@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Sidebar from './components/Sidebar';
 import Globe from './components/Globe';
 import NetworkBuilder from './components/NetworkBuilder';
@@ -7,17 +7,10 @@ import AnalyticsView from './components/AnalyticsView';
 import SettingsView from './components/SettingsView';
 import ResilienceHub from './components/ResilienceHub';
 import OptimizationView from './components/OptimizationView';
-import { SupplyNode, NodeType, NodeStatus, Route, TransportMode, KPI, SimulationParams } from './types';
+import { SupplyNode, NodeType, NodeStatus, Route, TransportMode, KPI, SimulationParams, InTransitShipment, HistorySnapshot } from './types';
 import { routingService } from './services/routingService';
 import { motion, AnimatePresence } from 'framer-motion';
 import { LayoutDashboard, Network, PlayCircle, BarChart3, Settings, Layers, Zap, ShieldAlert, Activity, Globe as GlobeIcon } from 'lucide-react';
-
-interface InTransitShipment {
-  id: string;
-  toId: string;
-  quantity: number;
-  remainingDays: number;
-}
 
 const INITIAL_NODES: SupplyNode[] = [];
 const INITIAL_ROUTES: Route[] = [];
@@ -68,13 +61,133 @@ const INITIAL_PARAMS: SimulationParams = {
   logisticDisruption: false
 };
 
+// Pure function: computes next simulation state from current state.
+// Returns both next nodes and next shipments — no setState calls inside.
+function computeNextSimulationState(
+  prevNodes: SupplyNode[],
+  prevShipments: InTransitShipment[],
+  routes: Route[],
+  params: SimulationParams,
+  nextDay: number
+): { nextNodes: SupplyNode[]; nextShipments: InTransitShipment[]; newLogs: string[]; snapshot: HistorySnapshot } {
+  const nextNodes = prevNodes.map(n => ({ ...n }));
+  const newLogs: string[] = [];
+  const nextShipments: InTransitShipment[] = [];
+
+  // 1. Process arriving shipments (tick down remainingDays, deliver if <= 1)
+  prevShipments.forEach(s => {
+    if (s.remainingDays <= 1) {
+      const target = nextNodes.find(n => n.id === s.toId);
+      if (target) {
+        target.inventoryLevel = Math.min(target.maxCapacity, target.inventoryLevel + s.quantity);
+        newLogs.push(`Day ${nextDay}: Shipment arrived at ${target.name} (${s.quantity} units)`);
+      }
+    } else {
+      nextShipments.push({ ...s, remainingDays: s.remainingDays - 1 });
+    }
+  });
+
+  // 2. Apply risk events per node
+  nextNodes.forEach(node => {
+    // Natural disaster — any node can go OFFLINE
+    if (Math.random() < params.naturalDisasterProb) {
+      node.status = NodeStatus.OFFLINE;
+      newLogs.push(`Day ${nextDay}: NATURAL DISASTER hit ${node.name}! Node offline.`);
+      return; // skip further processing for offline node
+    }
+
+    // Cyber attack — DC/Warehouse throughput halved
+    if ((node.type === NodeType.DISTRIBUTION_CENTER || node.type === NodeType.WAREHOUSE)
+        && Math.random() < params.cyberRisk) {
+      node.throughputCapacity = Math.floor((node.throughputCapacity || 500) * 0.5);
+      newLogs.push(`Day ${nextDay}: CYBER INCIDENT at ${node.name}. Throughput halved.`);
+    }
+
+    // Supplier failure
+    if (node.type === NodeType.SUPPLIER && Math.random() < params.supplierFailureProb) {
+      node.status = NodeStatus.CRITICAL;
+      newLogs.push(`Day ${nextDay}: SUPPLIER FAILURE at ${node.name}!`);
+    }
+
+    // Labor strike — factory production drops to 0 for this tick
+    const isOnStrike = node.type === NodeType.FACTORY && Math.random() < params.laborStrikeProb;
+    if (isOnStrike) {
+      newLogs.push(`Day ${nextDay}: LABOR STRIKE at ${node.name}. No production this day.`);
+    }
+
+    // 3. Demand consumption (RETAIL nodes)
+    if (node.type === NodeType.RETAIL) {
+      const surgeFactor = 1 + (params.demandSurge / 100);
+      const baseDemand = (node.demandVolume || 20) * surgeFactor;
+      const isShocked = Math.random() < params.demandShockProb;
+      const demand = Math.max(0, Math.floor(baseDemand * (isShocked ? 2 : 1)));
+      node.inventoryLevel = Math.max(0, node.inventoryLevel - demand);
+      node.status = node.inventoryLevel < (node.reorderPoint || 20) ? NodeStatus.WARNING : NodeStatus.OPTIMAL;
+      if (node.inventoryLevel === 0 && demand > 0) {
+        newLogs.push(`Day ${nextDay}: STOCKOUT at ${node.name}!`);
+        node.status = NodeStatus.CRITICAL;
+      }
+    }
+
+    // 4. Production (FACTORY nodes)
+    if (node.type === NodeType.FACTORY && !isOnStrike) {
+      const degradation = Math.max(0, params.yieldRateDegradation);
+      const yieldRate = Math.max(0, ((node.yieldRate || 100) - degradation)) / 100;
+      const netProduction = Math.floor((node.productionCapacity || 100) * yieldRate);
+      node.inventoryLevel = Math.min(node.maxCapacity, node.inventoryLevel + netProduction);
+    }
+  });
+
+  // 5. Reorder logic — trigger replenishment shipments
+  nextNodes.forEach(node => {
+    if (node.status === NodeStatus.OFFLINE || node.status === NodeStatus.CRITICAL) return;
+    if (node.inventoryLevel < (node.reorderPoint || 50)) {
+      const route = routes.find(r => r.toId === node.id);
+      if (route) {
+        const source = nextNodes.find(n => n.id === route.fromId);
+        if (source && source.status !== NodeStatus.OFFLINE && source.inventoryLevel >= (node.orderQuantity || 100)) {
+          // Compute delay
+          let delayDays = 0;
+          if (params.geopoliticalTension) delayDays += 5;
+          if (params.logisticDisruption) delayDays += 2;
+          if (params.weatherEvent) delayDays += 3;
+          if (Math.random() < params.portCongestionProb) delayDays += 3;
+          if (Math.random() < params.transportDelayProb) delayDays += 1;
+          // Tariff imposition increases effective cost (represented as extra lead time from customs)
+          if (params.tariffImposition) delayDays += 2;
+
+          // Bullwhip effect: upstream orders are amplified
+          const orderQty = Math.ceil((node.orderQuantity || 100) * (node.type !== NodeType.RETAIL ? params.bullwhipFactor : 1));
+          const actualQty = Math.min(orderQty, source.inventoryLevel);
+
+          source.inventoryLevel -= actualQty;
+          nextShipments.push({
+            id: Math.random().toString(36).substr(2, 9),
+            toId: node.id,
+            quantity: actualQty,
+            remainingDays: Math.max(1, Math.ceil(route.baseLeadTime + delayDays))
+          });
+          newLogs.push(`Day ${nextDay}: ${source.name} → ${node.name} (${actualQty} units, ${Math.ceil(route.baseLeadTime + delayDays)}d)`);
+        }
+      }
+    }
+  });
+
+  const snapshot: HistorySnapshot = {
+    day: nextDay,
+    nodes: nextNodes.map(n => ({ id: n.id, inv: n.inventoryLevel, status: n.status }))
+  };
+
+  return { nextNodes, nextShipments, newLogs, snapshot };
+}
+
 function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [nodes, setNodes] = useState<SupplyNode[]>(INITIAL_NODES);
   const [routes, setRoutes] = useState<Route[]>(INITIAL_ROUTES);
   const [params, setParams] = useState<SimulationParams>(INITIAL_PARAMS);
   const [selectedNode, setSelectedNode] = useState<SupplyNode | null>(null);
-  const [history, setHistory] = useState<any[]>([]);
+  const [history, setHistory] = useState<HistorySnapshot[]>([]);
 
   // --- SESSION-LIVE SIMULATION ENGINE ---
   const [isPlaying, setIsPlaying] = useState(false);
@@ -83,91 +196,43 @@ function App() {
   const [logs, setLogs] = useState<string[]>([]);
   const [shipments, setShipments] = useState<InTransitShipment[]>([]);
 
-  // Core Simulation Loop (The Heartbeat)
+  // Refs so the interval callback always reads the latest state without stale closures
+  const nodesRef = useRef<SupplyNode[]>(nodes);
+  const shipmentsRef = useRef<InTransitShipment[]>(shipments);
+  const dayRef = useRef<number>(day);
+  const routesRef = useRef<Route[]>(routes);
+  const paramsRef = useRef<SimulationParams>(params);
+
+  useEffect(() => { nodesRef.current = nodes; }, [nodes]);
+  useEffect(() => { shipmentsRef.current = shipments; }, [shipments]);
+  useEffect(() => { dayRef.current = day; }, [day]);
+  useEffect(() => { routesRef.current = routes; }, [routes]);
+  useEffect(() => { paramsRef.current = params; }, [params]);
+
+  // Core Simulation Loop (The Heartbeat) — no nested setState
   useEffect(() => {
-    let interval: NodeJS.Timeout;
-    if (isPlaying) {
-      interval = setInterval(() => {
-        setDay(d => {
-          const nextDay = d + 1;
-          setNodes(prevNodes => {
-            const nextNodes = [...prevNodes.map(n => ({ ...n }))];
-            
-            // Record Telemetry
-            const dailySnapshot = {
-              day: nextDay,
-              nodes: nextNodes.map(n => ({ id: n.id, inv: n.inventoryLevel, status: n.status }))
-            };
-            setHistory(prev => [...prev, dailySnapshot].slice(-100));
+    if (!isPlaying) return;
+    const interval = setInterval(() => {
+      const nextDay = dayRef.current + 1;
+      const { nextNodes, nextShipments, newLogs, snapshot } = computeNextSimulationState(
+        nodesRef.current,
+        shipmentsRef.current,
+        routesRef.current,
+        paramsRef.current,
+        nextDay
+      );
 
-            setShipments(prevShipments => {
-              const remaining: InTransitShipment[] = [];
-              const processedArriving: string[] = [];
+      setDay(nextDay);
+      setNodes(nextNodes);
+      setShipments(nextShipments);
+      if (newLogs.length > 0) {
+        setLogs(prev => [...newLogs, ...prev].slice(0, 50));
+      }
+      setHistory(prev => [...prev, snapshot].slice(-100));
+    }, 1000 / speed);
 
-              prevShipments.forEach(s => {
-                if (s.remainingDays <= 1) {
-                  const targetNode = nextNodes.find(n => n.id === s.toId);
-                  if (targetNode) {
-                    targetNode.inventoryLevel = Math.min(targetNode.maxCapacity, targetNode.inventoryLevel + s.quantity);
-                    processedArriving.push(`Day ${nextDay}: Shipment arrived at ${targetNode.name} (${s.quantity} units)`);
-                  }
-                } else {
-                  remaining.push({ ...s, remainingDays: s.remainingDays - 1 });
-                }
-              });
-
-              nextNodes.forEach(node => {
-                if (node.type === NodeType.RETAIL) {
-                  const surgeFactor = 1 + (params.demandSurge / 100);
-                  const baseDemand = (node.demandVolume || 20) * surgeFactor;
-                  const isShocked = Math.random() < (params.demandShockProb / 100);
-                  const demand = Math.max(0, Math.floor(baseDemand * (isShocked ? 2 : 1)));
-                  node.inventoryLevel = Math.max(0, node.inventoryLevel - demand);
-                  node.status = node.inventoryLevel < (node.reorderPoint || 20) ? NodeStatus.WARNING : NodeStatus.OPTIMAL;
-                  if (node.inventoryLevel === 0 && demand > 0) {
-                    processedArriving.push(`Day ${nextDay}: STOCKOUT at ${node.name}!`);
-                    node.status = NodeStatus.CRITICAL;
-                  }
-                } else if (node.type === NodeType.FACTORY) {
-                  const yieldRate = ((node.yieldRate || 100) - params.yieldRateDegradation) / 100;
-                  const netProduction = Math.floor((node.productionCapacity || 100) * yieldRate);
-                  node.inventoryLevel = Math.min(node.maxCapacity, node.inventoryLevel + netProduction);
-                }
-
-                if (node.inventoryLevel < (node.reorderPoint || 50)) {
-                  const route = routes.find(r => r.toId === node.id);
-                  if (route) {
-                    const source = nextNodes.find(n => n.id === route.fromId);
-                    if (source && source.inventoryLevel >= (node.orderQuantity || 100)) {
-                      let delayDays = 0;
-                      if (params.geopoliticalTension) delayDays += 5;
-                      if (Math.random() < (params.portCongestionProb / 100)) delayDays += 3;
-                      source.inventoryLevel -= (node.orderQuantity || 100);
-                      remaining.push({
-                        id: Math.random().toString(36).substr(2, 9),
-                        toId: node.id,
-                        quantity: (node.orderQuantity || 100),
-                        remainingDays: Math.ceil(route.baseLeadTime + delayDays)
-                      });
-                      processedArriving.push(`Day ${nextDay}: ${source.name} shipped replenishment to ${node.name}`);
-                    }
-                  }
-                }
-              });
-
-              if (processedArriving.length > 0) {
-                setLogs(prev => [...processedArriving, ...prev].slice(0, 50));
-              }
-              return remaining;
-            });
-            return nextNodes;
-          });
-          return nextDay;
-        });
-      }, 1000 / speed);
-    }
     return () => clearInterval(interval);
-  }, [isPlaying, speed, routes, params]);
+  }, [isPlaying, speed]);
 
   const resetSimulation = () => {
     setIsPlaying(false);
@@ -214,11 +279,12 @@ function App() {
     loadState();
   }, []);
 
-  const networkHealth = Math.round(
+  // Fix #6: Guard against NaN when nodes array is empty
+  const networkHealth = nodes.length === 0 ? 0 : Math.round(
     (nodes.filter(n => n.status === NodeStatus.OPTIMAL).length / nodes.length) * 100
   );
   const activeShipments = shipments.length;
-  const riskLevel = nodes.some(n => n.status === NodeStatus.CRITICAL) ? 'HIGH' : 
+  const riskLevel = nodes.some(n => n.status === NodeStatus.CRITICAL) ? 'HIGH' :
                    nodes.some(n => n.status === NodeStatus.WARNING) ? 'MED' : 'LOW';
 
   const renderContent = () => {
@@ -251,7 +317,7 @@ function App() {
                   <div className="flex-1 overflow-y-auto space-y-3 custom-scrollbar">
                     {nodes.map(node => (
                       <div key={node.id} onClick={() => setSelectedNode(node)} className="bg-white/5 border border-white/10 rounded-2xl p-4 cursor-pointer">
-                        <div className="flex justify-between items-center"><span className="text-sm font-bold text-white">{node.name}</span><div className={`w-2 h-2 rounded-full ${node.status === 'OPTIMAL' ? 'bg-emerald-500' : 'bg-red-500'}`} /></div>
+                        <div className="flex justify-between items-center"><span className="text-sm font-bold text-white">{node.name}</span><div className={`w-2 h-2 rounded-full ${node.status === NodeStatus.OPTIMAL ? 'bg-emerald-500' : node.status === NodeStatus.OFFLINE ? 'bg-gray-500' : 'bg-red-500'}`} /></div>
                         <p className="text-xs text-white/40">{node.type} • {node.inventoryLevel} units</p>
                       </div>
                     ))}
@@ -264,10 +330,10 @@ function App() {
         return <NetworkBuilder nodes={nodes} routes={routes} setNodes={setNodes} setRoutes={setRoutes} />;
       case 'simulation':
         return (
-          <SimulationEngine 
-            nodes={nodes} routes={routes} setNodes={setNodes} 
+          <SimulationEngine
+            nodes={nodes} routes={routes} setNodes={setNodes}
             day={day} isPlaying={isPlaying} setIsPlaying={setIsPlaying}
-            speed={speed} setSpeed={setSpeed} logs={logs} 
+            speed={speed} setSpeed={setSpeed} logs={logs}
             shipments={shipments} resetSimulation={resetSimulation}
           />
         );

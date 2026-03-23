@@ -1,6 +1,6 @@
 import React from 'react';
 import { Play, Pause, RotateCcw, FastForward, TrendingUp, DollarSign, Package, ShieldAlert, Activity, PlayCircle } from 'lucide-react';
-import { SupplyNode, Route, NodeStatus, NodeType } from '../types';
+import { SupplyNode, Route, NodeStatus, NodeType, InTransitShipment } from '../types';
 
 interface SimulationEngineProps {
   nodes: SupplyNode[];
@@ -11,7 +11,7 @@ interface SimulationEngineProps {
   speed: number;
   setSpeed: (speed: number) => void;
   logs: string[];
-  shipments: any[];
+  shipments: InTransitShipment[];
   resetSimulation: () => void;
 }
 
@@ -26,12 +26,19 @@ const SimulationEngine: React.FC<SimulationEngineProps> = ({
   
   const totalCost = nodes.reduce((acc, n) => {
     const invCost = n.inventoryLevel * (n.holdingCost || 0.5);
-    const opCost = (n.type === NodeType.FACTORY ? 500 : 200); 
+    const opCost = n.type === NodeType.FACTORY
+      ? (n.productionCapacity || 100) * (n.holdingCost || 0.5)
+      : (n.throughputCapacity || 200) * 0.1;
     return acc + invCost + opCost;
   }, 0);
 
-  const inventoryValue = nodes.reduce((acc, n) => acc + (n.inventoryLevel * 100), 0);
-  const transitValue = shipments.reduce((acc, s) => acc + (s.quantity * 100), 0);
+  const inventoryValue = nodes.reduce((acc, n) =>
+    acc + (n.inventoryLevel * (n.supplierCostPerUnit || 10)), 0
+  );
+  const avgUnitCost = nodes.length > 0
+    ? nodes.reduce((sum, n) => sum + (n.supplierCostPerUnit || 10), 0) / nodes.length
+    : 10;
+  const transitValue = shipments.reduce((acc, s) => acc + (s.quantity * avgUnitCost), 0);
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">

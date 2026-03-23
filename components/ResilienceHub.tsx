@@ -4,11 +4,11 @@ import {
   Zap, ShieldAlert, Globe, TrendingUp, AlertTriangle, 
   ChevronRight, Info, Play
 } from 'lucide-react';
-import { SupplyNode, SimulationParams } from '../types';
+import { SupplyNode, Route, SimulationParams } from '../types';
 
 interface ResilienceHubProps {
   nodes: SupplyNode[];
-  routes: any[];
+  routes: Route[];
   params: SimulationParams;
   setParams: (params: SimulationParams) => void;
   setIsPlaying: (playing: boolean) => void;
@@ -19,12 +19,18 @@ const ResilienceHub: React.FC<ResilienceHubProps> = ({ nodes, routes, params, se
   const [activeTab, setLocalActiveTab] = useState<'levers' | 'risks'>('levers');
 
   const calculateResilience = () => {
+    // Probabilities are stored as decimals (0.01 = 1%, 0.5 = 50%).
+    // Multiply by 100 to convert to percentage before applying weights.
     let score = 100;
-    score -= params.supplierFailureProb * 50;
-    score -= params.naturalDisasterProb * 100;
-    score -= params.portCongestionProb * 30;
+    score -= (params.supplierFailureProb * 100) * 0.5;   // 50% failure → -25
+    score -= (params.naturalDisasterProb * 100) * 1.0;   // 1% disaster → -1
+    score -= (params.portCongestionProb * 100) * 0.3;    // 5% congestion → -1.5
+    score -= (params.laborStrikeProb * 100) * 0.2;       // 1% strike → -0.2
+    score -= (params.cyberRisk * 100) * 0.4;             // 0.5% cyber → -0.2
     score -= params.geopoliticalTension ? 20 : 0;
     score -= params.tariffImposition ? 5 : 0;
+    score -= params.logisticDisruption ? 10 : 0;
+    score -= params.weatherEvent ? 8 : 0;
     score -= (100 - params.forecastAccuracy) / 5;
     return Math.max(0, Math.min(100, Math.round(score)));
   };

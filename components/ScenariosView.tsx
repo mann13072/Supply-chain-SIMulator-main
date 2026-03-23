@@ -12,6 +12,11 @@ interface ScenariosViewProps {
 }
 
 const DEFAULT_PARAMS: SimulationParams = {
+  polysiliconPriceChange: 0,
+  silverPriceChange: 0,
+  aluminumPriceChange: 0,
+  yieldRateDegradation: 0,
+  energyCostChange: 0,
   unitProductionCost: 100,
   procurementCost: 50,
   transportationCost: 20,
@@ -41,7 +46,15 @@ const DEFAULT_PARAMS: SimulationParams = {
   forecastAccuracy: 85,
   forecastUpdateFrequency: 30,
   bullwhipFactor: 1.2,
-  collaborationLevel: 50
+  collaborationLevel: 50,
+  demandSurge: 0,
+  tariffImposition: false,
+  subsidyLevel: 0,
+  interestRateChange: 0,
+  weatherEvent: false,
+  geopoliticalTension: false,
+  freightCostIndex: 100,
+  logisticDisruption: false
 };
 
 const ScenariosView: React.FC<ScenariosViewProps> = ({ nodes, routes, setNodes, setRoutes }) => {

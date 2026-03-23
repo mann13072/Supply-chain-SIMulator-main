@@ -1,15 +1,16 @@
 import React from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Legend } from 'recharts';
+import { HistorySnapshot } from '../types';
 
 interface AnalyticsViewProps {
-  history: any[];
+  history: HistorySnapshot[];
 }
 
 const AnalyticsView: React.FC<AnalyticsViewProps> = ({ history }) => {
   // Map history to chart-friendly format
   const chartData = history.map(h => {
-    const data: any = { name: `Day ${h.day}` };
-    h.nodes.forEach((n: any) => {
+    const data: Record<string, number | string> = { name: `Day ${h.day}` };
+    h.nodes.forEach(n => {
       data[n.id] = n.inv;
     });
     return data;
@@ -18,7 +19,7 @@ const AnalyticsView: React.FC<AnalyticsViewProps> = ({ history }) => {
   // Calculate stockout incidents from history
   const stockoutData = history.map(h => ({
     name: `Day ${h.day}`,
-    count: h.nodes.filter((n: any) => n.status === 'CRITICAL').length
+    count: h.nodes.filter(n => n.status === 'CRITICAL').length
   }));
 
   return (

@@ -14,10 +14,10 @@ export enum NodeStatus {
 }
 
 export enum TransportMode {
-  SEA = 'SEA',
-  AIR = 'AIR',
-  ROAD = 'ROAD',
-  RAIL = 'RAIL'
+  SEA = 'Sea',
+  AIR = 'Air',
+  ROAD = 'Road',
+  RAIL = 'Rail'
 }
 
 export interface SupplyNode {
@@ -207,6 +207,18 @@ export interface Scenario {
   params: SimulationParams;
   results?: SimulationResult;
   createdAt: string;
+}
+
+export interface InTransitShipment {
+  id: string;
+  toId: string;
+  quantity: number;
+  remainingDays: number;
+}
+
+export interface HistorySnapshot {
+  day: number;
+  nodes: { id: string; inv: number; status: string }[];
 }
 
 export interface OptimizationResult {
