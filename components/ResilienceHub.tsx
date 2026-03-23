@@ -115,10 +115,13 @@ const ResilienceHub: React.FC<ResilienceHubProps> = ({
     (params.naturalDisasterProb * 500)
   ).toFixed(0);
 
+  const commodityImpact = Object.values(params.commodityPriceChanges as Record<string, number>)
+    .reduce((sum: number, v: number) => sum + Math.max(0, v) * 0.3, 0);
+
   const costImpact = Math.max(0,
     (params.tariffImposition ? 8 : 0) +
     ((params.freightCostIndex - 100) * 0.1) +
-    (params.polysiliconPriceChange * 0.3) +
+    commodityImpact +
     (params.logisticDisruption ? 5 : 0)
   ).toFixed(1);
 
@@ -143,11 +146,11 @@ const ResilienceHub: React.FC<ResilienceHubProps> = ({
 
   // Strategic levers — stored as whole numbers 0–100
   const strategicLevers = [
-    { label: 'Demand Surge',           key: 'demandSurge'              as keyof SimulationParams, min: 0,   max: 100, step: 1,   unit: '%' },
-    { label: 'Yield Degradation',      key: 'yieldRateDegradation'     as keyof SimulationParams, min: 0,   max: 30,  step: 0.5, unit: '%' },
-    { label: 'Polysilicon Price Δ',    key: 'polysiliconPriceChange'   as keyof SimulationParams, min: -50, max: 100, step: 1,   unit: '%' },
-    { label: 'Bullwhip Factor',        key: 'bullwhipFactor'           as keyof SimulationParams, min: 1,   max: 3,   step: 0.1, unit: '×' },
-    { label: 'Forecast Accuracy',      key: 'forecastAccuracy'         as keyof SimulationParams, min: 50,  max: 100, step: 1,   unit: '%' },
+    { label: 'Demand Surge',      key: 'demandSurge'          as keyof SimulationParams, min: 0,  max: 100, step: 1,   unit: '%' },
+    { label: 'Yield Degradation', key: 'yieldRateDegradation' as keyof SimulationParams, min: 0,  max: 30,  step: 0.5, unit: '%' },
+    { label: 'Energy Cost Spike', key: 'energyCostChange'     as keyof SimulationParams, min: 0,  max: 200, step: 5,   unit: '%' },
+    { label: 'Bullwhip Factor',   key: 'bullwhipFactor'       as keyof SimulationParams, min: 1,  max: 3,   step: 0.1, unit: '×' },
+    { label: 'Forecast Accuracy', key: 'forecastAccuracy'     as keyof SimulationParams, min: 50, max: 100, step: 1,   unit: '%' },
   ];
 
   // R2: Per-node risk heatmap
