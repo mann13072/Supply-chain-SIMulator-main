@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Plus, Trash2, Link as LinkIcon, MapPin, Factory, Warehouse, Truck, ShoppingCart, Layers, Globe as GlobeIcon, Zap, Loader2 } from 'lucide-react';
 import { SupplyNode, NodeType, NodeStatus, Route, TransportMode } from '../types';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -51,17 +51,37 @@ const NetworkBuilder: React.FC<NetworkBuilderProps> = ({ nodes, routes, setNodes
   // Hub suggestions
   const [nearbyHubs, setNearbyHubs] = useState<any[]>([]);
   const [showHubSuggestions, setShowHubSuggestions] = useState(false);
+  const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const requestIdRef = useRef(0);
 
-  const handleLocationChange = async (location: string) => {
-    setNewNode({...newNode, location});
-    if (location.length > 2) {
+  useEffect(() => {
+    return () => { if (debounceTimer.current) clearTimeout(debounceTimer.current); };
+  }, []);
+
+  const handleLocationChange = (location: string) => {
+    // Fix stale closure: use functional updater
+    setNewNode(prev => ({ ...prev, location }));
+
+    if (debounceTimer.current) clearTimeout(debounceTimer.current);
+
+    if (location.length <= 2) {
+      requestIdRef.current++;
+      setShowHubSuggestions(false);
+      setNearbyHubs([]);
+      return;
+    }
+
+    debounceTimer.current = setTimeout(async () => {
+      const requestId = ++requestIdRef.current;
       const coords = await geocode(location);
+      if (requestId !== requestIdRef.current) return;
       if (coords) {
         const nearby = await routingService.getNearbyHubs(coords.lat, coords.lng);
+        if (requestId !== requestIdRef.current) return;
         setNearbyHubs(nearby);
-        setShowHubSuggestions(true);
+        setShowHubSuggestions(nearby.length > 0);
       }
-    }
+    }, 400);
   };
 
   const snapToHub = (hub: any) => {
@@ -1063,12 +1083,14 @@ const NetworkBuilder: React.FC<NetworkBuilderProps> = ({ nodes, routes, setNodes
                       </div>
                       <div className="relative">
                         <label className="text-[10px] text-white/40 uppercase tracking-widest mb-1 block">Location</label>
-                        <input 
-                          type="text" 
+                        <input
+                          type="text"
                           value={newNode.location}
                           onChange={(e) => handleLocationChange(e.target.value)}
+                          onBlur={() => setTimeout(() => setShowHubSuggestions(false), 150)}
                           className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-white/30 transition-all"
                           placeholder="e.g. China or London"
+                          autoComplete="off"
                         />
                         {showHubSuggestions && nearbyHubs.length > 0 && (
                           <div className="absolute z-10 w-full mt-2 bg-[#111] border border-white/10 rounded-xl shadow-2xl p-2">

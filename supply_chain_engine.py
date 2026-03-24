@@ -185,21 +185,54 @@ def seed_default_scenario(network: TransitNetwork) -> None:
     
     network.save_state()
 
+_GLOBAL_HUB_ATLAS = [
+    # Air hubs
+    ("DXB",  "Dubai Int'l Airport",       25.25,  55.36, "Air"),
+    ("SIN",  "Singapore Changi Airport",   1.36,  103.99, "Air"),
+    ("HKG",  "Hong Kong Int'l Airport",   22.31,  113.91, "Air"),
+    ("PVG",  "Shanghai Pudong Airport",   31.14,  121.80, "Air"),
+    ("LHR",  "London Heathrow Airport",   51.48,   -0.46, "Air"),
+    ("FRA",  "Frankfurt Airport",         50.03,    8.57, "Air"),
+    ("AMS",  "Amsterdam Schiphol",        52.31,    4.76, "Air"),
+    ("JFK",  "New York JFK Airport",      40.64,  -73.78, "Air"),
+    ("LAX",  "Los Angeles Airport",       33.94, -118.40, "Air"),
+    ("NRT",  "Tokyo Narita Airport",      35.76,  140.39, "Air"),
+    ("ICN",  "Seoul Incheon Airport",     37.46,  126.44, "Air"),
+    ("ORD",  "Chicago O'Hare Airport",    41.97,  -87.91, "Air"),
+    # Sea hubs
+    ("CNSHA", "Port of Shanghai",         31.38,  121.62, "Sea"),
+    ("SGSIN", "Port of Singapore",         1.27,  103.82, "Sea"),
+    ("NLRTM", "Port of Rotterdam",        51.94,    4.06, "Sea"),
+    ("CNSZX", "Port of Shenzhen",         22.53,  113.93, "Sea"),
+    ("KRPUS", "Port of Busan",            35.10,  129.04, "Sea"),
+    ("AEDXB", "Port of Jebel Ali",        24.98,   55.06, "Sea"),
+    ("USLA",  "Port of Los Angeles",      33.73, -118.26, "Sea"),
+    ("DEHAM", "Port of Hamburg",          53.54,    9.97, "Sea"),
+    ("CNNGB", "Port of Ningbo",           29.87,  121.55, "Sea"),
+    ("MYPKG", "Port Klang Malaysia",       3.00,  101.39, "Sea"),
+]
+
+def seed_hub_atlas(network: TransitNetwork) -> None:
+    """Seeds the global logistics hub atlas. Hubs are marked is_hub=True
+    so get_nearby_hubs() can surface them as suggestions without cluttering
+    the user's simulation node list."""
+    for hub_id, name, lat, lon, hub_type in _GLOBAL_HUB_ATLAS:
+        if hub_id not in network._nodes:
+            network.add_node(hub_id, name, lat, lon, hub_type, is_hub=True, persist=False)
+
 def seed_prototype_data(network: TransitNetwork) -> None:
-    """
-    CLEAN SLATE: Only seeds the Global Solar Supply Chain scenario.
-    No longer seeds the 24 global hub atlas to prevent clutter.
-    """
-    # 1. Saved Simulation State (User nodes/routes)
+    # 1. Saved simulation state (user nodes/routes)
     state_exists = os.path.exists(network.state_file)
     if state_exists:
         network.load_state()
-    
-    # 2. Seed Default Scenario if state is new/empty
-    # We check if there are any nodes at all
+
+    # 2. Seed default scenario if state is new/empty
     if not state_exists or len(network._nodes) == 0:
         seed_default_scenario(network)
-    
-    # 3. Finalize (Auto-mesh is disabled)
+
+    # 3. Always seed the hub atlas so nearby-hub suggestions work
+    seed_hub_atlas(network)
+
+    # 4. Finalize
     network.auto_mesh_network()
 

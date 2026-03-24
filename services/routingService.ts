@@ -78,9 +78,13 @@ export const routingService = {
   async getNearbyHubs(lat: number, lon: number): Promise<any[]> {
     try {
       const response = await fetch(`/api/hubs/nearby?lat=${lat}&lon=${lon}`);
-      if (!response.ok) return [];
+      if (!response.ok) {
+        console.error('getNearbyHubs failed:', response.status, response.statusText);
+        return [];
+      }
       return await response.json();
     } catch (error) {
+      console.error('getNearbyHubs error:', error);
       return [];
     }
   },
