@@ -2,12 +2,14 @@
   "name": "solarchain-twin-root",
   "private": true,
   "scripts": {
+    "predev": "kill-port 3000 8000 --silent || true",
     "dev": "concurrently -k \"npm run dev:api\" \"npm run dev:ui\"",
     "dev:api": "cd backend && python server.py || python3 server.py || py server.py",
     "dev:ui": "cd frontend && npm run dev",
     "install:frontend": "cd frontend && npm install"
   },
   "devDependencies": {
-    "concurrently": "^9.2.1"
+    "concurrently": "^9.2.1",
+    "kill-port": "^2.0.1"
   }
 }
