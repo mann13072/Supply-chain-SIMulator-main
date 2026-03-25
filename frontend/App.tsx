@@ -75,6 +75,15 @@ function computeNextSimulationState(
   const newLogs: string[] = [];
   const nextShipments: InTransitShipment[] = [];
 
+  // Metrics tracking
+  let demandTotal = 0;
+  let demandFulfilled = 0;
+  let stockoutCost = 0;
+  let newShipmentsTotal = 0;
+  let newShipmentsDelayed = 0;
+  const disruptionCounts = { naturalDisaster: 0, cyberIncident: 0, supplierFailure: 0, laborStrike: 0, demandShock: 0 };
+  const factoryUtilization: { id: string; name: string; util: number }[] = [];
+
   // 1. Process arriving shipments (tick down remainingDays, deliver if <= 1)
   prevShipments.forEach(s => {
     if (s.remainingDays <= 1) {
@@ -93,26 +102,30 @@ function computeNextSimulationState(
     // Natural disaster — any node can go OFFLINE
     if (Math.random() < params.naturalDisasterProb) {
       node.status = NodeStatus.OFFLINE;
+      disruptionCounts.naturalDisaster++;
       newLogs.push(`Day ${nextDay}: NATURAL DISASTER hit ${node.name}! Node offline.`);
-      return; // skip further processing for offline node
+      return;
     }
 
     // Cyber attack — DC/Warehouse throughput halved
     if ((node.type === NodeType.DISTRIBUTION_CENTER || node.type === NodeType.WAREHOUSE)
         && Math.random() < params.cyberRisk) {
       node.throughputCapacity = Math.floor((node.throughputCapacity || 500) * 0.5);
+      disruptionCounts.cyberIncident++;
       newLogs.push(`Day ${nextDay}: CYBER INCIDENT at ${node.name}. Throughput halved.`);
     }
 
     // Supplier failure
     if (node.type === NodeType.SUPPLIER && Math.random() < params.supplierFailureProb) {
       node.status = NodeStatus.CRITICAL;
+      disruptionCounts.supplierFailure++;
       newLogs.push(`Day ${nextDay}: SUPPLIER FAILURE at ${node.name}!`);
     }
 
     // Labor strike — factory production drops to 0 for this tick
     const isOnStrike = node.type === NodeType.FACTORY && Math.random() < params.laborStrikeProb;
     if (isOnStrike) {
+      disruptionCounts.laborStrike++;
       newLogs.push(`Day ${nextDay}: LABOR STRIKE at ${node.name}. No production this day.`);
     }
 
@@ -121,25 +134,32 @@ function computeNextSimulationState(
       const surgeFactor = 1 + (params.demandSurge / 100);
       const baseDemand = (node.demandVolume || 20) * surgeFactor;
       const isShocked = Math.random() < params.demandShockProb;
+      if (isShocked) disruptionCounts.demandShock++;
       const demand = Math.max(0, Math.floor(baseDemand * (isShocked ? 2 : 1)));
+      demandTotal += demand;
+      demandFulfilled += Math.min(demand, node.inventoryLevel);
       node.inventoryLevel = Math.max(0, node.inventoryLevel - demand);
       node.status = node.inventoryLevel < (node.reorderPoint || 20) ? NodeStatus.WARNING : NodeStatus.OPTIMAL;
       if (node.inventoryLevel === 0 && demand > 0) {
         newLogs.push(`Day ${nextDay}: STOCKOUT at ${node.name}!`);
         node.status = NodeStatus.CRITICAL;
+        stockoutCost += params.stockoutPenalty;
       }
     }
 
     // 4. Production (FACTORY nodes)
-    // Commodity price increases reduce effective production capacity (cost squeeze)
     if (node.type === NodeType.FACTORY && !isOnStrike) {
       const degradation = Math.max(0, params.yieldRateDegradation);
       const yieldRate = Math.max(0, ((node.yieldRate || 100) - degradation)) / 100;
-      const costSqueeze = Math.max(0.5, 1 / commodityMultiplier); // high commodity cost → lower net production
+      const costSqueeze = Math.max(0.5, 1 / commodityMultiplier);
       const netProduction = Math.floor((node.productionCapacity || 100) * yieldRate * costSqueeze);
       node.inventoryLevel = Math.min(node.maxCapacity, node.inventoryLevel + netProduction);
+      factoryUtilization.push({ id: node.id, name: node.name, util: Math.round(netProduction / (node.productionCapacity || 100) * 100) });
     }
   });
+
+  // Holding cost after all inventory updates
+  const holdingCost = nextNodes.reduce((sum, n) => sum + n.inventoryLevel * (n.holdingCost || 1), 0);
 
   // 5. Reorder logic — trigger replenishment shipments
   nextNodes.forEach(node => {
@@ -149,17 +169,14 @@ function computeNextSimulationState(
       if (route) {
         const source = nextNodes.find(n => n.id === route.fromId);
         if (source && source.status !== NodeStatus.OFFLINE && source.inventoryLevel >= (node.orderQuantity || 100)) {
-          // Compute delay
           let delayDays = 0;
           if (params.geopoliticalTension) delayDays += 5;
           if (params.logisticDisruption) delayDays += 2;
           if (params.weatherEvent) delayDays += 3;
           if (Math.random() < params.portCongestionProb) delayDays += 3;
           if (Math.random() < params.transportDelayProb) delayDays += 1;
-          // Tariff imposition increases effective cost (represented as extra lead time from customs)
           if (params.tariffImposition) delayDays += 2;
 
-          // Bullwhip effect: upstream orders are amplified
           const orderQty = Math.ceil((node.orderQuantity || 100) * (node.type !== NodeType.RETAIL ? params.bullwhipFactor : 1));
           const actualQty = Math.min(orderQty, source.inventoryLevel);
 
@@ -170,6 +187,8 @@ function computeNextSimulationState(
             quantity: actualQty,
             remainingDays: Math.max(1, Math.ceil(route.baseLeadTime + delayDays))
           });
+          newShipmentsTotal++;
+          if (delayDays > 0) newShipmentsDelayed++;
           newLogs.push(`Day ${nextDay}: ${source.name} → ${node.name} (${actualQty} units, ${Math.ceil(route.baseLeadTime + delayDays)}d)`);
         }
       }
@@ -178,7 +197,17 @@ function computeNextSimulationState(
 
   const snapshot: HistorySnapshot = {
     day: nextDay,
-    nodes: nextNodes.map(n => ({ id: n.id, inv: n.inventoryLevel, status: n.status }))
+    nodes: nextNodes.map(n => ({ id: n.id, inv: n.inventoryLevel, status: n.status })),
+    shipmentsInFlight: nextShipments.length,
+    unitsInFlight: nextShipments.reduce((sum, s) => sum + s.quantity, 0),
+    demandTotal,
+    demandFulfilled,
+    newShipmentsTotal,
+    newShipmentsDelayed,
+    holdingCost,
+    stockoutCost,
+    disruptionCounts,
+    factoryUtilization,
   };
 
   return { nextNodes, nextShipments, newLogs, snapshot };
@@ -391,7 +420,13 @@ function App() {
       case 'optimization':
         return <OptimizationView nodes={nodes} routes={routes} history={history} params={params} industryConfig={industryConfig} analysisReady={workflowState.analysisReady} />;
       case 'settings':
-        return <SettingsView industryConfig={industryConfig} setIndustryConfig={setIndustryConfig} lowStockThreshold={lowStockThreshold} setLowStockThreshold={setLowStockThreshold} costVarianceThreshold={costVarianceThreshold} setCostVarianceThreshold={setCostVarianceThreshold} />;
+        return <SettingsView
+          industryConfig={industryConfig} setIndustryConfig={setIndustryConfig}
+          lowStockThreshold={lowStockThreshold} setLowStockThreshold={setLowStockThreshold}
+          costVarianceThreshold={costVarianceThreshold} setCostVarianceThreshold={setCostVarianceThreshold}
+          setNodes={setNodes} setRoutes={setRoutes} setParams={setParams}
+          resetSimulation={resetSimulation}
+        />;
       default:
         return <div className="text-white">Coming Soon</div>;
     }

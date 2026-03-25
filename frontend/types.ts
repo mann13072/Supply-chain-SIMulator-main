@@ -242,6 +242,22 @@ export interface InTransitShipment {
 export interface HistorySnapshot {
   day: number;
   nodes: { id: string; inv: number; status: string }[];
+  shipmentsInFlight: number;
+  unitsInFlight: number;
+  demandTotal: number;
+  demandFulfilled: number;
+  newShipmentsTotal: number;
+  newShipmentsDelayed: number;
+  holdingCost: number;
+  stockoutCost: number;
+  disruptionCounts: {
+    naturalDisaster: number;
+    cyberIncident: number;
+    supplierFailure: number;
+    laborStrike: number;
+    demandShock: number;
+  };
+  factoryUtilization: { id: string; name: string; util: number }[];
 }
 
 export interface OptimizationResult {
