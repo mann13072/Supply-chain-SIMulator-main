@@ -14,6 +14,30 @@ import { LayoutDashboard, Network, PlayCircle, BarChart3, Settings, Zap, ShieldA
 const INITIAL_NODES: SupplyNode[] = [];
 const INITIAL_ROUTES: Route[] = [];
 
+function computeLeadTime(distanceKm: number, mode: string): number {
+  const speeds: Record<string, number> = { Air: 850, Sea: 40, Road: 90, Rail: 120 };
+  return Math.max(1, Math.ceil(distanceKm / (speeds[mode] || 90) / 24));
+}
+
+const SOLAR_PRESET_NODES: SupplyNode[] = [
+  { id: 'BAOTOU_SILICON', name: 'Baotou Silicon', location: 'Baotou Silicon', type: NodeType.SUPPLIER, status: NodeStatus.OPTIMAL, inventoryLevel: 15000, maxCapacity: 20000, reorderPoint: 3000, orderQuantity: 5000, safetyStock: 2000, targetServiceLevel: 98, reviewFrequency: 1, moq: 1, holdingCost: 1, obsolescenceRate: 0.01, shelfLife: 365, supplierLeadTime: 5, supplierReliability: 98, supplierCostPerUnit: 45, yieldRate: 98, setupTime: 4, batchSize: 50, throughputCapacity: 500, automationLevel: 2, demandVolume: 100, demandVariability: 10, priceElasticity: -1.2, coordinates: { x: 644, y: 110, lat: 40.65, lng: 109.84 } },
+  { id: 'SHANGHAI_CELL', name: 'Shanghai Cell Mfg', location: 'Shanghai Cell Mfg', type: NodeType.FACTORY, status: NodeStatus.OPTIMAL, inventoryLevel: 5000, maxCapacity: 10000, reorderPoint: 1000, orderQuantity: 2000, safetyStock: 500, targetServiceLevel: 96, reviewFrequency: 1, moq: 1, holdingCost: 1, obsolescenceRate: 0.01, shelfLife: 365, supplierLeadTime: 14, supplierReliability: 95, supplierCostPerUnit: 10, yieldRate: 96, setupTime: 12, batchSize: 500, productionCapacity: 1000, throughputCapacity: 500, automationLevel: 2, demandVolume: 100, demandVariability: 10, priceElasticity: -1.2, coordinates: { x: 670, y: 131, lat: 31.23, lng: 121.47 } },
+  { id: 'HAIPHONG_ASSY', name: 'Haiphong Assembly', location: 'Haiphong Assembly', type: NodeType.FACTORY, status: NodeStatus.OPTIMAL, inventoryLevel: 2000, maxCapacity: 8000, reorderPoint: 500, orderQuantity: 1000, safetyStock: 200, targetServiceLevel: 99, reviewFrequency: 1, moq: 1, holdingCost: 1, obsolescenceRate: 0.01, shelfLife: 365, supplierLeadTime: 14, supplierReliability: 95, supplierCostPerUnit: 10, yieldRate: 99, setupTime: 8, batchSize: 1000, productionCapacity: 800, throughputCapacity: 500, automationLevel: 2, demandVolume: 100, demandVariability: 10, priceElasticity: -1.2, coordinates: { x: 637, y: 154, lat: 20.84, lng: 106.68 } },
+  { id: 'SINGAPORE_DC', name: 'Singapore Nexus', location: 'Singapore Nexus', type: NodeType.DISTRIBUTION_CENTER, status: NodeStatus.OPTIMAL, inventoryLevel: 8000, maxCapacity: 25000, reorderPoint: 2000, orderQuantity: 4000, safetyStock: 1000, targetServiceLevel: 95, reviewFrequency: 1, moq: 1, holdingCost: 1, obsolescenceRate: 0.01, shelfLife: 365, supplierLeadTime: 14, supplierReliability: 95, supplierCostPerUnit: 10, yieldRate: 98, setupTime: 4, batchSize: 50, throughputCapacity: 5000, automationLevel: 4, demandVolume: 100, demandVariability: 10, priceElasticity: -1.2, coordinates: { x: 631, y: 197, lat: 1.35, lng: 103.82 } },
+  { id: 'ROTTERDAM_WH', name: 'Rotterdam Gateway', location: 'Rotterdam Gateway', type: NodeType.WAREHOUSE, status: NodeStatus.OPTIMAL, inventoryLevel: 12000, maxCapacity: 30000, reorderPoint: 3000, orderQuantity: 5000, safetyStock: 2000, targetServiceLevel: 95, reviewFrequency: 1, moq: 1, holdingCost: 1, obsolescenceRate: 0.01, shelfLife: 365, supplierLeadTime: 14, supplierReliability: 95, supplierCostPerUnit: 10, yieldRate: 98, setupTime: 4, batchSize: 50, throughputCapacity: 3000, automationLevel: 3, demandVolume: 100, demandVariability: 10, priceElasticity: -1.2, coordinates: { x: 410, y: 85, lat: 51.92, lng: 4.48 } },
+  { id: 'BERLIN_RETAIL', name: 'Berlin Solar Store', location: 'Berlin Solar Store', type: NodeType.RETAIL, status: NodeStatus.OPTIMAL, inventoryLevel: 500, maxCapacity: 1000, reorderPoint: 150, orderQuantity: 300, safetyStock: 100, targetServiceLevel: 95, reviewFrequency: 1, moq: 1, holdingCost: 1, obsolescenceRate: 0.01, shelfLife: 365, supplierLeadTime: 14, supplierReliability: 95, supplierCostPerUnit: 10, yieldRate: 98, setupTime: 4, batchSize: 50, throughputCapacity: 500, automationLevel: 2, demandVolume: 200, demandVariability: 15, priceElasticity: -1.5, coordinates: { x: 430, y: 83, lat: 52.52, lng: 13.40 } },
+  { id: 'LONDON_RETAIL', name: 'London Eco Hub', location: 'London Eco Hub', type: NodeType.RETAIL, status: NodeStatus.OPTIMAL, inventoryLevel: 300, maxCapacity: 800, reorderPoint: 100, orderQuantity: 200, safetyStock: 80, targetServiceLevel: 95, reviewFrequency: 1, moq: 1, holdingCost: 1, obsolescenceRate: 0.01, shelfLife: 365, supplierLeadTime: 14, supplierReliability: 95, supplierCostPerUnit: 10, yieldRate: 98, setupTime: 4, batchSize: 50, throughputCapacity: 500, automationLevel: 2, demandVolume: 150, demandVariability: 25, priceElasticity: -1.2, coordinates: { x: 400, y: 85, lat: 51.50, lng: -0.12 } },
+];
+
+const SOLAR_PRESET_ROUTES: Route[] = [
+  { id: 'r_baotou_shanghai',    fromId: 'BAOTOU_SILICON', toId: 'SHANGHAI_CELL',  mode: TransportMode.AIR, distance: 1580,  baseLeadTime: 1,  leadTimeVariability: 0.1, costPerUnitDistance: 0.008, vehicleCapacity: 100,  shipmentFrequency: 1, fuelPrice: 1.5, customsTime: 0, disruptionProb: 0.01 },
+  { id: 'r_shanghai_haiphong',  fromId: 'SHANGHAI_CELL',  toId: 'HAIPHONG_ASSY',  mode: TransportMode.SEA, distance: 1720,  baseLeadTime: 2,  leadTimeVariability: 0.2, costPerUnitDistance: 0.002, vehicleCapacity: 1000, shipmentFrequency: 1, fuelPrice: 1.5, customsTime: 1, disruptionProb: 0.02 },
+  { id: 'r_haiphong_singapore', fromId: 'HAIPHONG_ASSY',  toId: 'SINGAPORE_DC',   mode: TransportMode.SEA, distance: 2160,  baseLeadTime: 3,  leadTimeVariability: 0.2, costPerUnitDistance: 0.002, vehicleCapacity: 1000, shipmentFrequency: 1, fuelPrice: 1.5, customsTime: 1, disruptionProb: 0.02 },
+  { id: 'r_singapore_rotterdam',fromId: 'SINGAPORE_DC',   toId: 'ROTTERDAM_WH',   mode: TransportMode.SEA, distance: 10500, baseLeadTime: 11, leadTimeVariability: 0.3, costPerUnitDistance: 0.002, vehicleCapacity: 5000, shipmentFrequency: 1, fuelPrice: 1.5, customsTime: 3, disruptionProb: 0.05 },
+  { id: 'r_rotterdam_berlin',   fromId: 'ROTTERDAM_WH',   toId: 'BERLIN_RETAIL',  mode: TransportMode.AIR, distance: 648,   baseLeadTime: 1,  leadTimeVariability: 0.1, costPerUnitDistance: 0.006, vehicleCapacity: 200,  shipmentFrequency: 1, fuelPrice: 1.5, customsTime: 0, disruptionProb: 0.01 },
+  { id: 'r_rotterdam_london',   fromId: 'ROTTERDAM_WH',   toId: 'LONDON_RETAIL',  mode: TransportMode.SEA, distance: 510,   baseLeadTime: 1,  leadTimeVariability: 0.1, costPerUnitDistance: 0.003, vehicleCapacity: 300,  shipmentFrequency: 1, fuelPrice: 1.5, customsTime: 0, disruptionProb: 0.01 },
+];
+
 const INITIAL_PARAMS: SimulationParams = {
   commodityPriceChanges: {},
   yieldRateDegradation: 0,
@@ -163,12 +187,25 @@ function computeNextSimulationState(
 
   // 5. Reorder logic — trigger replenishment shipments
   nextNodes.forEach(node => {
-    if (node.status === NodeStatus.OFFLINE || node.status === NodeStatus.CRITICAL) return;
+    if (node.status === NodeStatus.OFFLINE) return;
+    // Fix: reset CRITICAL to WARNING if inventory was restored by an arriving shipment
+    if (node.status === NodeStatus.CRITICAL && node.inventoryLevel > 0) {
+      node.status = node.inventoryLevel < (node.reorderPoint || 50) ? NodeStatus.WARNING : NodeStatus.OPTIMAL;
+    }
     if (node.inventoryLevel < (node.reorderPoint || 50)) {
-      const route = routes.find(r => r.toId === node.id);
+      const candidateRoutes = routes.filter(r => r.toId === node.id);
+      const route = candidateRoutes.reduce<Route | null>((best, r) => {
+        if (!best) return r;
+        const src = nextNodes.find(n => n.id === r.fromId);
+        const bestSrc = nextNodes.find(n => n.id === best.fromId);
+        if (!src || src.status === NodeStatus.OFFLINE) return best;
+        if (!bestSrc || bestSrc.status === NodeStatus.OFFLINE) return r;
+        return r.baseLeadTime < best.baseLeadTime ? r : best;
+      }, null);
       if (route) {
         const source = nextNodes.find(n => n.id === route.fromId);
-        if (source && source.status !== NodeStatus.OFFLINE && source.inventoryLevel >= (node.orderQuantity || 100)) {
+        // Fix: allow partial fulfillment — ship whatever the source has, not all-or-nothing
+        if (source && source.status !== NodeStatus.OFFLINE && source.inventoryLevel > 0) {
           let delayDays = 0;
           if (params.geopoliticalTension) delayDays += 5;
           if (params.logisticDisruption) delayDays += 2;
@@ -246,6 +283,9 @@ function App() {
   useEffect(() => { paramsRef.current = params; }, [params]);
   useEffect(() => { industryConfigRef.current = industryConfig; }, [industryConfig]);
 
+  useEffect(() => { if (nodes.length > 0) localStorage.setItem('sc_nodes', JSON.stringify(nodes)); }, [nodes]);
+  useEffect(() => { if (routes.length > 0) localStorage.setItem('sc_routes', JSON.stringify(routes)); }, [routes]);
+
   // Core Simulation Loop (The Heartbeat) — no nested setState
   useEffect(() => {
     if (!isPlaying) return;
@@ -266,7 +306,7 @@ function App() {
       if (newLogs.length > 0) {
         setLogs(prev => [...newLogs, ...prev].slice(0, 50));
       }
-      setHistory(prev => [...prev, snapshot].slice(-100));
+      setHistory(prev => [...prev, snapshot]);
     }, 1000 / speed);
 
     return () => clearInterval(interval);
@@ -282,6 +322,22 @@ function App() {
 
   useEffect(() => {
     const loadState = async () => {
+      // 1. Check localStorage first — has full data including all route/node properties
+      try {
+        const savedNodes = localStorage.getItem('sc_nodes');
+        const savedRoutes = localStorage.getItem('sc_routes');
+        if (savedNodes && savedRoutes) {
+          const parsedNodes = JSON.parse(savedNodes) as SupplyNode[];
+          const parsedRoutes = JSON.parse(savedRoutes) as Route[];
+          if (parsedNodes.length > 0) {
+            setNodes(parsedNodes);
+            setRoutes(parsedRoutes);
+            return;
+          }
+        }
+      } catch {}
+
+      // 2. Try backend API
       const state = await routingService.getState();
       if (state.nodes && state.nodes.length > 0) {
         const mappedNodes: SupplyNode[] = state.nodes.map((n: any) => {
@@ -302,17 +358,21 @@ function App() {
             coordinates: { x: (n.lon + 180) * (800 / 360), y: (90 - n.lat) * (400 / 180), lat: n.lat, lng: n.lon }
           };
         });
-        setNodes(mappedNodes);
-      }
-      if (state.routes && state.routes.length > 0) {
         const mappedRoutes: Route[] = state.routes.map((r: any) => ({
           id: Math.random().toString(36).substr(2, 9), fromId: r.fromId, toId: r.toId,
-          mode: r.mode as TransportMode, distance: r.distance, baseLeadTime: 2,
-          leadTimeVariability: 0.1, costPerUnitDistance: 0.004, vehicleCapacity: 100,
-          shipmentFrequency: 1, fuelPrice: 1.5, customsTime: 0, disruptionProb: 0.01
+          mode: r.mode as TransportMode, distance: r.distance,
+          baseLeadTime: computeLeadTime(r.distance, r.mode),
+          leadTimeVariability: 0.1, costPerUnitDistance: r.mode === 'Air' ? 0.008 : 0.002,
+          vehicleCapacity: 100, shipmentFrequency: 1, fuelPrice: 1.5, customsTime: 0, disruptionProb: 0.01
         }));
+        setNodes(mappedNodes);
         setRoutes(mappedRoutes);
+        return;
       }
+
+      // 3. Fall back to built-in solar chain preset
+      setNodes(SOLAR_PRESET_NODES);
+      setRoutes(SOLAR_PRESET_ROUTES);
     };
     loadState();
   }, []);

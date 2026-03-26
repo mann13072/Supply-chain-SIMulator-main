@@ -6,6 +6,15 @@ import { geocode } from '../utils/geocoding';
 import { routingService, Hub } from '../services/routingService';
 import NetworkMap from './NetworkMap';
 
+function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371;
+  const toRad = (d: number) => d * Math.PI / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
 interface NetworkBuilderProps {
   nodes: SupplyNode[];
   routes: Route[];
@@ -85,19 +94,19 @@ const NetworkBuilder: React.FC<NetworkBuilderProps> = ({ nodes, routes, setNodes
   };
 
   const snapToHub = (hub: any) => {
-    setNewNode({
-      ...newNode, 
+    // Bug 1 fix: use functional updater to avoid stale closure
+    setNewNode(prev => ({
+      ...prev,
       location: hub.name,
-      name: newNode.name || hub.name,
-      coordinates: { 
-        ...newNode.coordinates,
-        lat: hub.lat, 
+      name: prev.name || hub.name,
+      coordinates: {
+        ...prev.coordinates,
+        lat: hub.lat,
         lng: hub.lon,
-        // Map lat/lng to approximate 2D x/y for the network map
         x: (hub.lon + 180) * (800 / 360),
         y: (90 - hub.lat) * (400 / 180)
       }
-    } as Partial<SupplyNode>);
+    } as Partial<SupplyNode>));
     setShowHubSuggestions(false);
   };
 
@@ -180,10 +189,25 @@ const NetworkBuilder: React.FC<NetworkBuilderProps> = ({ nodes, routes, setNodes
     consolidationPolicy: 'None'
   });
 
+  // Bug 2 fix: resolve nearest hub of the correct transport mode by coordinates,
+  // so routing uses the right hub ID rather than fragile location-string matching.
+  const resolveHubId = async (node: SupplyNode, modeStr: 'Air' | 'Sea'): Promise<string> => {
+    if (node.coordinates.lat !== 0 || node.coordinates.lng !== 0) {
+      const nearby = await routingService.getNearbyHubs(node.coordinates.lat, node.coordinates.lng);
+      const hub = nearby.find((h: any) => h.type === modeStr);
+      if (hub) return hub.id;
+    }
+    return node.location;
+  };
+
+  const calcAbortRef = useRef<number>(0);
+
   const handleCalculateRealDistance = async () => {
     if (!newRoute.fromId || !newRoute.toId || !newRoute.mode) return;
-    
     if (newRoute.mode !== TransportMode.AIR && newRoute.mode !== TransportMode.SEA) return;
+
+    // Bug 5 fix: cancel any in-flight calculation before starting a new one
+    const callId = ++calcAbortRef.current;
 
     setIsCalculatingRoute(true);
     setRoutingError(null);
@@ -192,21 +216,34 @@ const NetworkBuilder: React.FC<NetworkBuilderProps> = ({ nodes, routes, setNodes
     const toNode = nodes.find(n => n.id === newRoute.toId);
 
     if (fromNode && toNode) {
-      const result = await routingService.getShortestPath(
-        fromNode.location, 
-        toNode.location,
-        newRoute.mode === TransportMode.AIR ? 'Air' : 'Sea'
-      );
+      const modeStr = newRoute.mode === TransportMode.AIR ? 'Air' : 'Sea';
+      const [fromKey, toKey] = await Promise.all([
+        resolveHubId(fromNode, modeStr),
+        resolveHubId(toNode, modeStr)
+      ]);
+
+      if (callId !== calcAbortRef.current) return; // superseded by newer call
+
+      const result = await routingService.getShortestPath(fromKey, toKey, modeStr);
+
+      if (callId !== calcAbortRef.current) return;
 
       if (result.status === 'success') {
-        setNewRoute(prev => ({ 
-          ...prev, 
+        setNewRoute(prev => ({
+          ...prev,
           distance: result.distance_km,
           baseLeadTime: Math.ceil(result.lead_time_days)
         }));
       } else {
-        setRoutingError(result.message || 'Routing failed');
-        setNewRoute(prev => ({ ...prev, distance: 0 }));
+        // Bug 4 fix: haversine fallback when backend is unavailable (e.g. Vercel)
+        const dist = Math.round(haversineKm(
+          fromNode.coordinates.lat, fromNode.coordinates.lng,
+          toNode.coordinates.lat, toNode.coordinates.lng
+        ));
+        const speed = newRoute.mode === TransportMode.AIR ? 850 : 40;
+        const leadTime = Math.max(1, Math.ceil(dist / speed / 24));
+        setNewRoute(prev => ({ ...prev, distance: dist, baseLeadTime: leadTime }));
+        setRoutingError('Routing engine offline — using straight-line estimate');
       }
     }
     setIsCalculatingRoute(false);
@@ -305,7 +342,7 @@ const NetworkBuilder: React.FC<NetworkBuilderProps> = ({ nodes, routes, setNodes
       name: node.name, 
       lat: node.coordinates.lat, 
       lon: node.coordinates.lng, 
-      type: node.type === NodeType.RETAIL || node.type === NodeType.SUPPLIER || node.type === NodeType.FACTORY ? 'Air' : 'Sea',
+      type: 'Air',
       is_hub: false 
     });
     
@@ -897,15 +934,27 @@ const NetworkBuilder: React.FC<NetworkBuilderProps> = ({ nodes, routes, setNodes
                             const fromNode = nodes.find(n => n.id === selectedRoute.fromId);
                             const toNode = nodes.find(n => n.id === selectedRoute.toId);
                             if (fromNode && toNode) {
-                              const result = await routingService.getShortestPath(
-                                fromNode.location,
-                                toNode.location,
-                                selectedRoute.mode === TransportMode.AIR ? 'Air' : 'Sea'
-                              );
+                              const modeStr = selectedRoute.mode === TransportMode.AIR ? 'Air' : 'Sea';
+                              const [fromKey, toKey] = await Promise.all([
+                                resolveHubId(fromNode, modeStr),
+                                resolveHubId(toNode, modeStr)
+                              ]);
+                              const result = await routingService.getShortestPath(fromKey, toKey, modeStr);
                               if (result.status === 'success') {
-                                handleUpdateRoute(selectedRoute.id, { 
+                                handleUpdateRoute(selectedRoute.id, {
                                   distance: result.distance_km,
                                   baseLeadTime: Math.ceil(result.lead_time_days)
+                                });
+                              } else {
+                                // Haversine fallback
+                                const dist = Math.round(haversineKm(
+                                  fromNode.coordinates.lat, fromNode.coordinates.lng,
+                                  toNode.coordinates.lat, toNode.coordinates.lng
+                                ));
+                                const speed = selectedRoute.mode === TransportMode.AIR ? 850 : 40;
+                                handleUpdateRoute(selectedRoute.id, {
+                                  distance: dist,
+                                  baseLeadTime: Math.max(1, Math.ceil(dist / speed / 24))
                                 });
                               }
                             }

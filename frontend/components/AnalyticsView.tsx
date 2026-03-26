@@ -131,17 +131,22 @@ const AnalyticsView: React.FC<AnalyticsViewProps> = ({ history, nodes, industryC
   // Per-node metrics
   const nodeMetrics = nodes.map(node => {
     const nodeHistory = history.map(h => h.nodes.find(n => n.id === node.id)).filter(Boolean) as { id: string; inv: number; status: string }[];
-    const stockoutDaysForNode = nodeHistory.filter(n => n.status === 'CRITICAL').length;
+    // Bug 3 fix: for retail, CRITICAL = stockout; for others, CRITICAL = disruption event
+    const criticalDaysForNode = nodeHistory.filter(n => n.status === 'CRITICAL').length;
+    const stockoutDaysForNode = node.type === NodeType.RETAIL ? criticalDaysForNode : 0;
     const avgInv = nodeHistory.length > 0
       ? Math.round(nodeHistory.reduce((s, n) => s + n.inv, 0) / nodeHistory.length)
       : node.inventoryLevel;
-    const fillRateForNode = node.type === NodeType.RETAIL
-      ? Math.max(0, 100 - Math.round(stockoutDaysForNode / Math.max(1, nodeHistory.length) * 100))
+    // Bug 4 fix: label as service level (% of days with stock), not fill rate (units)
+    const serviceLevelForNode = node.type === NodeType.RETAIL
+      ? Math.max(0, 100 - Math.round(criticalDaysForNode / Math.max(1, nodeHistory.length) * 100))
       : null;
+    // Bug 5 fix: use avgInv as fallback so DoS isn't 0 just because simulation stopped at a stockout
+    const dosInv = nodeHistory.length > 0 ? avgInv : node.inventoryLevel;
     const dos = node.type === NodeType.RETAIL && (node.demandVolume || 0) > 0
-      ? Math.round(node.inventoryLevel / (node.demandVolume || 20))
+      ? Math.round(dosInv / (node.demandVolume || 20))
       : null;
-    return { node, stockoutDaysForNode, avgInv, fillRateForNode, dos };
+    return { node, criticalDaysForNode, stockoutDaysForNode, avgInv, serviceLevelForNode, dos };
   });
 
   const statusColor = (s: string) =>
@@ -278,22 +283,38 @@ const AnalyticsView: React.FC<AnalyticsViewProps> = ({ history, nodes, industryC
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-white/5">
-                      {['Node', 'Type', 'Status', 'Curr. Inv', 'Avg Inv', 'Capacity %', 'Stockout Days', 'Fill Rate', 'Days of Supply'].map(h => (
+                      {['Node', 'Type', 'Status', 'Curr. Inv', 'Avg Inv', 'Avg Capacity %', 'Stockout Days', 'Service Level', 'Avg Days of Supply'].map(h => (
                         <th key={h} className="text-left px-5 py-4 text-[10px] text-white/30 uppercase tracking-widest font-bold">{h}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
-                    {nodeMetrics.map(({ node, stockoutDaysForNode, avgInv, fillRateForNode, dos }) => {
-                      const capacityPct = Math.round(node.inventoryLevel / node.maxCapacity * 100);
+                    {nodeMetrics.map(({ node, criticalDaysForNode, stockoutDaysForNode, avgInv, serviceLevelForNode, dos }) => {
+                      // Bug 6 fix: use avgInv for the capacity bar so it matches the Avg Inv column
+                      const capacityPct = Math.round(avgInv / node.maxCapacity * 100);
+                      // Bug 1 fix: color direction depends on node type
+                      // Retail/Supplier: low stock = danger (red), high = good (green)
+                      // Factory/Warehouse/DC: high fill = overflow risk (red), low = room to receive (green)
+                      const isStockNode = node.type === NodeType.RETAIL || node.type === NodeType.SUPPLIER;
+                      const barColor = isStockNode
+                        ? (capacityPct < 20 ? '#ef4444' : capacityPct < 50 ? '#f59e0b' : '#10b981')
+                        : (capacityPct > 90 ? '#ef4444' : capacityPct > 70 ? '#f59e0b' : '#10b981');
+                      // Bug 2 fix: derive display status from current inventory, not frozen simulation state
+                      const displayStatus = node.status === NodeStatus.OFFLINE
+                        ? NodeStatus.OFFLINE
+                        : node.inventoryLevel === 0
+                          ? NodeStatus.CRITICAL
+                          : node.inventoryLevel < (node.reorderPoint || 20)
+                            ? NodeStatus.WARNING
+                            : NodeStatus.OPTIMAL;
                       return (
                         <tr key={node.id} className="border-b border-white/5 hover:bg-white/5 transition-colors">
                           <td className="px-5 py-4 font-semibold text-white">{node.name}</td>
                           <td className="px-5 py-4 text-white/40">{typeLabel[node.type] || node.type}</td>
                           <td className="px-5 py-4">
                             <span className="flex items-center gap-2">
-                              <div className="w-2 h-2 rounded-full" style={{ backgroundColor: statusColor(node.status) }} />
-                              <span className="text-white/60 capitalize">{node.status.toLowerCase()}</span>
+                              <div className="w-2 h-2 rounded-full" style={{ backgroundColor: statusColor(displayStatus) }} />
+                              <span className="text-white/60 capitalize">{displayStatus.toLowerCase()}</span>
                             </span>
                           </td>
                           <td className="px-5 py-4 text-white">{node.inventoryLevel}</td>
@@ -301,21 +322,18 @@ const AnalyticsView: React.FC<AnalyticsViewProps> = ({ history, nodes, industryC
                           <td className="px-5 py-4">
                             <div className="flex items-center gap-2">
                               <div className="w-16 h-1.5 bg-white/10 rounded-full overflow-hidden">
-                                <div
-                                  className="h-full rounded-full"
-                                  style={{ width: `${capacityPct}%`, backgroundColor: capacityPct > 80 ? '#ef4444' : capacityPct > 50 ? '#f59e0b' : '#10b981' }}
-                                />
+                                <div className="h-full rounded-full" style={{ width: `${Math.min(capacityPct, 100)}%`, backgroundColor: barColor }} />
                               </div>
                               <span className="text-white/60 text-xs">{capacityPct}%</span>
                             </div>
                           </td>
                           <td className="px-5 py-4">
-                            <span style={{ color: stockoutDaysForNode > 0 ? '#ef4444' : '#10b981' }}>
-                              {stockoutDaysForNode}
+                            <span style={{ color: stockoutDaysForNode > 0 ? '#ef4444' : criticalDaysForNode > 0 ? '#f59e0b' : '#10b981' }}>
+                              {node.type === NodeType.RETAIL ? stockoutDaysForNode : `${criticalDaysForNode}d`}
                             </span>
                           </td>
                           <td className="px-5 py-4 text-white/60">
-                            {fillRateForNode !== null ? `${fillRateForNode}%` : '—'}
+                            {serviceLevelForNode !== null ? `${serviceLevelForNode}%` : '—'}
                           </td>
                           <td className="px-5 py-4 text-white/60">
                             {dos !== null ? `${dos}d` : '—'}
