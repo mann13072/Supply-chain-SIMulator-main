@@ -49,68 +49,78 @@ const SimulationEngine: React.FC<SimulationEngineProps> = ({
   return (
     <div className="space-y-4 md:space-y-8 animate-in fade-in duration-500">
       <div className="space-y-3">
-        {/* Title row */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-2xl md:text-3xl font-bold text-white tracking-tight">Simulation Monitor</h2>
-            <p className="text-white/40 text-sm mt-1">{industryConfig.name} · Live inventory flow</p>
-          </div>
-          <div className={`flex items-center gap-2 text-xs font-bold uppercase tracking-widest transition-colors duration-500 ${isPlaying ? 'text-emerald-400' : 'text-white/20'}`}>
-            <div className={`w-2 h-2 rounded-full transition-all duration-500 ${isPlaying ? 'bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.8)] animate-pulse' : 'bg-white/15'}`} />
-            {isPlaying ? 'Running' : 'Paused'}
-          </div>
-        </div>
-
-        {/* Full-width control bar */}
-        <div className={`flex items-center w-full rounded-2xl border transition-all duration-500 overflow-hidden ${
-          isPlaying ? 'bg-emerald-500/5 border-emerald-500/20 shadow-[0_0_24px_rgba(16,185,129,0.07)]' : 'bg-white/5 border-white/10'
-        }`}>
-          {/* State accent bar */}
-          <div className={`w-1 self-stretch shrink-0 transition-all duration-500 ${isPlaying ? 'bg-emerald-500' : 'bg-transparent'}`} />
-
-          {/* DAY counter */}
-          <div className="px-4 py-3 shrink-0">
-            <p className="text-[9px] text-white/40 uppercase tracking-widest leading-none mb-1">Day</p>
-            <p className={`text-2xl font-mono font-black tabular-nums leading-none transition-colors duration-300 ${isPlaying ? 'text-emerald-400' : 'text-white'}`}>
-              {String(day).padStart(3, '0')}
-            </p>
+        {/* Title row + control bar: stacked on mobile, side-by-side on desktop */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          {/* Title + status indicator */}
+          <div className="flex items-center justify-between sm:block">
+            <div>
+              <h2 className="text-2xl md:text-3xl font-bold text-white tracking-tight">Simulation Monitor</h2>
+              <p className="text-white/40 text-sm mt-1">{industryConfig.name} · Live inventory flow</p>
+            </div>
+            {/* Status — visible in title row on mobile */}
+            <div className={`flex sm:hidden items-center gap-2 text-xs font-bold uppercase tracking-widest transition-colors duration-500 ${isPlaying ? 'text-emerald-400' : 'text-white/20'}`}>
+              <div className={`w-2 h-2 rounded-full transition-all duration-500 ${isPlaying ? 'bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.8)] animate-pulse' : 'bg-white/15'}`} />
+              {isPlaying ? 'Running' : 'Paused'}
+            </div>
           </div>
 
-          <div className="h-8 w-px bg-white/10 mx-1 shrink-0" />
+          {/* Control bar: full-width on mobile, compact on desktop */}
+          <div className={`flex items-center w-full sm:w-auto rounded-2xl border transition-all duration-500 overflow-hidden ${
+            isPlaying ? 'bg-emerald-500/5 border-emerald-500/20 shadow-[0_0_24px_rgba(16,185,129,0.07)]' : 'bg-white/5 border-white/10'
+          }`}>
+            {/* State accent bar */}
+            <div className={`w-1 self-stretch shrink-0 transition-all duration-500 ${isPlaying ? 'bg-emerald-500' : 'bg-transparent'}`} />
 
-          {/* Reset + Play buttons */}
-          <div className="flex items-center gap-1 px-2 py-2 shrink-0">
-            <button onClick={resetSimulation} className="p-2 text-white/30 hover:text-white hover:bg-white/5 rounded-xl transition-all" title="Reset">
-              <RotateCcw className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => setIsPlaying(!isPlaying)}
-              className={`px-4 py-2 rounded-xl font-bold text-sm flex items-center gap-2 transition-all duration-300 ${
-                isPlaying
-                  ? 'bg-emerald-500 text-white shadow-[0_0_16px_rgba(16,185,129,0.5)] hover:bg-emerald-400'
-                  : 'bg-white text-black hover:scale-105 shadow-[0_0_12px_rgba(255,255,255,0.2)]'
-              }`}
-            >
-              {isPlaying ? <Pause className="w-4 h-4 fill-white" /> : <Play className="w-4 h-4 fill-black" />}
-              <span className="hidden sm:inline text-xs tracking-wide">{isPlaying ? 'PAUSE' : 'RUN'}</span>
-            </button>
-          </div>
+            {/* DAY counter */}
+            <div className="px-4 py-3 shrink-0">
+              <p className="text-[9px] text-white/40 uppercase tracking-widest leading-none mb-1">Day</p>
+              <p className={`text-2xl font-mono font-black tabular-nums leading-none transition-colors duration-300 ${isPlaying ? 'text-emerald-400' : 'text-white'}`}>
+                {String(day).padStart(3, '0')}
+              </p>
+            </div>
 
-          {/* Speed segmented control — pushed to right */}
-          <div className="flex gap-0.5 p-2 ml-auto shrink-0">
-            {[1, 2, 4].map(s => (
+            <div className="h-8 w-px bg-white/10 mx-1 shrink-0" />
+
+            {/* Reset + Play */}
+            <div className="flex items-center gap-1 px-2 py-2 shrink-0">
+              <button onClick={resetSimulation} className="p-2 text-white/30 hover:text-white hover:bg-white/5 rounded-xl transition-all" title="Reset">
+                <RotateCcw className="w-4 h-4" />
+              </button>
               <button
-                key={s}
-                onClick={() => setSpeed(s)}
-                className={`px-2.5 py-1.5 rounded-lg text-xs font-bold tracking-wide transition-all ${
-                  speed === s
-                    ? isPlaying ? 'bg-emerald-500 text-white' : 'bg-white text-black'
-                    : 'text-white/30 hover:text-white hover:bg-white/5'
+                onClick={() => setIsPlaying(!isPlaying)}
+                className={`px-4 py-2 rounded-xl font-bold text-sm flex items-center gap-2 transition-all duration-300 ${
+                  isPlaying
+                    ? 'bg-emerald-500 text-white shadow-[0_0_16px_rgba(16,185,129,0.5)] hover:bg-emerald-400'
+                    : 'bg-white text-black hover:scale-105 shadow-[0_0_12px_rgba(255,255,255,0.2)]'
                 }`}
               >
-                {s}×
+                {isPlaying ? <Pause className="w-4 h-4 fill-white" /> : <Play className="w-4 h-4 fill-black" />}
+                <span className="text-xs tracking-wide">{isPlaying ? 'PAUSE' : 'RUN'}</span>
               </button>
-            ))}
+            </div>
+
+            {/* Speed segmented control */}
+            <div className="flex gap-0.5 p-2 ml-auto sm:ml-2 shrink-0">
+              {[1, 2, 4].map(s => (
+                <button
+                  key={s}
+                  onClick={() => setSpeed(s)}
+                  className={`px-2.5 py-1.5 rounded-lg text-xs font-bold tracking-wide transition-all ${
+                    speed === s
+                      ? isPlaying ? 'bg-emerald-500 text-white' : 'bg-white text-black'
+                      : 'text-white/30 hover:text-white hover:bg-white/5'
+                  }`}
+                >
+                  {s}×
+                </button>
+              ))}
+            </div>
+
+            {/* Status indicator inside bar — desktop only */}
+            <div className={`hidden sm:flex items-center gap-2 px-3 text-xs font-bold uppercase tracking-widest transition-colors duration-500 ${isPlaying ? 'text-emerald-400' : 'text-white/20'}`}>
+              <div className={`w-2 h-2 rounded-full transition-all duration-500 ${isPlaying ? 'bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.8)] animate-pulse' : 'bg-white/15'}`} />
+              {isPlaying ? 'Running' : 'Paused'}
+            </div>
           </div>
         </div>
 
