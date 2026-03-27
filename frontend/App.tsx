@@ -409,7 +409,7 @@ function App() {
         return (
           <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
             {/* Workflow Progress Strip */}
-            <div className="bg-white/5 rounded-2xl border border-white/5 p-4 flex items-center justify-between gap-2">
+            <div className="bg-white/5 rounded-2xl border border-white/5 p-3 md:p-4 flex items-center justify-between gap-2 overflow-x-auto">
               {workflowSteps.map((step, i) => (
                 <React.Fragment key={step.tab}>
                   <button onClick={() => setActiveTab(step.tab)} className="flex flex-col items-center gap-1 group">
@@ -424,27 +424,27 @@ function App() {
                 </React.Fragment>
               ))}
             </div>
-            <div className="grid grid-cols-12 gap-8">
-              <div className="col-span-12 lg:col-span-8 flex flex-col gap-8">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  <div className="bg-white/5 rounded-3xl border border-white/5 p-8">
-                    <p className="text-[10px] text-white/40 uppercase tracking-[0.2em] font-bold mb-2">Network Health</p>
-                    <h3 className="text-4xl font-bold text-white tracking-tighter">{networkHealth}%</h3>
+            <div className="grid grid-cols-12 gap-4 md:gap-8">
+              <div className="col-span-12 lg:col-span-8 flex flex-col gap-4 md:gap-8">
+                <div className="grid grid-cols-3 gap-3 md:gap-6">
+                  <div className="bg-white/5 rounded-2xl md:rounded-3xl border border-white/5 p-4 md:p-8">
+                    <p className="text-[9px] md:text-[10px] text-white/40 uppercase tracking-[0.2em] font-bold mb-1 md:mb-2">Network Health</p>
+                    <h3 className="text-2xl md:text-4xl font-bold text-white tracking-tighter">{networkHealth}%</h3>
                   </div>
-                  <div className="bg-white/5 rounded-3xl border border-white/5 p-8">
-                    <p className="text-[10px] text-white/40 uppercase tracking-[0.2em] font-bold mb-2">Active Shipments</p>
-                    <h3 className="text-4xl font-bold text-white tracking-tighter">{activeShipments}</h3>
+                  <div className="bg-white/5 rounded-2xl md:rounded-3xl border border-white/5 p-4 md:p-8">
+                    <p className="text-[9px] md:text-[10px] text-white/40 uppercase tracking-[0.2em] font-bold mb-1 md:mb-2">Active Shipments</p>
+                    <h3 className="text-2xl md:text-4xl font-bold text-white tracking-tighter">{activeShipments}</h3>
                   </div>
-                  <div className="bg-white/5 rounded-3xl border border-white/5 p-8">
-                    <p className="text-[10px] text-white/40 uppercase tracking-[0.2em] font-bold mb-2">Risk Level</p>
-                    <h3 className={`text-4xl font-bold tracking-tighter ${riskLevel === 'HIGH' ? 'text-red-500' : 'text-white'}`}>{riskLevel}</h3>
+                  <div className="bg-white/5 rounded-2xl md:rounded-3xl border border-white/5 p-4 md:p-8">
+                    <p className="text-[9px] md:text-[10px] text-white/40 uppercase tracking-[0.2em] font-bold mb-1 md:mb-2">Risk Level</p>
+                    <h3 className={`text-2xl md:text-4xl font-bold tracking-tighter ${riskLevel === 'HIGH' ? 'text-red-500' : 'text-white'}`}>{riskLevel}</h3>
                   </div>
                 </div>
-                <div className="min-h-[500px] relative">
+                <div className="min-h-[250px] sm:min-h-[350px] md:min-h-[500px] relative">
                   <Globe nodes={nodes} routes={routes} onNodeSelect={setSelectedNode} selectedNodeId={selectedNode?.id || null} />
                 </div>
               </div>
-              <div className="col-span-12 lg:col-span-4 h-full overflow-hidden">
+              <div className="col-span-12 lg:col-span-4 overflow-hidden">
                  <div className="bg-[#050505] rounded-3xl border border-white/5 p-8 h-full flex flex-col">
                     <h3 className="text-white font-semibold flex items-center gap-2 mb-8"><Activity className="w-5 h-5" /> Telemetry</h3>
                     <p className="text-[10px] text-white/30 uppercase tracking-widest mb-4">{industryConfig.name}</p>
@@ -492,33 +492,47 @@ function App() {
     }
   };
 
+  const NAV_ITEMS = [
+    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { id: 'builder', label: 'Builder', icon: Network },
+    { id: 'simulation', label: 'Simulation', icon: PlayCircle },
+    { id: 'resilience', label: 'Resilience', icon: ShieldAlert },
+    { id: 'analytics', label: 'Analytics', icon: BarChart3 },
+    { id: 'optimization', label: 'Optimize', icon: Zap },
+    { id: 'settings', label: 'Settings', icon: Settings },
+  ];
+
   return (
     <div className="flex min-h-screen bg-black">
-      <nav className="w-20 lg:w-64 border-r border-white/5 flex flex-col shrink-0">
-        <div className="p-8"><h1 className="text-white font-black text-2xl tracking-tighter flex items-center gap-2"><Zap className="w-8 h-8 fill-white" />ChainSim</h1></div>
-        <div className="flex-1 px-4 space-y-2">
-          {[
-            { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-            { id: 'builder', label: 'Builder', icon: Network },
-            { id: 'simulation', label: 'Simulation', icon: PlayCircle },
-            { id: 'resilience', label: 'Resilience', icon: ShieldAlert },
-            { id: 'analytics', label: 'Analytics', icon: BarChart3 },
-            { id: 'optimization', label: 'Optimization', icon: Zap },
-            { id: 'settings', label: 'Settings', icon: Settings },
-          ].map(item => (
-            <button key={item.id} onClick={() => setActiveTab(item.id)} className={`w-full flex items-center gap-4 px-4 py-4 rounded-2xl transition-all ${activeTab === item.id ? 'bg-white text-black' : 'text-white/40'}`}>
-              <item.icon className="w-5 h-5" /><span className="hidden lg:block text-[10px] font-bold uppercase">{item.label}</span>
+      {/* Sidebar — hidden below md (768px), icon-only at md, full at lg */}
+      <nav className="hidden md:flex w-20 lg:w-64 border-r border-white/5 flex-col shrink-0">
+        <div className="p-4 lg:p-8 flex items-center justify-center lg:justify-start"><h1 className="text-white font-black text-2xl tracking-tighter hidden lg:flex items-center gap-2"><Zap className="w-8 h-8 fill-white" />ChainSim</h1><Zap className="lg:hidden w-7 h-7 fill-white" /></div>
+        <div className="flex-1 px-2 lg:px-4 space-y-2">
+          {NAV_ITEMS.map(item => (
+            <button key={item.id} onClick={() => setActiveTab(item.id)} className={`w-full flex items-center justify-center lg:justify-start gap-4 px-2 lg:px-4 py-3 lg:py-4 rounded-2xl transition-all min-h-[44px] ${activeTab === item.id ? 'bg-white text-black' : 'text-white/40'}`}>
+              <item.icon className="w-5 h-5 shrink-0" /><span className="hidden lg:block text-[10px] font-bold uppercase">{item.label}</span>
             </button>
           ))}
         </div>
       </nav>
+
       <main className="flex-1 flex flex-col h-screen overflow-hidden">
-        <header className="h-20 border-b border-white/5 flex items-center justify-between px-12 shrink-0">
+        <header className="h-14 md:h-20 border-b border-white/5 flex items-center justify-between px-4 md:px-12 shrink-0">
           <p className="text-[10px] text-white/40 uppercase tracking-[0.3em] font-bold">Session Active • v4.2.0</p>
-          <button className="px-6 py-2 bg-white text-black text-xs font-bold rounded-full">DEPLOY</button>
+          <button className="px-4 md:px-6 py-2 bg-white text-black text-xs font-bold rounded-full min-h-[36px]">DEPLOY</button>
         </header>
-        <div className="flex-1 overflow-y-auto p-12 custom-scrollbar">{renderContent()}</div>
+        <div className="flex-1 overflow-y-auto p-4 md:p-8 lg:p-12 pb-24 md:pb-8 lg:pb-12 custom-scrollbar">{renderContent()}</div>
       </main>
+
+      {/* Bottom nav — visible below md (768px): phones + small tablets in portrait */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-black border-t border-white/5 flex">
+        {NAV_ITEMS.map(item => (
+          <button key={item.id} onClick={() => setActiveTab(item.id)} className={`flex-1 flex flex-col items-center gap-1 py-3 min-h-[56px] transition-colors ${activeTab === item.id ? 'text-white' : 'text-white/30'}`}>
+            <item.icon className="w-5 h-5" />
+            <span className="text-[8px] uppercase tracking-wide font-bold">{item.label}</span>
+          </button>
+        ))}
+      </nav>
     </div>
   );
 }

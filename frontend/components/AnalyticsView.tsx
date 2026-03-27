@@ -279,8 +279,8 @@ const AnalyticsView: React.FC<AnalyticsViewProps> = ({ history, nodes, industryC
                 <p className="text-white/20 text-sm">Add nodes to the network to see per-node analytics</p>
               </div>
             ) : (
-              <div className="bg-white/5 rounded-3xl border border-white/5 overflow-hidden">
-                <table className="w-full text-sm">
+              <div className="bg-white/5 rounded-3xl border border-white/5 overflow-x-auto">
+                <table className="w-full text-sm min-w-[700px]">
                   <thead>
                     <tr className="border-b border-white/5">
                       {['Node', 'Type', 'Status', 'Curr. Inv', 'Avg Inv', 'Avg Capacity %', 'Stockout Days', 'Service Level', 'Avg Days of Supply'].map(h => (
@@ -355,13 +355,13 @@ const AnalyticsView: React.FC<AnalyticsViewProps> = ({ history, nodes, industryC
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       {/* Header */}
-      <div className="flex justify-between items-end">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-end gap-3">
         <div>
-          <h2 className="text-3xl font-bold text-white tracking-tight">Analytics</h2>
+          <h2 className="text-2xl md:text-3xl font-bold text-white tracking-tight">Analytics</h2>
           <p className="text-white/40 text-sm mt-1">{industryConfig.name} · {history.length} days recorded</p>
         </div>
         <div className="flex gap-2">
-          <span className="px-4 py-2 bg-white/5 text-sm text-white/40 rounded-xl border border-white/10">
+          <span className="px-4 py-2 bg-white/5 text-sm text-white/40 rounded-xl border border-white/10 whitespace-nowrap">
             {nodes.length} nodes · {totalShipments} shipments
           </span>
         </div>

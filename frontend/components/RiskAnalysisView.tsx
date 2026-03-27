@@ -45,15 +45,15 @@ const RiskAnalysisView: React.FC<RiskAnalysisViewProps> = ({ nodes, routes, para
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h2 className="text-3xl font-bold text-white tracking-tight">Risk Analysis</h2>
+          <h2 className="text-2xl md:text-3xl font-bold text-white tracking-tight">Risk Analysis</h2>
           <p className="text-white/40 text-sm mt-1">Comprehensive qualitative and quantitative risk assessment</p>
         </div>
-        <button 
+        <button
           onClick={runRiskAnalysis}
           disabled={isAnalyzing}
-          className="flex items-center gap-2 px-6 py-3 bg-white text-black hover:bg-white/90 rounded-2xl transition-all font-bold disabled:opacity-50 disabled:cursor-not-allowed shadow-[0_0_30px_rgba(255,255,255,0.2)]"
+          className="flex items-center gap-2 px-6 py-3 bg-white text-black hover:bg-white/90 rounded-2xl transition-all font-bold disabled:opacity-50 disabled:cursor-not-allowed shadow-[0_0_30px_rgba(255,255,255,0.2)] self-start sm:self-auto min-h-[44px]"
         >
           {isAnalyzing ? <Loader2 className="w-5 h-5 animate-spin" /> : <ShieldAlert className="w-5 h-5 fill-black" />}
           <span>{isAnalyzing ? 'Evaluating Risks...' : 'Run Risk Audit'}</span>
@@ -69,7 +69,7 @@ const RiskAnalysisView: React.FC<RiskAnalysisViewProps> = ({ nodes, routes, para
         {/* Right Column: Analysis Results */}
         <div className="col-span-12 lg:col-span-8">
           {!analysis && !isAnalyzing && (
-            <div className="h-full min-h-[500px] flex flex-col items-center justify-center text-center p-12 bg-white/5 rounded-[3rem] border border-dashed border-white/10">
+            <div className="h-full min-h-[280px] md:min-h-[500px] flex flex-col items-center justify-center text-center p-12 bg-white/5 rounded-[3rem] border border-dashed border-white/10">
               <div className="w-20 h-20 rounded-3xl bg-white/5 flex items-center justify-center mb-6">
                 <ShieldAlert className="w-10 h-10 text-white/20" />
               </div>
@@ -79,7 +79,7 @@ const RiskAnalysisView: React.FC<RiskAnalysisViewProps> = ({ nodes, routes, para
           )}
 
           {isAnalyzing && (
-            <div className="h-full min-h-[500px] flex flex-col items-center justify-center text-center p-12 bg-white/5 rounded-[3rem] border border-white/5">
+            <div className="h-full min-h-[280px] md:min-h-[500px] flex flex-col items-center justify-center text-center p-12 bg-white/5 rounded-[3rem] border border-white/5">
               <div className="relative">
                 <div className="w-24 h-24 rounded-full border-4 border-white/10 border-t-white animate-spin mb-8" />
                 <ShieldAlert className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-8 text-white animate-pulse" />

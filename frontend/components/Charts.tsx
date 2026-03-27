@@ -37,10 +37,10 @@ export const CostTrendChart: React.FC<CostTrendChartProps> = ({ history, nodes, 
     cost: Math.round(h.nodes.reduce((sum, n) => sum + n.inv, 0) * avgUnitCost),
   }));
 
-  if (chartData.length === 0) return <div className="h-64 w-full flex items-center justify-center"><EmptyState text="Run simulation to see cost trend" /></div>;
+  if (chartData.length === 0) return <div className="h-44 md:h-64 w-full flex items-center justify-center"><EmptyState text="Run simulation to see cost trend" /></div>;
 
   return (
-    <div className="h-64 w-full">
+    <div className="h-44 md:h-64 w-full">
       <ResponsiveContainer width="100%" height="100%">
         <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
           <defs>
@@ -74,10 +74,10 @@ export const InventoryChart: React.FC<InventoryChartProps> = ({ nodes, industryC
 
   const primaryColor = industryConfig.commodities[0]?.color || '#3b82f6';
 
-  if (inventoryData.length === 0) return <div className="h-64 w-full flex items-center justify-center"><EmptyState text="Add nodes to see inventory levels" /></div>;
+  if (inventoryData.length === 0) return <div className="h-44 md:h-64 w-full flex items-center justify-center"><EmptyState text="Add nodes to see inventory levels" /></div>;
 
   return (
-    <div className="h-64 w-full">
+    <div className="h-44 md:h-64 w-full">
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={inventoryData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#ffffff" strokeOpacity={0.05} vertical={false} />
@@ -105,10 +105,10 @@ export const FillRateTrendChart: React.FC<{ history: HistorySnapshot[] }> = ({ h
     rate: h.demandTotal > 0 ? Math.round(h.demandFulfilled / h.demandTotal * 100) : 100,
   }));
 
-  if (chartData.length === 0) return <div className="h-56 w-full"><EmptyState text="Run simulation to see fill rate" /></div>;
+  if (chartData.length === 0) return <div className="h-40 md:h-56 w-full"><EmptyState text="Run simulation to see fill rate" /></div>;
 
   return (
-    <div className="h-56 w-full">
+    <div className="h-40 md:h-56 w-full">
       <ResponsiveContainer width="100%" height="100%">
         <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
           <defs>
@@ -135,10 +135,10 @@ export const DemandAreaChart: React.FC<{ history: HistorySnapshot[] }> = ({ hist
     fulfilled: h.demandFulfilled,
   }));
 
-  if (chartData.length === 0) return <div className="h-56 w-full"><EmptyState text="Run simulation to see demand data" /></div>;
+  if (chartData.length === 0) return <div className="h-40 md:h-56 w-full"><EmptyState text="Run simulation to see demand data" /></div>;
 
   return (
-    <div className="h-56 w-full">
+    <div className="h-40 md:h-56 w-full">
       <ResponsiveContainer width="100%" height="100%">
         <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
           <defs>
@@ -173,10 +173,10 @@ export const InTransitInventoryChart: React.FC<{ history: HistorySnapshot[] }> =
     shipments: h.shipmentsInFlight,
   }));
 
-  if (chartData.length === 0) return <div className="h-56 w-full"><EmptyState text="Run simulation to see in-transit data" /></div>;
+  if (chartData.length === 0) return <div className="h-40 md:h-56 w-full"><EmptyState text="Run simulation to see in-transit data" /></div>;
 
   return (
-    <div className="h-56 w-full">
+    <div className="h-40 md:h-56 w-full">
       <ResponsiveContainer width="100%" height="100%">
         <ComposedChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
           <defs>
@@ -208,10 +208,10 @@ export const CostBreakdownChart: React.FC<{ history: HistorySnapshot[]; industry
     stockout: Math.round(h.stockoutCost),
   }));
 
-  if (chartData.length === 0) return <div className="h-56 w-full"><EmptyState text="Run simulation to see cost breakdown" /></div>;
+  if (chartData.length === 0) return <div className="h-40 md:h-56 w-full"><EmptyState text="Run simulation to see cost breakdown" /></div>;
 
   return (
-    <div className="h-56 w-full">
+    <div className="h-40 md:h-56 w-full">
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#ffffff" strokeOpacity={0.05} vertical={false} />
@@ -236,10 +236,10 @@ export const CumulativeCostChart: React.FC<{ history: HistorySnapshot[]; industr
     return { name: `D${h.day}`, holding: Math.round(cumHolding), stockout: Math.round(cumStockout), total: Math.round(cumHolding + cumStockout) };
   });
 
-  if (chartData.length === 0) return <div className="h-56 w-full"><EmptyState text="Run simulation to see cumulative costs" /></div>;
+  if (chartData.length === 0) return <div className="h-40 md:h-56 w-full"><EmptyState text="Run simulation to see cumulative costs" /></div>;
 
   return (
-    <div className="h-56 w-full">
+    <div className="h-40 md:h-56 w-full">
       <ResponsiveContainer width="100%" height="100%">
         <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
           <defs>
@@ -273,10 +273,10 @@ export const NodeStatusDistributionChart: React.FC<{ history: HistorySnapshot[] 
     offline: h.nodes.filter(n => n.status === 'OFFLINE').length,
   }));
 
-  if (chartData.length === 0) return <div className="h-56 w-full"><EmptyState text="Run simulation to see node status history" /></div>;
+  if (chartData.length === 0) return <div className="h-40 md:h-56 w-full"><EmptyState text="Run simulation to see node status history" /></div>;
 
   return (
-    <div className="h-56 w-full">
+    <div className="h-40 md:h-56 w-full">
       <ResponsiveContainer width="100%" height="100%">
         <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#ffffff" strokeOpacity={0.05} vertical={false} />
@@ -315,10 +315,10 @@ export const DisruptionBreakdownChart: React.FC<{ history: HistorySnapshot[] }> 
   ];
 
   const total = chartData.reduce((sum, d) => sum + d.count, 0);
-  if (total === 0) return <div className="h-56 w-full"><EmptyState text="No disruptions recorded yet" /></div>;
+  if (total === 0) return <div className="h-40 md:h-56 w-full"><EmptyState text="No disruptions recorded yet" /></div>;
 
   return (
-    <div className="h-56 w-full">
+    <div className="h-40 md:h-56 w-full">
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={chartData} layout="vertical" margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#ffffff" strokeOpacity={0.05} horizontal={false} />
@@ -352,10 +352,10 @@ export const FactoryUtilizationChart: React.FC<{ history: HistorySnapshot[] }> =
     utilization: Math.round(f.total / f.count),
   }));
 
-  if (chartData.length === 0) return <div className="h-56 w-full"><EmptyState text="No factory nodes in simulation" /></div>;
+  if (chartData.length === 0) return <div className="h-40 md:h-56 w-full"><EmptyState text="No factory nodes in simulation" /></div>;
 
   return (
-    <div className="h-56 w-full">
+    <div className="h-40 md:h-56 w-full">
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#ffffff" strokeOpacity={0.05} vertical={false} />
@@ -381,10 +381,10 @@ export const ShipmentFlowChart: React.FC<{ history: HistorySnapshot[] }> = ({ hi
     onTime: h.newShipmentsTotal - h.newShipmentsDelayed,
   }));
 
-  if (chartData.length === 0) return <div className="h-56 w-full"><EmptyState text="Run simulation to see shipment flow" /></div>;
+  if (chartData.length === 0) return <div className="h-40 md:h-56 w-full"><EmptyState text="Run simulation to see shipment flow" /></div>;
 
   return (
-    <div className="h-56 w-full">
+    <div className="h-40 md:h-56 w-full">
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#ffffff" strokeOpacity={0.05} vertical={false} />

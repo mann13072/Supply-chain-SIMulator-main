@@ -132,7 +132,7 @@ const NetworkMap: React.FC<NetworkMapProps> = ({ nodes, routes, onNodeSelect, se
   }, [nodes, projection, selectedNodeId, onNodeSelect]);
 
   return (
-    <div className="relative w-full h-[500px] bg-[#020617] rounded-[2rem] border border-white/5 overflow-hidden group">
+    <div className="relative w-full h-[250px] sm:h-[350px] md:h-[500px] bg-[#020617] rounded-[2rem] border border-white/5 overflow-hidden group">
       <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-full">
         {/* Graticule */}
         {graticule}
