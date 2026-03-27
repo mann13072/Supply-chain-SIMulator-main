@@ -147,24 +147,24 @@ const ScenariosView: React.FC<ScenariosViewProps> = ({ nodes, routes, setNodes, 
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h2 className="text-3xl font-bold text-white tracking-tight">Scenario Management</h2>
+          <h2 className="text-2xl md:text-3xl font-bold text-white tracking-tight">Scenario Management</h2>
           <p className="text-white/40 text-sm mt-1">Save and compare different network configurations</p>
         </div>
-        <div className="flex gap-3">
-          <button 
+        <div className="flex gap-2 md:gap-3 self-start sm:self-auto">
+          <button
             onClick={exportToExcel}
-            className="flex items-center gap-2 px-4 py-2 bg-white/5 hover:bg-white/10 text-white rounded-xl border border-white/10 transition-all"
+            className="flex items-center gap-1.5 px-3 py-1.5 md:px-4 md:py-2 text-xs md:text-sm bg-white/5 hover:bg-white/10 text-white rounded-xl border border-white/10 transition-all"
           >
-            <FileSpreadsheet className="w-4 h-4" />
+            <FileSpreadsheet className="w-3.5 h-3.5 md:w-4 md:h-4" />
             <span>Export Excel</span>
           </button>
-          <button 
+          <button
             onClick={() => setIsSaving(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-white text-black hover:bg-white/90 rounded-xl transition-all font-medium"
+            className="flex items-center gap-1.5 px-3 py-1.5 md:px-4 md:py-2 text-xs md:text-sm bg-white text-black hover:bg-white/90 rounded-xl transition-all font-medium"
           >
-            <Save className="w-4 h-4" />
+            <Save className="w-3.5 h-3.5 md:w-4 md:h-4" />
             <span>Save Current State</span>
           </button>
         </div>

@@ -48,25 +48,25 @@ const SimulationEngine: React.FC<SimulationEngineProps> = ({
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h2 className="text-3xl font-bold text-white tracking-tight">Simulation Monitor</h2>
+          <h2 className="text-2xl md:text-3xl font-bold text-white tracking-tight">Simulation Monitor</h2>
           <p className="text-white/40 text-sm mt-1">{industryConfig.name} · Live inventory flow</p>
         </div>
 
-        <div className="flex items-center gap-4 bg-white/5 p-2 rounded-2xl border border-white/10">
-          <div className="px-4 py-2 text-right">
-            <p className="text-[10px] text-white/40 uppercase tracking-widest">Day</p>
-            <p className="text-xl font-mono text-white font-bold">{day}</p>
+        <div className="flex items-center gap-2 md:gap-4 bg-white/5 p-1.5 md:p-2 rounded-2xl border border-white/10 self-start sm:self-auto">
+          <div className="px-3 py-1 md:px-4 md:py-2 text-right">
+            <p className="text-[9px] md:text-[10px] text-white/40 uppercase tracking-widest">Day</p>
+            <p className="text-lg md:text-xl font-mono text-white font-bold">{day}</p>
           </div>
           <div className="h-8 w-px bg-white/10" />
-          <div className="flex gap-1 p-1">
-            <button onClick={resetSimulation} className="p-3 text-white/60 hover:text-white hover:bg-white/5 rounded-xl"><RotateCcw className="w-5 h-5" /></button>
-            <button onClick={() => setIsPlaying(!isPlaying)} className="p-3 bg-white text-black rounded-xl hover:scale-105 transition-all">
-              {isPlaying ? <Pause className="w-5 h-5 fill-black" /> : <Play className="w-5 h-5 fill-black" />}
+          <div className="flex gap-0.5 md:gap-1 p-0.5 md:p-1">
+            <button onClick={resetSimulation} className="p-2 md:p-3 text-white/60 hover:text-white hover:bg-white/5 rounded-xl"><RotateCcw className="w-4 h-4 md:w-5 md:h-5" /></button>
+            <button onClick={() => setIsPlaying(!isPlaying)} className="p-2 md:p-3 bg-white text-black rounded-xl hover:scale-105 transition-all">
+              {isPlaying ? <Pause className="w-4 h-4 md:w-5 md:h-5 fill-black" /> : <Play className="w-4 h-4 md:w-5 md:h-5 fill-black" />}
             </button>
-            <button onClick={() => setSpeed(speed === 4 ? 1 : speed * 2)} className="p-3 text-white/60 hover:text-white hover:bg-white/5 rounded-xl flex items-center gap-1">
-              <FastForward className="w-5 h-5" /><span className="text-xs font-bold">{speed}x</span>
+            <button onClick={() => setSpeed(speed === 4 ? 1 : speed * 2)} className="p-2 md:p-3 text-white/60 hover:text-white hover:bg-white/5 rounded-xl flex items-center gap-1">
+              <FastForward className="w-4 h-4 md:w-5 md:h-5" /><span className="text-xs font-bold">{speed}x</span>
             </button>
           </div>
         </div>
