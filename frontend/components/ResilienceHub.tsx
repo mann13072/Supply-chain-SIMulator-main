@@ -222,13 +222,13 @@ const ResilienceHub: React.FC<ResilienceHubProps> = ({
   }).sort((a, b) => ({ HIGH: 0, MED: 1, LOW: 2 }[a.riskLevel] - { HIGH: 0, MED: 1, LOW: 2 }[b.riskLevel]));
 
   return (
-    <div className="flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
+    <div className="flex flex-col gap-4 md:gap-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
 
       {/* Header — Score + Presets */}
-      <div className="bg-[#050505] rounded-3xl border border-white/5 p-8">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+      <div className="bg-[#050505] rounded-3xl border border-white/5 p-4 md:p-8">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 md:gap-6">
           <div>
-            <h2 className="text-3xl font-bold text-white flex items-center gap-3">
+            <h2 className="text-2xl md:text-3xl font-bold text-white flex items-center gap-3">
               <ShieldAlert className="w-7 h-7 text-emerald-500" /> Resilience Hub
             </h2>
             <p className="text-white/30 text-sm mt-1">Configure risk parameters and run stress tests</p>
@@ -238,7 +238,7 @@ const ResilienceHub: React.FC<ResilienceHubProps> = ({
           <div className="flex items-center gap-6">
             <div className="text-right">
               <p className="text-xs text-white/40 uppercase tracking-widest mb-1">Resilience Score</p>
-              <span className="text-5xl font-black tabular-nums" style={{ color: scoreColor }}>
+              <span className="text-3xl md:text-5xl font-black tabular-nums" style={{ color: scoreColor }}>
                 {resilienceScore}
               </span>
               <p className="text-xs font-bold mt-1" style={{ color: scoreColor }}>{scoreLabel}</p>
@@ -273,7 +273,7 @@ const ResilienceHub: React.FC<ResilienceHubProps> = ({
         </div>
       </div>
 
-      <div className="grid grid-cols-12 gap-6">
+      <div className="grid grid-cols-12 gap-4 md:gap-6">
 
         {/* Left: Controls */}
         <div className="col-span-12 lg:col-span-7 flex flex-col gap-4">

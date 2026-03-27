@@ -76,7 +76,7 @@ const OptimizationView: React.FC<OptimizationViewProps> = ({
   };
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500">
+    <div className="space-y-4 md:space-y-8 animate-in fade-in duration-500">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h2 className="text-2xl md:text-3xl font-bold text-white tracking-tight">AI Network Optimization</h2>
@@ -104,7 +104,7 @@ const OptimizationView: React.FC<OptimizationViewProps> = ({
 
       {/* Locked state */}
       {!analysisReady && (
-        <div className="h-96 flex flex-col items-center justify-center text-center p-12 bg-white/5 rounded-[3rem] border border-dashed border-white/10">
+        <div className="h-auto min-h-[200px] md:h-96 flex flex-col items-center justify-center text-center p-6 md:p-12 bg-white/5 rounded-[3rem] border border-dashed border-white/10">
           <div className="w-20 h-20 rounded-3xl bg-white/5 flex items-center justify-center mb-6">
             <Lock className="w-10 h-10 text-white/20" />
           </div>
@@ -127,7 +127,7 @@ const OptimizationView: React.FC<OptimizationViewProps> = ({
 
       {/* Ready, no result yet */}
       {analysisReady && !result && !isAnalyzing && !error && (
-        <div className="h-96 flex flex-col items-center justify-center text-center p-12 bg-white/5 rounded-[3rem] border border-dashed border-white/10">
+        <div className="h-auto min-h-[200px] md:h-96 flex flex-col items-center justify-center text-center p-6 md:p-12 bg-white/5 rounded-[3rem] border border-dashed border-white/10">
           <div className="w-20 h-20 rounded-3xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center mb-6">
             <Zap className="w-10 h-10 text-emerald-400" />
           </div>

@@ -47,7 +47,7 @@ const SimulationEngine: React.FC<SimulationEngineProps> = ({
   const transitValue = shipments.reduce((acc, s) => acc + (s.quantity * avgUnitCost), 0);
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500">
+    <div className="space-y-4 md:space-y-8 animate-in fade-in duration-500">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h2 className="text-2xl md:text-3xl font-bold text-white tracking-tight">Simulation Monitor</h2>
@@ -72,31 +72,31 @@ const SimulationEngine: React.FC<SimulationEngineProps> = ({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="bg-white/5 rounded-3xl border border-white/5 p-8">
-            <p className="text-[10px] text-white/40 uppercase tracking-[0.2em] font-bold mb-2">Service Level</p>
-            <h3 className="text-5xl font-bold text-white tracking-tighter mb-4">{serviceLevel}%</h3>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-8">
+        <div className="lg:col-span-2 grid grid-cols-2 md:grid-cols-2 gap-3 md:gap-4">
+          <div className="bg-white/5 rounded-2xl md:rounded-3xl border border-white/5 p-4 md:p-8">
+            <p className="text-[9px] md:text-[10px] text-white/40 uppercase tracking-[0.2em] font-bold mb-1 md:mb-2">Service Level</p>
+            <h3 className="text-2xl md:text-5xl font-bold text-white tracking-tighter mb-1 md:mb-4">{serviceLevel}%</h3>
             <p className="text-white/40 text-xs">{serviceLevel > 90 ? 'Healthy' : 'Replenishment Lagging'}</p>
           </div>
-          <div className="bg-white/5 rounded-3xl border border-white/5 p-8">
-            <p className="text-[10px] text-white/40 uppercase tracking-[0.2em] font-bold mb-2">Daily OpEx</p>
-            <h3 className="text-5xl font-bold text-white tracking-tighter mb-4">{formatCurrencyCompact(totalCost, industryConfig)}</h3>
+          <div className="bg-white/5 rounded-2xl md:rounded-3xl border border-white/5 p-4 md:p-8">
+            <p className="text-[9px] md:text-[10px] text-white/40 uppercase tracking-[0.2em] font-bold mb-1 md:mb-2">Daily OpEx</p>
+            <h3 className="text-2xl md:text-5xl font-bold text-white tracking-tighter mb-1 md:mb-4">{formatCurrencyCompact(totalCost, industryConfig)}</h3>
             <p className="text-white/40 text-xs">Dynamic operational costs</p>
           </div>
-          <div className="bg-white/5 rounded-3xl border border-white/5 p-8">
-            <p className="text-[10px] text-white/40 uppercase tracking-[0.2em] font-bold mb-2">Chain Value</p>
-            <h3 className="text-5xl font-bold text-white tracking-tighter mb-4">{formatCurrencyCompact(inventoryValue + transitValue, industryConfig)}</h3>
+          <div className="bg-white/5 rounded-2xl md:rounded-3xl border border-white/5 p-4 md:p-8">
+            <p className="text-[9px] md:text-[10px] text-white/40 uppercase tracking-[0.2em] font-bold mb-1 md:mb-2">Chain Value</p>
+            <h3 className="text-2xl md:text-5xl font-bold text-white tracking-tighter mb-1 md:mb-4">{formatCurrencyCompact(inventoryValue + transitValue, industryConfig)}</h3>
             <p className="text-white/40 text-xs">{shipments.length} Active Shipments</p>
           </div>
-          <div className="bg-white/5 rounded-3xl border border-white/5 p-8">
-            <p className="text-[10px] text-white/40 uppercase tracking-[0.2em] font-bold mb-2">Network Health</p>
-            <h3 className={`text-5xl font-bold tracking-tighter ${serviceLevel < 80 ? 'text-red-500' : 'text-white'}`}>{serviceLevel < 80 ? 'CRITICAL' : 'STABLE'}</h3>
+          <div className="bg-white/5 rounded-2xl md:rounded-3xl border border-white/5 p-4 md:p-8">
+            <p className="text-[9px] md:text-[10px] text-white/40 uppercase tracking-[0.2em] font-bold mb-1 md:mb-2">Network Health</p>
+            <h3 className={`text-2xl md:text-5xl font-bold tracking-tighter ${serviceLevel < 80 ? 'text-red-500' : 'text-white'}`}>{serviceLevel < 80 ? 'CRITICAL' : 'STABLE'}</h3>
             <p className="text-white/40 text-xs">{nodes.filter(n => n.status !== 'OPTIMAL').length} Warnings</p>
           </div>
         </div>
 
-        <div className="bg-[#050505] rounded-3xl border border-white/5 p-8 flex flex-col h-[500px]">
+        <div className="bg-[#050505] rounded-2xl md:rounded-3xl border border-white/5 p-4 md:p-8 flex flex-col h-auto md:h-[500px]">
           <h3 className="text-white font-semibold mb-6 flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-blue-500" />Node Inventory</h3>
           <div className="flex-1 overflow-y-auto space-y-3 custom-scrollbar">
             {nodes.map(node => (
