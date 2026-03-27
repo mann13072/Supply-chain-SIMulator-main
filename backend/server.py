@@ -150,6 +150,63 @@ class AnalysisRequest(BaseModel):
     nodes: List[Any]
     routes: List[Any]
     params: Dict[str, Any]
+    historySummary: Optional[Dict[str, Any]] = None
+    industryConfig: Optional[Dict[str, Any]] = None
+
+
+# Fields kept per node for AI analysis — drops UI-only and redundant fields
+NODE_ANALYSIS_FIELDS = {
+    "id", "name", "type", "status",
+    "inventoryLevel", "maxCapacity", "reorderPoint", "safetyStock",
+    "holdingCost", "obsolescenceRate", "shelfLife",
+    "supplierLeadTime", "supplierReliability", "supplierCostPerUnit",
+    "yieldRate", "throughputCapacity", "automationLevel",
+    "demandVolume", "demandVariability", "priceElasticity",
+}
+
+# Fields kept per route for AI analysis
+ROUTE_ANALYSIS_FIELDS = {
+    "fromId", "toId", "mode", "distance", "baseLeadTime",
+    "leadTimeVariability", "costPerUnitDistance", "vehicleCapacity",
+    "customsTime", "disruptionProb",
+}
+
+# Params that are zero/false by default and boring when unchanged
+PARAM_SKIP_IF_ZERO_OR_FALSE = {
+    "naturalDisasterProb", "laborStrikeProb", "cyberRisk", "qualityRecallProb",
+    "demandShockProb", "pandemicFactor", "demandSurge", "subsidyLevel",
+    "interestRateChange", "tariffImposition", "weatherEvent",
+    "geopoliticalTension", "postponementEnabled", "inventoryPooling",
+    "nearshoring", "dynamicPricing", "logisticDisruption",
+}
+
+
+def _compact_nodes(nodes: List[Any]) -> List[Dict]:
+    result = []
+    for n in nodes:
+        if isinstance(n, dict):
+            result.append({k: v for k, v in n.items() if k in NODE_ANALYSIS_FIELDS})
+    return result
+
+
+def _compact_routes(routes: List[Any]) -> List[Dict]:
+    result = []
+    for r in routes:
+        if isinstance(r, dict):
+            result.append({k: v for k, v in r.items() if k in ROUTE_ANALYSIS_FIELDS})
+    return result
+
+
+def _compact_params(params: Dict[str, Any]) -> Dict[str, Any]:
+    result = {}
+    for k, v in params.items():
+        if k in PARAM_SKIP_IF_ZERO_OR_FALSE:
+            # Only include if non-zero / true
+            if v:
+                result[k] = v
+        else:
+            result[k] = v
+    return result
 
 
 @app.post("/api/analyze")
@@ -163,34 +220,50 @@ async def analyze_supply_chain(req: AnalysisRequest):
         import google.generativeai as genai
         genai.configure(api_key=api_key)
 
-        prompt = f"""Act as an advanced Digital Twin Simulation Engine for supply chain analysis.
-Analyze the provided supply chain network using the following data:
+        # Compact the payload to reduce token usage
+        compact_nodes = _compact_nodes(req.nodes)
+        compact_routes = _compact_routes(req.routes)
+        compact_params = _compact_params(req.params)
 
-Nodes: {json.dumps(req.nodes)}
-Routes: {json.dumps(req.routes)}
-Global Parameters: {json.dumps(req.params)}
+        industry_name = (req.industryConfig or {}).get("name", "General")
+        history_block = ""
+        if req.historySummary:
+            h = req.historySummary
+            history_block = f"""
+Simulation History ({h.get('totalDays', 0)} days):
+- Stockout events: {h.get('stockoutCount', 0)}
+- Avg inventory utilization: {h.get('avgInventoryUtilization', 0)}%
+- Most critical nodes: {json.dumps(h.get('worstNodeId', {}))}
+"""
 
-In your analysis, consider:
-- Inventory Policy: Reorder points, safety stock, holding costs, shelf life, and obsolescence risk.
-- Supplier Reliability: Lead time variability, reliability %, disruption probabilities, and recovery time.
-- Production Efficiency: Capacity utilization, yield rates, defect rates, and setup constraints.
-- Warehouse Performance: Throughput capacity, automation level, and labor availability.
-- Market Dynamics: Demand seasonality, variability, price elasticity, and customer lead time tolerance.
+        prompt = f"""You are a supply chain digital-twin AI for a {industry_name} network.
+Analyze the network and return strategic insights.
+{history_block}
+Nodes ({len(compact_nodes)}): {json.dumps(compact_nodes)}
+Routes ({len(compact_routes)}): {json.dumps(compact_routes)}
+Active params: {json.dumps(compact_params)}
 
-Return a JSON object with exactly these fields:
+Analyze:
+- Inventory: reorder points, safety stock, holding cost, shelf life, obsolescence risk
+- Suppliers: lead time variability, reliability %, disruption probability, recovery time
+- Production: capacity utilization, yield rates, throughput vs demand
+- Logistics: route costs, lead times, disruption exposure, modal mix
+- Market: demand variability, price elasticity, demand surges
+
+Return JSON with exactly:
 {{
-  "narrative": "string - detailed analysis",
+  "narrative": "string",
   "kpiImpact": {{
     "landedCostChange": number,
     "otifChange": number,
     "carbonFootprintChange": number,
-    "inventoryRisk": "Low" | "Medium" | "High",
-    "financialRisk": number (0-100),
-    "operationalRisk": number (0-100)
+    "inventoryRisk": "Low"|"Medium"|"High",
+    "financialRisk": number,
+    "operationalRisk": number
   }},
-  "recommendations": ["string array of 3-5 recommendations"],
+  "recommendations": ["3-5 strings"],
   "qualitativeRisk": "string",
-  "quantitativeRiskScore": number (0-100)
+  "quantitativeRiskScore": number
 }}"""
 
         model = genai.GenerativeModel('gemini-2.0-flash')

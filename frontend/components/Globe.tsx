@@ -271,18 +271,18 @@ const Globe: React.FC<GlobeProps> = ({ nodes, routes, onNodeSelect, selectedNode
   };
 
   return (
-    <div 
+    <div
       className="relative w-full h-full flex items-center justify-center bg-slate-950/50 rounded-2xl border border-white/5 overflow-hidden group"
       onDrop={handleDrop}
       onDragOver={handleDragOver}
     >
-      <canvas 
-        ref={canvasRef} 
-        width={800} 
-        height={800} 
+      <canvas
+        ref={canvasRef}
+        width={800}
+        height={800}
         className="w-full h-full max-w-full max-h-full cursor-grab active:cursor-grabbing"
       />
-      
+
       {/* Globe Controls */}
       <div className="absolute top-6 left-6 flex flex-col gap-1 pointer-events-none">
         <h3 className="text-white font-medium tracking-tight">Global Network</h3>
@@ -290,7 +290,7 @@ const Globe: React.FC<GlobeProps> = ({ nodes, routes, onNodeSelect, selectedNode
       </div>
 
       <div className="absolute bottom-6 left-6 flex items-center gap-2 bg-black/40 backdrop-blur-md p-2 rounded-xl border border-white/10 opacity-0 group-hover:opacity-100 transition-opacity">
-        <button 
+        <button
           onClick={() => setManualPaused(!manualPaused)}
           className="p-2 hover:bg-white/10 rounded-lg text-white transition-all"
           title={manualPaused ? "Play Rotation" : "Pause Rotation"}
@@ -298,21 +298,21 @@ const Globe: React.FC<GlobeProps> = ({ nodes, routes, onNodeSelect, selectedNode
           {manualPaused ? <Play className="w-4 h-4" /> : <Pause className="w-4 h-4" />}
         </button>
         <div className="w-px h-4 bg-white/10 mx-1" />
-        <button 
+        <button
           onClick={() => targetZoom.current = Math.min(targetZoom.current + 0.5, 5)}
           className="p-2 hover:bg-white/10 rounded-lg text-white transition-all"
           title="Zoom In"
         >
           <ZoomIn className="w-4 h-4" />
         </button>
-        <button 
+        <button
           onClick={() => targetZoom.current = Math.max(targetZoom.current - 0.5, 0.5)}
           className="p-2 hover:bg-white/10 rounded-lg text-white transition-all"
           title="Zoom Out"
         >
           <ZoomOut className="w-4 h-4" />
         </button>
-        <button 
+        <button
           onClick={() => {
             targetZoom.current = 1;
             rotationRef.current = [0, -30];
@@ -327,8 +327,8 @@ const Globe: React.FC<GlobeProps> = ({ nodes, routes, onNodeSelect, selectedNode
 
       <div className="absolute bottom-6 right-6 flex flex-col gap-2 bg-black/40 backdrop-blur-md p-3 rounded-xl border border-white/10">
         <div className="flex items-center gap-2 text-[10px] text-slate-400 uppercase tracking-widest">
-            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
-            System Active
+          <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+          System Active
         </div>
       </div>
     </div>
