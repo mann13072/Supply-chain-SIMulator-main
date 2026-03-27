@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Globe from './components/Globe';
 import NetworkBuilder from './components/NetworkBuilder';
 import SimulationEngine from './components/SimulationEngine';
@@ -463,26 +463,37 @@ function AppContent() {
   // Persist nodes/routes to user-scoped localStorage + auto-save to DB
   const networkIdRef = useRef<string | null>(null);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const nodesRef = useRef(nodes);
+  const routesRef = useRef(routes);
+  nodesRef.current = nodes;
+  routesRef.current = routes;
+
+  const debouncedSaveToDB = useCallback(() => {
+    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    saveTimeoutRef.current = setTimeout(async () => {
+      const currentNodes = nodesRef.current;
+      const currentRoutes = routesRef.current;
+      if (currentNodes.length === 0) return;
+      if (networkIdRef.current) {
+        await routingService.updateNetwork(networkIdRef.current, 'My Network', currentNodes, currentRoutes, params);
+      } else {
+        const result = await routingService.saveNetwork('My Network', currentNodes, currentRoutes, params);
+        if (result) networkIdRef.current = result.id;
+      }
+    }, 2000);
+  }, [params]);
 
   useEffect(() => {
     if (nodes.length > 0 && user) {
       localStorage.setItem(`sc_nodes_${user.id}`, JSON.stringify(nodes));
-      // Debounced save to DB (2s after last change)
-      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-      saveTimeoutRef.current = setTimeout(async () => {
-        if (networkIdRef.current) {
-          await routingService.updateNetwork(networkIdRef.current, 'My Network', nodes, routes, params);
-        } else {
-          const result = await routingService.saveNetwork('My Network', nodes, routes, params);
-          if (result) networkIdRef.current = result.id;
-        }
-      }, 2000);
+      debouncedSaveToDB();
     }
   }, [nodes]);
 
   useEffect(() => {
-    if (routes.length > 0 && user) {
+    if (user) {
       localStorage.setItem(`sc_routes_${user.id}`, JSON.stringify(routes));
+      if (nodes.length > 0) debouncedSaveToDB();
     }
   }, [routes]);
 
