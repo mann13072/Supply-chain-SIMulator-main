@@ -1,7 +1,8 @@
 import React from 'react';
-import { LayoutDashboard, Network, PlayCircle, BarChart3, Settings, Layers, Zap, ShieldAlert } from 'lucide-react';
+import { LayoutDashboard, Network, PlayCircle, BarChart3, Settings, Layers, Zap, ShieldAlert, LogOut } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import { useAuth } from '../contexts/AuthContext';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -13,6 +14,7 @@ interface SidebarProps {
 }
 
 const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => {
+  const { user, logout } = useAuth();
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'builder', label: 'Network Builder', icon: Network },
@@ -63,17 +65,22 @@ const Sidebar: React.FC<SidebarProps> = ({ activeTab, setActiveTab }) => {
 
       <div className="p-6 border-t border-white/5">
         <div className="bg-white/5 rounded-2xl p-4 border border-white/5">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-500" />
-            <div>
-              <p className="text-xs text-white font-medium">Sarah Connor</p>
-              <p className="text-[10px] text-white/40">Supply Chain Lead</p>
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white text-xs font-bold shrink-0">
+              {(user?.name || user?.email || 'U').charAt(0).toUpperCase()}
             </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs text-white font-medium truncate">{user?.name || 'User'}</p>
+              <p className="text-[10px] text-white/40 truncate">{user?.email}</p>
+            </div>
+            <button
+              onClick={logout}
+              title="Sign out"
+              className="text-white/30 hover:text-white transition-colors shrink-0"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
           </div>
-          <div className="h-1 w-full bg-white/10 rounded-full overflow-hidden">
-            <div className="h-full bg-white w-2/3" />
-          </div>
-          <p className="text-[10px] text-white/30 mt-2">67% Capacity Utilization</p>
         </div>
       </div>
     </aside>

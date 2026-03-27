@@ -1,17 +1,24 @@
 import os
 import json
 import uvicorn
-from fastapi import FastAPI, HTTPException, Query
+from datetime import datetime
+from fastapi import FastAPI, HTTPException, Query, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, EmailStr
 from typing import List, Optional, Dict, Any
 from dataclasses import asdict
+from sqlalchemy.orm import Session
 
 try:
     from dotenv import load_dotenv
     load_dotenv()
 except ImportError:
     pass  # python-dotenv optional; env vars can be set directly
+
+# Auth + DB imports
+from database import engine, get_db
+from models import Base, User, UserNetwork
+from auth import hash_password, verify_password, create_access_token, get_current_user
 
 # Import our optimized engine
 from supply_chain_engine import TransitNetwork, seed_prototype_data
@@ -22,11 +29,20 @@ app = FastAPI(
     version="1.0.0"
 )
 
+# Create DB tables on startup (safe — never drops existing data)
+Base.metadata.create_all(bind=engine)
+
+ALLOWED_ORIGINS = os.environ.get(
+    "ALLOWED_ORIGINS",
+    "http://localhost:3000,http://localhost:5173"
+).split(",")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
-    allow_methods=["GET", "POST"],
-    allow_headers=["Content-Type"],
+    allow_origins=ALLOWED_ORIGINS,
+    allow_methods=["GET", "POST", "PUT", "DELETE"],
+    allow_headers=["Content-Type", "Authorization"],
+    allow_credentials=True,
 )
 
 # Initialize and seed the engine globally
@@ -278,6 +294,189 @@ Return JSON with exactly:
     except Exception as e:
         print(f"Gemini analysis error: {e}")
         raise HTTPException(status_code=500, detail=f"AI analysis failed: {str(e)}")
+
+
+# ─────────────────────────────────────────────
+#  AUTH ENDPOINTS
+# ─────────────────────────────────────────────
+
+class RegisterRequest(BaseModel):
+    email: str
+    password: str
+    name: Optional[str] = None
+
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+
+class AuthResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user: Dict[str, Any]
+
+
+@app.post("/auth/register", response_model=AuthResponse)
+def register(req: RegisterRequest, db: Session = Depends(get_db)):
+    if len(req.password) < 8:
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters.")
+    if db.query(User).filter(User.email == req.email.lower()).first():
+        raise HTTPException(status_code=409, detail="An account with this email already exists.")
+
+    user = User(
+        email=req.email.lower(),
+        hashed_password=hash_password(req.password),
+        name=req.name or req.email.split("@")[0],
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+
+    token = create_access_token(user.id, user.email)
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "user": {"id": user.id, "email": user.email, "name": user.name},
+    }
+
+
+@app.post("/auth/login", response_model=AuthResponse)
+def login(req: LoginRequest, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.email == req.email.lower()).first()
+    if not user or not verify_password(req.password, user.hashed_password):
+        raise HTTPException(status_code=401, detail="Invalid email or password.")
+    if not user.is_active:
+        raise HTTPException(status_code=403, detail="Account is disabled.")
+
+    token = create_access_token(user.id, user.email)
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "user": {"id": user.id, "email": user.email, "name": user.name},
+    }
+
+
+@app.get("/auth/me")
+def get_me(current_user: User = Depends(get_current_user)):
+    return {"id": current_user.id, "email": current_user.email, "name": current_user.name}
+
+
+# ─────────────────────────────────────────────
+#  USER NETWORK SAVE / LOAD ENDPOINTS
+# ─────────────────────────────────────────────
+
+class NetworkSaveRequest(BaseModel):
+    name: str
+    nodes: List[Any]
+    routes: List[Any]
+    params: Optional[Dict[str, Any]] = None
+
+
+class NetworkSummary(BaseModel):
+    id: str
+    name: str
+    node_count: int
+    route_count: int
+    updated_at: str
+
+
+@app.get("/api/networks")
+def list_networks(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    networks = db.query(UserNetwork).filter(UserNetwork.owner_id == current_user.id).all()
+    return [
+        {
+            "id": n.id,
+            "name": n.name,
+            "node_count": len(n.nodes or []),
+            "route_count": len(n.routes or []),
+            "updated_at": n.updated_at.isoformat() if n.updated_at else None,
+        }
+        for n in networks
+    ]
+
+
+@app.post("/api/networks")
+def save_network(
+    req: NetworkSaveRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    network = UserNetwork(
+        owner_id=current_user.id,
+        name=req.name,
+        nodes=req.nodes,
+        routes=req.routes,
+        params=req.params or {},
+    )
+    db.add(network)
+    db.commit()
+    db.refresh(network)
+    return {"id": network.id, "name": network.name}
+
+
+@app.get("/api/networks/{network_id}")
+def load_network(
+    network_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    network = db.query(UserNetwork).filter(
+        UserNetwork.id == network_id,
+        UserNetwork.owner_id == current_user.id,
+    ).first()
+    if not network:
+        raise HTTPException(status_code=404, detail="Network not found.")
+    return {
+        "id": network.id,
+        "name": network.name,
+        "nodes": network.nodes,
+        "routes": network.routes,
+        "params": network.params,
+    }
+
+
+@app.put("/api/networks/{network_id}")
+def update_network(
+    network_id: str,
+    req: NetworkSaveRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    network = db.query(UserNetwork).filter(
+        UserNetwork.id == network_id,
+        UserNetwork.owner_id == current_user.id,
+    ).first()
+    if not network:
+        raise HTTPException(status_code=404, detail="Network not found.")
+
+    network.name = req.name
+    network.nodes = req.nodes
+    network.routes = req.routes
+    network.params = req.params or {}
+    network.updated_at = datetime.utcnow()
+    db.commit()
+    return {"id": network.id, "name": network.name}
+
+
+@app.delete("/api/networks/{network_id}")
+def delete_network(
+    network_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    network = db.query(UserNetwork).filter(
+        UserNetwork.id == network_id,
+        UserNetwork.owner_id == current_user.id,
+    ).first()
+    if not network:
+        raise HTTPException(status_code=404, detail="Network not found.")
+    db.delete(network)
+    db.commit()
+    return {"status": "deleted"}
 
 
 if __name__ == "__main__":

@@ -1,0 +1,12 @@
+{
+  "rewrites": [
+    {
+      "source": "/auth/:path*",
+      "destination": "https://YOUR_RAILWAY_URL.up.railway.app/auth/:path*"
+    },
+    {
+      "source": "/api/:path*",
+      "destination": "https://YOUR_RAILWAY_URL.up.railway.app/api/:path*"
+    }
+  ]
+}

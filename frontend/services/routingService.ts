@@ -20,6 +20,16 @@ export interface HubsResponse {
   Sea: Hub[];
 }
 
+const API_BASE = import.meta.env.VITE_API_URL || '';
+
+/** Returns stored JWT token for authenticated requests. */
+function authHeaders(): Record<string, string> {
+  const token = localStorage.getItem('sc_token');
+  return token
+    ? { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
+    : { 'Content-Type': 'application/json' };
+}
+
 /**
  * Service to communicate with the Python Supply Chain Routing Engine.
  */
@@ -32,7 +42,7 @@ export const routingService = {
    */
   async getShortestPath(start: string, end: string, mode: 'Air' | 'Sea'): Promise<RouteResponse> {
     try {
-      const response = await fetch(`/api/route?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}&mode=${mode}`);
+      const response = await fetch(`${API_BASE}/api/route?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}&mode=${mode}`);
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         return {
@@ -61,7 +71,7 @@ export const routingService = {
    */
   async getAvailableHubs(): Promise<HubsResponse> {
     try {
-      const response = await fetch('/api/hubs');
+      const response = await fetch(`${API_BASE}/api/hubs`);
       if (!response.ok) {
         throw new Error(`API error: ${response.statusText}`);
       }
@@ -77,7 +87,7 @@ export const routingService = {
    */
   async getNearbyHubs(lat: number, lon: number): Promise<any[]> {
     try {
-      const response = await fetch(`/api/hubs/nearby?lat=${lat}&lon=${lon}`);
+      const response = await fetch(`${API_BASE}/api/hubs/nearby?lat=${lat}&lon=${lon}`);
       if (!response.ok) {
         console.error('getNearbyHubs failed:', response.status, response.statusText);
         return [];
@@ -94,7 +104,7 @@ export const routingService = {
    */
   async getState(): Promise<{ nodes: any[], routes: any[] }> {
     try {
-      const response = await fetch('/api/state');
+      const response = await fetch(`${API_BASE}/api/state`);
       if (!response.ok) return { nodes: [], routes: [] };
       return await response.json();
     } catch (error) {
@@ -108,9 +118,9 @@ export const routingService = {
    */
   async persistNode(node: { id: string, name: string, lat: number, lon: number, type: string, is_hub?: boolean }) {
     try {
-      await fetch('/api/nodes', {
+      await fetch(`${API_BASE}/api/nodes`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: authHeaders(),
         body: JSON.stringify(node)
       });
     } catch (e) { console.error('Persist Node Error', e); }
@@ -121,11 +131,62 @@ export const routingService = {
    */
   async persistRoute(u: string, v: string, mode: string) {
     try {
-      await fetch('/api/routes', {
+      await fetch(`${API_BASE}/api/routes`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: authHeaders(),
         body: JSON.stringify({ u, v, mode })
       });
     } catch (e) { console.error('Persist Route Error', e); }
-  }
+  },
+
+  // ── User network save / load ──────────────────────────────────────
+
+  async listNetworks(): Promise<any[]> {
+    try {
+      const res = await fetch(`${API_BASE}/api/networks`, { headers: authHeaders() });
+      if (!res.ok) return [];
+      return await res.json();
+    } catch { return []; }
+  },
+
+  async saveNetwork(name: string, nodes: any[], routes: any[], params?: any): Promise<{ id: string; name: string } | null> {
+    try {
+      const res = await fetch(`${API_BASE}/api/networks`, {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({ name, nodes, routes, params }),
+      });
+      if (!res.ok) return null;
+      return await res.json();
+    } catch { return null; }
+  },
+
+  async loadNetwork(networkId: string): Promise<any | null> {
+    try {
+      const res = await fetch(`${API_BASE}/api/networks/${networkId}`, { headers: authHeaders() });
+      if (!res.ok) return null;
+      return await res.json();
+    } catch { return null; }
+  },
+
+  async updateNetwork(networkId: string, name: string, nodes: any[], routes: any[], params?: any): Promise<boolean> {
+    try {
+      const res = await fetch(`${API_BASE}/api/networks/${networkId}`, {
+        method: 'PUT',
+        headers: authHeaders(),
+        body: JSON.stringify({ name, nodes, routes, params }),
+      });
+      return res.ok;
+    } catch { return false; }
+  },
+
+  async deleteNetwork(networkId: string): Promise<boolean> {
+    try {
+      const res = await fetch(`${API_BASE}/api/networks/${networkId}`, {
+        method: 'DELETE',
+        headers: authHeaders(),
+      });
+      return res.ok;
+    } catch { return false; }
+  },
 };
