@@ -1075,23 +1075,23 @@ const NetworkBuilder: React.FC<NetworkBuilderProps> = ({ nodes, routes, setNodes
       {/* Add Node Modal */}
       <AnimatePresence>
         {isAddingNode && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-6">
-            <motion.div 
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-6">
+            <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setIsAddingNode(false)}
               className="absolute inset-0 bg-black/80 backdrop-blur-sm"
             />
-            <motion.div 
+            <motion.div
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              className="relative w-full max-w-4xl bg-[#0a0a0a] rounded-3xl border border-white/10 p-8 shadow-2xl max-h-[90vh] overflow-y-auto custom-scrollbar"
+              className="relative w-full max-w-4xl bg-[#0a0a0a] rounded-2xl md:rounded-3xl border border-white/10 p-4 md:p-8 shadow-2xl max-h-[90vh] overflow-y-auto custom-scrollbar"
             >
-              <div className="flex items-center justify-between mb-8">
-                <h3 className="text-2xl font-bold text-white">New Supply Node</h3>
-                <div className="flex bg-white/5 p-1 rounded-xl border border-white/5">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4 md:mb-8">
+                <h3 className="text-lg md:text-2xl font-bold text-white">New Supply Node</h3>
+                <div className="flex overflow-x-auto bg-white/5 p-1 rounded-xl border border-white/5 shrink-0">
                   {(['basic', 'inventory', 'supplier', 'production', 'warehouse', 'demand'] as const)
                     .filter(tab => {
                       if (tab === 'basic' || tab === 'inventory') return true;
@@ -1105,7 +1105,7 @@ const NetworkBuilder: React.FC<NetworkBuilderProps> = ({ nodes, routes, setNodes
                     <button
                       key={tab}
                       onClick={() => setActiveNodeTab(tab)}
-                      className={`px-4 py-2 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all ${
+                      className={`px-2 py-1.5 md:px-4 md:py-2 rounded-lg text-[9px] md:text-[10px] font-bold uppercase tracking-widest transition-all whitespace-nowrap ${
                         activeNodeTab === tab ? 'bg-white text-black' : 'text-white/40 hover:text-white'
                       }`}
                     >
@@ -1115,9 +1115,9 @@ const NetworkBuilder: React.FC<NetworkBuilderProps> = ({ nodes, routes, setNodes
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 gap-8">
+              <div className="grid grid-cols-1 gap-4 md:gap-8">
                 {activeNodeTab === 'basic' && (
-                  <div className="grid grid-cols-2 gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
                     <div className="space-y-4">
                       <h4 className="text-[10px] text-white/40 uppercase tracking-widest border-b border-white/5 pb-2">Identity</h4>
                       <div>
@@ -1126,7 +1126,7 @@ const NetworkBuilder: React.FC<NetworkBuilderProps> = ({ nodes, routes, setNodes
                           type="text" 
                           value={newNode.name}
                           onChange={(e) => setNewNode({...newNode, name: e.target.value})}
-                          className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-white/30 transition-all"
+                          className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 md:px-4 md:py-3 text-white focus:outline-none focus:border-white/30 transition-all"
                           placeholder="e.g. Shanghai Factory"
                         />
                       </div>
@@ -1137,7 +1137,7 @@ const NetworkBuilder: React.FC<NetworkBuilderProps> = ({ nodes, routes, setNodes
                           value={newNode.location}
                           onChange={(e) => handleLocationChange(e.target.value)}
                           onBlur={() => setTimeout(() => setShowHubSuggestions(false), 150)}
-                          className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-white/30 transition-all"
+                          className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 md:px-4 md:py-3 text-white focus:outline-none focus:border-white/30 transition-all"
                           placeholder="e.g. China or London"
                           autoComplete="off"
                         />
@@ -1170,7 +1170,7 @@ const NetworkBuilder: React.FC<NetworkBuilderProps> = ({ nodes, routes, setNodes
                         <select 
                           value={newNode.type}
                           onChange={(e) => setNewNode({...newNode, type: e.target.value as NodeType})}
-                          className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-white/30 transition-all"
+                          className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 md:px-4 md:py-3 text-white focus:outline-none focus:border-white/30 transition-all"
                         >
                           {Object.values(NodeType).map(type => (
                             <option key={type} value={type} className="bg-[#0a0a0a]">{type}</option>
@@ -1182,17 +1182,17 @@ const NetworkBuilder: React.FC<NetworkBuilderProps> = ({ nodes, routes, setNodes
                 )}
 
                 {activeNodeTab === 'inventory' && (
-                  <div className="grid grid-cols-2 gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
                     <div className="space-y-4">
                       <h4 className="text-[10px] text-white/40 uppercase tracking-widest border-b border-white/5 pb-2">Levels</h4>
                       <div className="grid grid-cols-2 gap-4">
                         <div>
                           <label className="text-[10px] text-white/40 uppercase tracking-widest mb-1 block">Initial Level</label>
-                          <input type="number" value={newNode.inventoryLevel} onChange={(e) => setNewNode({...newNode, inventoryLevel: parseInt(e.target.value)})} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white" />
+                          <input type="number" value={newNode.inventoryLevel} onChange={(e) => setNewNode({...newNode, inventoryLevel: parseInt(e.target.value)})} className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 md:px-4 md:py-3 text-white" />
                         </div>
                         <div>
                           <label className="text-[10px] text-white/40 uppercase tracking-widest mb-1 block">Max Capacity</label>
-                          <input type="number" value={newNode.maxCapacity} onChange={(e) => setNewNode({...newNode, maxCapacity: parseInt(e.target.value)})} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white" />
+                          <input type="number" value={newNode.maxCapacity} onChange={(e) => setNewNode({...newNode, maxCapacity: parseInt(e.target.value)})} className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 md:px-4 md:py-3 text-white" />
                         </div>
                       </div>
                     </div>
@@ -1201,11 +1201,11 @@ const NetworkBuilder: React.FC<NetworkBuilderProps> = ({ nodes, routes, setNodes
                       <div className="grid grid-cols-2 gap-4">
                         <div>
                           <label className="text-[10px] text-white/40 uppercase tracking-widest mb-1 block">Reorder Point</label>
-                          <input type="number" value={newNode.reorderPoint} onChange={(e) => setNewNode({...newNode, reorderPoint: parseInt(e.target.value)})} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white" />
+                          <input type="number" value={newNode.reorderPoint} onChange={(e) => setNewNode({...newNode, reorderPoint: parseInt(e.target.value)})} className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 md:px-4 md:py-3 text-white" />
                         </div>
                         <div>
                           <label className="text-[10px] text-white/40 uppercase tracking-widest mb-1 block">Order Qty</label>
-                          <input type="number" value={newNode.orderQuantity} onChange={(e) => setNewNode({...newNode, orderQuantity: parseInt(e.target.value)})} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white" />
+                          <input type="number" value={newNode.orderQuantity} onChange={(e) => setNewNode({...newNode, orderQuantity: parseInt(e.target.value)})} className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 md:px-4 md:py-3 text-white" />
                         </div>
                       </div>
                     </div>
@@ -1213,17 +1213,17 @@ const NetworkBuilder: React.FC<NetworkBuilderProps> = ({ nodes, routes, setNodes
                 )}
 
                 {activeNodeTab === 'supplier' && (
-                  <div className="grid grid-cols-2 gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
                     <div className="space-y-4">
                       <h4 className="text-[10px] text-white/40 uppercase tracking-widest border-b border-white/5 pb-2">Lead Times</h4>
                       <div className="grid grid-cols-2 gap-4">
                         <div>
                           <label className="text-[10px] text-white/40 uppercase tracking-widest mb-1 block">Lead Time (d)</label>
-                          <input type="number" value={newNode.supplierLeadTime} onChange={(e) => setNewNode({...newNode, supplierLeadTime: parseInt(e.target.value)})} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white" />
+                          <input type="number" value={newNode.supplierLeadTime} onChange={(e) => setNewNode({...newNode, supplierLeadTime: parseInt(e.target.value)})} className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 md:px-4 md:py-3 text-white" />
                         </div>
                         <div>
                           <label className="text-[10px] text-white/40 uppercase tracking-widest mb-1 block">Variability %</label>
-                          <input type="number" value={newNode.supplierLeadTimeVariability} onChange={(e) => setNewNode({...newNode, supplierLeadTimeVariability: parseInt(e.target.value)})} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white" />
+                          <input type="number" value={newNode.supplierLeadTimeVariability} onChange={(e) => setNewNode({...newNode, supplierLeadTimeVariability: parseInt(e.target.value)})} className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 md:px-4 md:py-3 text-white" />
                         </div>
                       </div>
                     </div>
@@ -1232,11 +1232,11 @@ const NetworkBuilder: React.FC<NetworkBuilderProps> = ({ nodes, routes, setNodes
                       <div className="grid grid-cols-2 gap-4">
                         <div>
                           <label className="text-[10px] text-white/40 uppercase tracking-widest mb-1 block">Reliability %</label>
-                          <input type="number" value={newNode.supplierReliability} onChange={(e) => setNewNode({...newNode, supplierReliability: parseInt(e.target.value)})} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white" />
+                          <input type="number" value={newNode.supplierReliability} onChange={(e) => setNewNode({...newNode, supplierReliability: parseInt(e.target.value)})} className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 md:px-4 md:py-3 text-white" />
                         </div>
                         <div>
                           <label className="text-[10px] text-white/40 uppercase tracking-widest mb-1 block">Unit Cost</label>
-                          <input type="number" value={newNode.supplierCostPerUnit} onChange={(e) => setNewNode({...newNode, supplierCostPerUnit: parseInt(e.target.value)})} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white" />
+                          <input type="number" value={newNode.supplierCostPerUnit} onChange={(e) => setNewNode({...newNode, supplierCostPerUnit: parseInt(e.target.value)})} className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 md:px-4 md:py-3 text-white" />
                         </div>
                       </div>
                     </div>
@@ -1244,17 +1244,17 @@ const NetworkBuilder: React.FC<NetworkBuilderProps> = ({ nodes, routes, setNodes
                 )}
 
                 {activeNodeTab === 'production' && (
-                  <div className="grid grid-cols-2 gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
                     <div className="space-y-4">
                       <h4 className="text-[10px] text-white/40 uppercase tracking-widest border-b border-white/5 pb-2">Output</h4>
                       <div className="grid grid-cols-2 gap-4">
                         <div>
                           <label className="text-[10px] text-white/40 uppercase tracking-widest mb-1 block">Capacity / Day</label>
-                          <input type="number" value={newNode.productionCapacity} onChange={(e) => setNewNode({...newNode, productionCapacity: parseInt(e.target.value)})} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white" />
+                          <input type="number" value={newNode.productionCapacity} onChange={(e) => setNewNode({...newNode, productionCapacity: parseInt(e.target.value)})} className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 md:px-4 md:py-3 text-white" />
                         </div>
                         <div>
                           <label className="text-[10px] text-white/40 uppercase tracking-widest mb-1 block">Yield Rate %</label>
-                          <input type="number" value={newNode.yieldRate} onChange={(e) => setNewNode({...newNode, yieldRate: parseInt(e.target.value)})} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white" />
+                          <input type="number" value={newNode.yieldRate} onChange={(e) => setNewNode({...newNode, yieldRate: parseInt(e.target.value)})} className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 md:px-4 md:py-3 text-white" />
                         </div>
                       </div>
                     </div>
@@ -1263,11 +1263,11 @@ const NetworkBuilder: React.FC<NetworkBuilderProps> = ({ nodes, routes, setNodes
                       <div className="grid grid-cols-2 gap-4">
                         <div>
                           <label className="text-[10px] text-white/40 uppercase tracking-widest mb-1 block">Batch Size</label>
-                          <input type="number" value={newNode.batchSize} onChange={(e) => setNewNode({...newNode, batchSize: parseInt(e.target.value)})} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white" />
+                          <input type="number" value={newNode.batchSize} onChange={(e) => setNewNode({...newNode, batchSize: parseInt(e.target.value)})} className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 md:px-4 md:py-3 text-white" />
                         </div>
                         <div>
                           <label className="text-[10px] text-white/40 uppercase tracking-widest mb-1 block">Setup Time (h)</label>
-                          <input type="number" value={newNode.setupTime} onChange={(e) => setNewNode({...newNode, setupTime: parseInt(e.target.value)})} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white" />
+                          <input type="number" value={newNode.setupTime} onChange={(e) => setNewNode({...newNode, setupTime: parseInt(e.target.value)})} className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 md:px-4 md:py-3 text-white" />
                         </div>
                       </div>
                     </div>
@@ -1275,17 +1275,17 @@ const NetworkBuilder: React.FC<NetworkBuilderProps> = ({ nodes, routes, setNodes
                 )}
 
                 {activeNodeTab === 'warehouse' && (
-                  <div className="grid grid-cols-2 gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
                     <div className="space-y-4">
                       <h4 className="text-[10px] text-white/40 uppercase tracking-widest border-b border-white/5 pb-2">Space</h4>
                       <div className="grid grid-cols-2 gap-4">
                         <div>
                           <label className="text-[10px] text-white/40 uppercase tracking-widest mb-1 block">Storage Cap</label>
-                          <input type="number" value={newNode.storageCapacity} onChange={(e) => setNewNode({...newNode, storageCapacity: parseInt(e.target.value)})} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white" />
+                          <input type="number" value={newNode.storageCapacity} onChange={(e) => setNewNode({...newNode, storageCapacity: parseInt(e.target.value)})} className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 md:px-4 md:py-3 text-white" />
                         </div>
                         <div>
                           <label className="text-[10px] text-white/40 uppercase tracking-widest mb-1 block">Throughput</label>
-                          <input type="number" value={newNode.throughputCapacity} onChange={(e) => setNewNode({...newNode, throughputCapacity: parseInt(e.target.value)})} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white" />
+                          <input type="number" value={newNode.throughputCapacity} onChange={(e) => setNewNode({...newNode, throughputCapacity: parseInt(e.target.value)})} className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 md:px-4 md:py-3 text-white" />
                         </div>
                       </div>
                     </div>
@@ -1294,11 +1294,11 @@ const NetworkBuilder: React.FC<NetworkBuilderProps> = ({ nodes, routes, setNodes
                       <div className="grid grid-cols-2 gap-4">
                         <div>
                           <label className="text-[10px] text-white/40 uppercase tracking-widest mb-1 block">Picking Rate</label>
-                          <input type="number" value={newNode.pickingRate} onChange={(e) => setNewNode({...newNode, pickingRate: parseInt(e.target.value)})} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white" />
+                          <input type="number" value={newNode.pickingRate} onChange={(e) => setNewNode({...newNode, pickingRate: parseInt(e.target.value)})} className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 md:px-4 md:py-3 text-white" />
                         </div>
                         <div>
                           <label className="text-[10px] text-white/40 uppercase tracking-widest mb-1 block">Labor Avail %</label>
-                          <input type="number" value={newNode.laborAvailability} onChange={(e) => setNewNode({...newNode, laborAvailability: parseInt(e.target.value)})} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white" />
+                          <input type="number" value={newNode.laborAvailability} onChange={(e) => setNewNode({...newNode, laborAvailability: parseInt(e.target.value)})} className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 md:px-4 md:py-3 text-white" />
                         </div>
                       </div>
                     </div>
@@ -1306,17 +1306,17 @@ const NetworkBuilder: React.FC<NetworkBuilderProps> = ({ nodes, routes, setNodes
                 )}
 
                 {activeNodeTab === 'demand' && (
-                  <div className="grid grid-cols-2 gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
                     <div className="space-y-4">
                       <h4 className="text-[10px] text-white/40 uppercase tracking-widest border-b border-white/5 pb-2">Volume</h4>
                       <div className="grid grid-cols-2 gap-4">
                         <div>
                           <label className="text-[10px] text-white/40 uppercase tracking-widest mb-1 block">Demand Vol</label>
-                          <input type="number" value={newNode.demandVolume} onChange={(e) => setNewNode({...newNode, demandVolume: parseInt(e.target.value)})} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white" />
+                          <input type="number" value={newNode.demandVolume} onChange={(e) => setNewNode({...newNode, demandVolume: parseInt(e.target.value)})} className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 md:px-4 md:py-3 text-white" />
                         </div>
                         <div>
                           <label className="text-[10px] text-white/40 uppercase tracking-widest mb-1 block">Variability %</label>
-                          <input type="number" value={newNode.demandVariability} onChange={(e) => setNewNode({...newNode, demandVariability: parseInt(e.target.value)})} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white" />
+                          <input type="number" value={newNode.demandVariability} onChange={(e) => setNewNode({...newNode, demandVariability: parseInt(e.target.value)})} className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 md:px-4 md:py-3 text-white" />
                         </div>
                       </div>
                     </div>
@@ -1325,11 +1325,11 @@ const NetworkBuilder: React.FC<NetworkBuilderProps> = ({ nodes, routes, setNodes
                       <div className="grid grid-cols-2 gap-4">
                         <div>
                           <label className="text-[10px] text-white/40 uppercase tracking-widest mb-1 block">Growth Rate %</label>
-                          <input type="number" value={newNode.demandGrowthRate} onChange={(e) => setNewNode({...newNode, demandGrowthRate: parseInt(e.target.value)})} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white" />
+                          <input type="number" value={newNode.demandGrowthRate} onChange={(e) => setNewNode({...newNode, demandGrowthRate: parseInt(e.target.value)})} className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 md:px-4 md:py-3 text-white" />
                         </div>
                         <div>
                           <label className="text-[10px] text-white/40 uppercase tracking-widest mb-1 block">Backorder %</label>
-                          <input type="number" value={newNode.backorderRate} onChange={(e) => setNewNode({...newNode, backorderRate: parseInt(e.target.value)})} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white" />
+                          <input type="number" value={newNode.backorderRate} onChange={(e) => setNewNode({...newNode, backorderRate: parseInt(e.target.value)})} className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 md:px-4 md:py-3 text-white" />
                         </div>
                       </div>
                     </div>
@@ -1337,9 +1337,9 @@ const NetworkBuilder: React.FC<NetworkBuilderProps> = ({ nodes, routes, setNodes
                 )}
               </div>
 
-              <div className="flex gap-3 mt-12">
-                <button onClick={() => setIsAddingNode(false)} className="flex-1 py-4 bg-white/5 text-white rounded-2xl border border-white/10 font-medium">Cancel</button>
-                <button onClick={handleAddNode} className="flex-1 py-4 bg-white text-black rounded-2xl font-bold">Create Node</button>
+              <div className="flex gap-3 mt-6 md:mt-12">
+                <button onClick={() => setIsAddingNode(false)} className="flex-1 py-3 md:py-4 bg-white/5 text-white rounded-2xl border border-white/10 font-medium text-sm">Cancel</button>
+                <button onClick={handleAddNode} className="flex-1 py-3 md:py-4 bg-white text-black rounded-2xl font-bold text-sm">Create Node</button>
               </div>
             </motion.div>
           </div>
@@ -1349,22 +1349,22 @@ const NetworkBuilder: React.FC<NetworkBuilderProps> = ({ nodes, routes, setNodes
       {/* Add Route Modal */}
       <AnimatePresence>
         {isAddingRoute && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-6">
-            <motion.div 
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-6">
+            <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setIsAddingRoute(false)}
               className="absolute inset-0 bg-black/80 backdrop-blur-sm"
             />
-            <motion.div 
+            <motion.div
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              className="relative w-full max-w-2xl bg-[#0a0a0a] rounded-3xl border border-white/10 p-8 shadow-2xl max-h-[90vh] overflow-y-auto custom-scrollbar"
+              className="relative w-full max-w-2xl bg-[#0a0a0a] rounded-2xl md:rounded-3xl border border-white/10 p-4 md:p-8 shadow-2xl max-h-[90vh] overflow-y-auto custom-scrollbar"
             >
-              <h3 className="text-2xl font-bold text-white mb-6">Connect Nodes</h3>
-              <div className="grid grid-cols-2 gap-6">
+              <h3 className="text-lg md:text-2xl font-bold text-white mb-4 md:mb-6">Connect Nodes</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-6">
                 <div className="space-y-4">
                   <h4 className="text-[10px] text-white/40 uppercase tracking-widest border-b border-white/5 pb-2">Route Definition</h4>
                   <div>
@@ -1372,7 +1372,7 @@ const NetworkBuilder: React.FC<NetworkBuilderProps> = ({ nodes, routes, setNodes
                     <select 
                       value={newRoute.fromId}
                       onChange={(e) => setNewRoute({...newRoute, fromId: e.target.value})}
-                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-white/30 transition-all"
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 md:px-4 md:py-3 text-white focus:outline-none focus:border-white/30 transition-all"
                     >
                       <option value="" className="bg-[#0a0a0a]">Select source...</option>
                       {nodes.map(node => (
@@ -1385,7 +1385,7 @@ const NetworkBuilder: React.FC<NetworkBuilderProps> = ({ nodes, routes, setNodes
                     <select 
                       value={newRoute.toId}
                       onChange={(e) => setNewRoute({...newRoute, toId: e.target.value})}
-                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-white/30 transition-all"
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 md:px-4 md:py-3 text-white focus:outline-none focus:border-white/30 transition-all"
                     >
                       <option value="" className="bg-[#0a0a0a]">Select destination...</option>
                       {nodes.map(node => (
@@ -1398,7 +1398,7 @@ const NetworkBuilder: React.FC<NetworkBuilderProps> = ({ nodes, routes, setNodes
                     <select 
                       value={newRoute.mode}
                       onChange={(e) => setNewRoute({...newRoute, mode: e.target.value as TransportMode})}
-                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-white/30 transition-all"
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 md:px-4 md:py-3 text-white focus:outline-none focus:border-white/30 transition-all"
                     >
                       {Object.values(TransportMode).map(mode => (
                         <option key={mode} value={mode} className="bg-[#0a0a0a]">{mode}</option>
