@@ -39,25 +39,25 @@ const SliderCard = ({
   step: number; onChange: (v: number) => void; displayValue: string;
   color?: string; accent?: string;
 }) => (
-  <div className="bg-white/[0.03] rounded-2xl border border-white/[0.06] p-5 hover:border-white/10 transition-colors">
-    <div className="flex justify-between items-start mb-4">
+  <div className="bg-white/[0.03] rounded-xl border border-white/[0.06] p-3.5 hover:border-white/10 transition-colors">
+    <div className="flex justify-between items-center mb-3">
       <div>
-        <p className="text-sm font-semibold text-white/80 leading-tight">{label}</p>
-        {sublabel && <p className="text-xs text-white/30 mt-0.5">{sublabel}</p>}
+        <p className="text-xs font-semibold text-white/80 leading-tight">{label}</p>
+        {sublabel && <p className="text-[10px] text-white/25 mt-0.5">{sublabel}</p>}
       </div>
-      <span className={`text-base font-bold font-mono tabular-nums px-3 py-1 rounded-lg bg-white/5 ${accent || 'text-white'}`}>
+      <span className={`text-sm font-bold font-mono tabular-nums px-2 py-0.5 rounded-md bg-white/5 ${accent || 'text-white'}`}>
         {displayValue}
       </span>
     </div>
     <input
       type="range" min={min} max={max} step={step} value={value}
       onChange={(e) => onChange(parseFloat(e.target.value))}
-      className="w-full h-2 rounded-full appearance-none cursor-pointer"
+      className="w-full h-1.5 rounded-full appearance-none cursor-pointer"
       style={sliderBg(value, min, max, color)}
     />
-    <div className="flex justify-between mt-2">
-      <span className="text-[10px] text-white/20 font-mono">{min}</span>
-      <span className="text-[10px] text-white/20 font-mono">{max}</span>
+    <div className="flex justify-between mt-1.5">
+      <span className="text-[9px] text-white/15 font-mono">{min}</span>
+      <span className="text-[9px] text-white/15 font-mono">{max}</span>
     </div>
   </div>
 );
@@ -92,16 +92,16 @@ const SimulationPanel: React.FC<SimulationPanelProps> = ({ params, setParams, in
   ];
 
   return (
-    <div className="bg-[#0a0a0a] rounded-3xl border border-white/10 overflow-hidden">
+    <div className="bg-[#0a0a0a] rounded-2xl border border-white/10 overflow-hidden">
       {/* Header */}
-      <div className="px-8 pt-7 pb-6 border-b border-white/5 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-white/5 flex items-center justify-center">
-            <Settings className="w-4 h-4 text-white/50" />
+      <div className="px-5 pt-4 pb-3.5 border-b border-white/5 flex items-center justify-between">
+        <div className="flex items-center gap-2.5">
+          <div className="w-7 h-7 rounded-lg bg-white/5 flex items-center justify-center">
+            <Settings className="w-3.5 h-3.5 text-white/50" />
           </div>
           <div>
-            <h2 className="text-base font-bold text-white">Simulation Levers</h2>
-            <p className="text-xs text-white/30 mt-0.5">Stress-test your digital twin</p>
+            <h2 className="text-sm font-bold text-white">Simulation Levers</h2>
+            <p className="text-[10px] text-white/30">Stress-test your digital twin</p>
           </div>
         </div>
         {activeShocks > 0 && (
@@ -118,20 +118,20 @@ const SimulationPanel: React.FC<SimulationPanelProps> = ({ params, setParams, in
           <button
             key={id}
             onClick={() => setActiveTab(id)}
-            className={`flex-1 flex flex-col items-center gap-1.5 py-4 text-xs font-semibold transition-all border-b-2 ${
+            className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-[10px] font-semibold transition-all border-b-2 ${
               activeTab === id
                 ? 'border-white text-white'
                 : 'border-transparent text-white/30 hover:text-white/60 hover:bg-white/[0.02]'
             }`}
           >
-            <Icon className={`w-4 h-4 ${activeTab === id ? 'text-white' : 'text-white/20'}`} />
+            <Icon className={`w-3.5 h-3.5 ${activeTab === id ? 'text-white' : 'text-white/20'}`} />
             {label}
           </button>
         ))}
       </div>
 
       {/* Content */}
-      <div className="p-6 space-y-4">
+      <div className="p-4 space-y-3">
 
         {/* COMMODITIES */}
         {activeTab === 'MATERIALS' && (
@@ -242,11 +242,11 @@ const SimulationPanel: React.FC<SimulationPanelProps> = ({ params, setParams, in
               color={params.forecastAccuracy >= 70 ? '#34d399' : '#fbbf24'}
               accent={params.forecastAccuracy >= 70 ? 'text-emerald-400' : 'text-amber-400'}
             />
-            <div className="bg-white/[0.03] rounded-2xl border border-white/[0.06] p-5 hover:border-white/10 transition-colors">
+            <div className="bg-white/[0.03] rounded-xl border border-white/[0.06] px-3.5 py-3 hover:border-white/10 transition-colors">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-semibold text-white/80">Port Congestion</p>
-                  <p className="text-xs text-white/30 mt-0.5">Force majeure — adds +2 days to all shipments</p>
+                  <p className="text-xs font-semibold text-white/80">Port Congestion</p>
+                  <p className="text-[10px] text-white/25 mt-0.5">Force majeure — adds +2 days to all shipments</p>
                 </div>
                 <Toggle
                   checked={params.logisticDisruption}
@@ -254,9 +254,9 @@ const SimulationPanel: React.FC<SimulationPanelProps> = ({ params, setParams, in
                 />
               </div>
               {params.logisticDisruption && (
-                <div className="mt-3 flex items-center gap-2 text-xs text-red-400/70">
-                  <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
-                  Disruption active — shipment delays in effect
+                <div className="mt-2 flex items-center gap-1.5 text-[10px] text-red-400/70">
+                  <div className="w-1 h-1 rounded-full bg-red-500 animate-pulse" />
+                  Disruption active
                 </div>
               )}
             </div>
@@ -276,20 +276,20 @@ const SimulationPanel: React.FC<SimulationPanelProps> = ({ params, setParams, in
               color="#34d399"
               accent={params.demandSurge > 0 ? 'text-emerald-400' : 'text-white/50'}
             />
-            <div className="grid grid-cols-1 gap-3">
+            <div className="grid grid-cols-1 gap-2">
               {[
                 { key: 'tariffImposition',    label: 'Tariff Imposition',     desc: 'Per-route customs delay + cost uplift', red: true },
                 { key: 'geopoliticalTension', label: 'Geopolitical Tension',  desc: '+5 days delay on all shipments', red: true },
-                { key: 'weatherEvent',        label: 'Extreme Weather Event', desc: '+3 days stochastic route disruption', red: true },
+                { key: 'weatherEvent',        label: 'Extreme Weather Event', desc: '+3 days stochastic disruption', red: true },
                 { key: 'multiSourcing',       label: 'Multi-Sourcing',        desc: 'Score all suppliers by stock + speed', red: false },
-                { key: 'inventoryPooling',    label: 'Inventory Pooling',     desc: 'Redistribute surplus between sibling nodes', red: false },
-                { key: 'dynamicPricing',      label: 'Dynamic Pricing',       desc: 'Adjust demand via price elasticity at retail', red: false },
+                { key: 'inventoryPooling',    label: 'Inventory Pooling',     desc: 'Redistribute surplus between nodes', red: false },
+                { key: 'dynamicPricing',      label: 'Dynamic Pricing',       desc: 'Price elasticity at retail nodes', red: false },
               ].map(({ key, label, desc, red }) => {
                 const isOn = params[key as keyof SimulationParams] as boolean;
                 return (
                   <div
                     key={key}
-                    className={`bg-white/[0.03] rounded-2xl border p-5 transition-all ${
+                    className={`bg-white/[0.03] rounded-xl border px-3.5 py-2.5 transition-all ${
                       isOn
                         ? red
                           ? 'border-red-500/30 bg-red-500/[0.04]'
@@ -299,8 +299,8 @@ const SimulationPanel: React.FC<SimulationPanelProps> = ({ params, setParams, in
                   >
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className={`text-sm font-semibold ${isOn ? (red ? 'text-red-300' : 'text-emerald-300') : 'text-white/80'}`}>{label}</p>
-                        <p className="text-xs text-white/30 mt-0.5">{desc}</p>
+                        <p className={`text-xs font-semibold ${isOn ? (red ? 'text-red-300' : 'text-emerald-300') : 'text-white/80'}`}>{label}</p>
+                        <p className="text-[10px] text-white/25 mt-0.5">{desc}</p>
                       </div>
                       <Toggle
                         checked={isOn}
@@ -316,10 +316,10 @@ const SimulationPanel: React.FC<SimulationPanelProps> = ({ params, setParams, in
       </div>
 
       {/* Footer */}
-      <div className="px-6 py-4 border-t border-white/5 bg-white/[0.02] flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className={`w-2 h-2 rounded-full ${activeShocks > 0 ? 'bg-amber-400 animate-pulse' : 'bg-white/20'}`} />
-          <span className="text-sm text-white/50">
+      <div className="px-4 py-3 border-t border-white/5 bg-white/[0.02] flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <div className={`w-1.5 h-1.5 rounded-full ${activeShocks > 0 ? 'bg-amber-400 animate-pulse' : 'bg-white/20'}`} />
+          <span className="text-xs text-white/40">
             {activeShocks > 0 ? <><span className="text-white font-bold">{activeShocks}</span> shock{activeShocks !== 1 ? 's' : ''} applied</> : 'No active shocks'}
           </span>
         </div>
