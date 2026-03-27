@@ -460,8 +460,31 @@ function AppContent() {
   useEffect(() => { paramsRef.current = params; }, [params]);
   useEffect(() => { industryConfigRef.current = industryConfig; }, [industryConfig]);
 
-  useEffect(() => { if (nodes.length > 0) localStorage.setItem('sc_nodes', JSON.stringify(nodes)); }, [nodes]);
-  useEffect(() => { if (routes.length > 0) localStorage.setItem('sc_routes', JSON.stringify(routes)); }, [routes]);
+  // Persist nodes/routes to user-scoped localStorage + auto-save to DB
+  const networkIdRef = useRef<string | null>(null);
+  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (nodes.length > 0 && user) {
+      localStorage.setItem(`sc_nodes_${user.id}`, JSON.stringify(nodes));
+      // Debounced save to DB (2s after last change)
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+      saveTimeoutRef.current = setTimeout(async () => {
+        if (networkIdRef.current) {
+          await routingService.updateNetwork(networkIdRef.current, 'My Network', nodes, routes, params);
+        } else {
+          const result = await routingService.saveNetwork('My Network', nodes, routes, params);
+          if (result) networkIdRef.current = result.id;
+        }
+      }, 2000);
+    }
+  }, [nodes]);
+
+  useEffect(() => {
+    if (routes.length > 0 && user) {
+      localStorage.setItem(`sc_routes_${user.id}`, JSON.stringify(routes));
+    }
+  }, [routes]);
 
   // Core Simulation Loop (The Heartbeat) — no nested setState
   useEffect(() => {
@@ -499,10 +522,26 @@ function AppContent() {
 
   useEffect(() => {
     const loadState = async () => {
-      // 1. Check localStorage first — has full data including all route/node properties
+      // 1. Try user's saved network from the database first
       try {
-        const savedNodes = localStorage.getItem('sc_nodes');
-        const savedRoutes = localStorage.getItem('sc_routes');
+        const networks = await routingService.listNetworks();
+        if (networks.length > 0) {
+          const latest = networks[0];
+          const data = await routingService.loadNetwork(latest.id);
+          if (data && data.nodes && data.nodes.length > 0) {
+            setNodes(data.nodes);
+            setRoutes(data.routes || []);
+            if (data.params) setParams(prev => ({ ...prev, ...data.params }));
+            networkIdRef.current = latest.id;
+            return;
+          }
+        }
+      } catch {}
+
+      // 2. Check user-scoped localStorage (offline fallback)
+      try {
+        const savedNodes = localStorage.getItem(`sc_nodes_${user?.id}`);
+        const savedRoutes = localStorage.getItem(`sc_routes_${user?.id}`);
         if (savedNodes && savedRoutes) {
           const parsedNodes = JSON.parse(savedNodes) as SupplyNode[];
           const parsedRoutes = JSON.parse(savedRoutes) as Route[];
@@ -514,40 +553,7 @@ function AppContent() {
         }
       } catch {}
 
-      // 2. Try backend API
-      const state = await routingService.getState();
-      if (state.nodes && state.nodes.length > 0) {
-        const mappedNodes: SupplyNode[] = state.nodes.map((n: any) => {
-          const meta = n.metadata || {};
-          return {
-            id: n.id, name: n.name, location: n.name,
-            type: (meta.node_type as NodeType) || NodeType.WAREHOUSE,
-            status: NodeStatus.OPTIMAL, inventoryLevel: meta.inventory || 50,
-            maxCapacity: meta.capacity || 100, reorderPoint: 20,
-            orderQuantity: 50, safetyStock: 10, targetServiceLevel: 95,
-            reviewFrequency: 1, moq: 1, holdingCost: 1, obsolescenceRate: 0.01, shelfLife: 365,
-            supplierLeadTime: meta.lead_time || 14, supplierReliability: meta.reliability || 95,
-            supplierCostPerUnit: meta.cost || 10, yieldRate: meta.yield_rate || 98,
-            setupTime: meta.setup_time || 4, batchSize: meta.batch_size || 50,
-            throughputCapacity: meta.throughput || 500, automationLevel: meta.automation || 2,
-            demandVolume: meta.demand || 100, demandVariability: meta.variability || 10,
-            priceElasticity: meta.elasticity || -1.2,
-            coordinates: { x: (n.lon + 180) * (800 / 360), y: (90 - n.lat) * (400 / 180), lat: n.lat, lng: n.lon }
-          };
-        });
-        const mappedRoutes: Route[] = state.routes.map((r: any) => ({
-          id: Math.random().toString(36).substr(2, 9), fromId: r.fromId, toId: r.toId,
-          mode: r.mode as TransportMode, distance: r.distance,
-          baseLeadTime: computeLeadTime(r.distance, r.mode),
-          leadTimeVariability: 0.1, costPerUnitDistance: r.mode === 'Air' ? 0.008 : 0.002,
-          vehicleCapacity: 100, shipmentFrequency: 1, fuelPrice: 1.5, customsTime: 0, disruptionProb: 0.01
-        }));
-        setNodes(mappedNodes);
-        setRoutes(mappedRoutes);
-        return;
-      }
-
-      // 3. Fall back to built-in solar chain preset
+      // 3. Fall back to built-in solar chain preset for new users
       setNodes(SOLAR_PRESET_NODES);
       setRoutes(SOLAR_PRESET_ROUTES);
     };
