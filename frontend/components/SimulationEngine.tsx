@@ -1,5 +1,5 @@
 import React from 'react';
-import { Play, Pause, RotateCcw, FastForward, Activity, PlayCircle } from 'lucide-react';
+import { Play, Pause, RotateCcw, Activity, PlayCircle } from 'lucide-react';
 import { SupplyNode, Route, NodeStatus, NodeType, InTransitShipment, SimulationParams, IndustryConfig } from '../types';
 import SimulationPanel from './SimulationPanel';
 import { formatCurrencyCompact } from '../utils/formatting';
@@ -48,27 +48,81 @@ const SimulationEngine: React.FC<SimulationEngineProps> = ({
 
   return (
     <div className="space-y-4 md:space-y-8 animate-in fade-in duration-500">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div>
-          <h2 className="text-2xl md:text-3xl font-bold text-white tracking-tight">Simulation Monitor</h2>
-          <p className="text-white/40 text-sm mt-1">{industryConfig.name} · Live inventory flow</p>
+      <div className="space-y-3">
+        {/* Title row */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-2xl md:text-3xl font-bold text-white tracking-tight">Simulation Monitor</h2>
+            <p className="text-white/40 text-sm mt-1">{industryConfig.name} · Live inventory flow</p>
+          </div>
+          <div className={`flex items-center gap-2 text-xs font-bold uppercase tracking-widest transition-colors duration-500 ${isPlaying ? 'text-emerald-400' : 'text-white/20'}`}>
+            <div className={`w-2 h-2 rounded-full transition-all duration-500 ${isPlaying ? 'bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.8)] animate-pulse' : 'bg-white/15'}`} />
+            {isPlaying ? 'Running' : 'Paused'}
+          </div>
         </div>
 
-        <div className="flex items-center gap-2 md:gap-4 bg-white/5 p-1.5 md:p-2 rounded-2xl border border-white/10 self-start sm:self-auto">
-          <div className="px-3 py-1 md:px-4 md:py-2 text-right">
-            <p className="text-[9px] md:text-[10px] text-white/40 uppercase tracking-widest">Day</p>
-            <p className="text-lg md:text-xl font-mono text-white font-bold">{day}</p>
+        {/* Full-width control bar */}
+        <div className={`flex items-center w-full rounded-2xl border transition-all duration-500 overflow-hidden ${
+          isPlaying ? 'bg-emerald-500/5 border-emerald-500/20 shadow-[0_0_24px_rgba(16,185,129,0.07)]' : 'bg-white/5 border-white/10'
+        }`}>
+          {/* State accent bar */}
+          <div className={`w-1 self-stretch shrink-0 transition-all duration-500 ${isPlaying ? 'bg-emerald-500' : 'bg-transparent'}`} />
+
+          {/* DAY counter */}
+          <div className="px-4 py-3 shrink-0">
+            <p className="text-[9px] text-white/40 uppercase tracking-widest leading-none mb-1">Day</p>
+            <p className={`text-2xl font-mono font-black tabular-nums leading-none transition-colors duration-300 ${isPlaying ? 'text-emerald-400' : 'text-white'}`}>
+              {String(day).padStart(3, '0')}
+            </p>
           </div>
-          <div className="h-8 w-px bg-white/10" />
-          <div className="flex gap-0.5 md:gap-1 p-0.5 md:p-1">
-            <button onClick={resetSimulation} className="p-2 md:p-3 text-white/60 hover:text-white hover:bg-white/5 rounded-xl"><RotateCcw className="w-4 h-4 md:w-5 md:h-5" /></button>
-            <button onClick={() => setIsPlaying(!isPlaying)} className="p-2 md:p-3 bg-white text-black rounded-xl hover:scale-105 transition-all">
-              {isPlaying ? <Pause className="w-4 h-4 md:w-5 md:h-5 fill-black" /> : <Play className="w-4 h-4 md:w-5 md:h-5 fill-black" />}
+
+          <div className="h-8 w-px bg-white/10 mx-1 shrink-0" />
+
+          {/* Reset + Play buttons */}
+          <div className="flex items-center gap-1 px-2 py-2 shrink-0">
+            <button onClick={resetSimulation} className="p-2 text-white/30 hover:text-white hover:bg-white/5 rounded-xl transition-all" title="Reset">
+              <RotateCcw className="w-4 h-4" />
             </button>
-            <button onClick={() => setSpeed(speed === 4 ? 1 : speed * 2)} className="p-2 md:p-3 text-white/60 hover:text-white hover:bg-white/5 rounded-xl flex items-center gap-1">
-              <FastForward className="w-4 h-4 md:w-5 md:h-5" /><span className="text-xs font-bold">{speed}x</span>
+            <button
+              onClick={() => setIsPlaying(!isPlaying)}
+              className={`px-4 py-2 rounded-xl font-bold text-sm flex items-center gap-2 transition-all duration-300 ${
+                isPlaying
+                  ? 'bg-emerald-500 text-white shadow-[0_0_16px_rgba(16,185,129,0.5)] hover:bg-emerald-400'
+                  : 'bg-white text-black hover:scale-105 shadow-[0_0_12px_rgba(255,255,255,0.2)]'
+              }`}
+            >
+              {isPlaying ? <Pause className="w-4 h-4 fill-white" /> : <Play className="w-4 h-4 fill-black" />}
+              <span className="hidden sm:inline text-xs tracking-wide">{isPlaying ? 'PAUSE' : 'RUN'}</span>
             </button>
           </div>
+
+          {/* Speed segmented control — pushed to right */}
+          <div className="flex gap-0.5 p-2 ml-auto shrink-0">
+            {[1, 2, 4].map(s => (
+              <button
+                key={s}
+                onClick={() => setSpeed(s)}
+                className={`px-2.5 py-1.5 rounded-lg text-xs font-bold tracking-wide transition-all ${
+                  speed === s
+                    ? isPlaying ? 'bg-emerald-500 text-white' : 'bg-white text-black'
+                    : 'text-white/30 hover:text-white hover:bg-white/5'
+                }`}
+              >
+                {s}×
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Simulation progress track */}
+        <div className="h-0.5 w-full bg-white/5 rounded-full overflow-hidden">
+          <div
+            className="h-full rounded-full transition-all duration-1000"
+            style={{
+              width: `${Math.min((day / 365) * 100, 100)}%`,
+              backgroundColor: isPlaying ? '#10b981' : 'rgba(255,255,255,0.2)'
+            }}
+          />
         </div>
       </div>
 
