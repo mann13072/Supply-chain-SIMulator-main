@@ -460,49 +460,65 @@ function AppContent() {
   useEffect(() => { paramsRef.current = params; }, [params]);
   useEffect(() => { industryConfigRef.current = industryConfig; }, [industryConfig]);
 
-  // Persist nodes/routes/industryConfig to user-scoped localStorage + auto-save to DB
+  // ── Persist ALL user state to DB (debounced) ──────────────────────
   const networkIdRef = useRef<string | null>(null);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const initialLoadDone = useRef(false);
+  const lowStockRef = useRef(lowStockThreshold);
+  const costVarianceRef = useRef(costVarianceThreshold);
+  const dayRef2 = useRef(day);
+  const historyRef = useRef(history);
+  const logsRef = useRef(logs);
+  const shipmentsRef2 = useRef(shipments);
+  const speedRef = useRef(speed);
+
+  useEffect(() => { lowStockRef.current = lowStockThreshold; }, [lowStockThreshold]);
+  useEffect(() => { costVarianceRef.current = costVarianceThreshold; }, [costVarianceThreshold]);
+  useEffect(() => { dayRef2.current = day; }, [day]);
+  useEffect(() => { historyRef.current = history; }, [history]);
+  useEffect(() => { logsRef.current = logs; }, [logs]);
+  useEffect(() => { shipmentsRef2.current = shipments; }, [shipments]);
+  useEffect(() => { speedRef.current = speed; }, [speed]);
 
   const debouncedSaveToDB = useCallback(() => {
-    if (!initialLoadDone.current) return; // Don't save during initial load
+    if (!initialLoadDone.current) return;
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     saveTimeoutRef.current = setTimeout(async () => {
       const currentNodes = nodesRef.current;
       const currentRoutes = routesRef.current;
-      const saveData = {
-        nodes: currentNodes,
-        routes: currentRoutes,
-        params: paramsRef.current,
+      // Store everything in the "params" JSON blob
+      const fullState = {
+        simulationParams: paramsRef.current,
         industryConfig: industryConfigRef.current,
+        lowStockThreshold: lowStockRef.current,
+        costVarianceThreshold: costVarianceRef.current,
+        simulation: {
+          day: dayRef2.current,
+          speed: speedRef.current,
+          history: historyRef.current,
+          logs: logsRef.current.slice(0, 200),
+          shipments: shipmentsRef2.current,
+        },
       };
       if (networkIdRef.current) {
-        await routingService.updateNetwork(networkIdRef.current, 'My Network', currentNodes, currentRoutes, saveData);
+        await routingService.updateNetwork(networkIdRef.current, 'My Network', currentNodes, currentRoutes, fullState);
       } else {
-        const result = await routingService.saveNetwork('My Network', currentNodes, currentRoutes, saveData);
+        const result = await routingService.saveNetwork('My Network', currentNodes, currentRoutes, fullState);
         if (result) networkIdRef.current = result.id;
       }
     }, 2000);
   }, []);
 
-  useEffect(() => {
-    if (user) {
-      localStorage.setItem(`sc_nodes_${user.id}`, JSON.stringify(nodes));
-      debouncedSaveToDB();
-    }
-  }, [nodes]);
-
-  useEffect(() => {
-    if (user) {
-      localStorage.setItem(`sc_routes_${user.id}`, JSON.stringify(routes));
-      debouncedSaveToDB();
-    }
-  }, [routes]);
-
-  useEffect(() => {
-    if (user) debouncedSaveToDB();
-  }, [industryConfig]);
+  // Trigger save on any meaningful state change
+  useEffect(() => { if (user) debouncedSaveToDB(); }, [nodes]);
+  useEffect(() => { if (user) debouncedSaveToDB(); }, [routes]);
+  useEffect(() => { if (user) debouncedSaveToDB(); }, [industryConfig]);
+  useEffect(() => { if (user) debouncedSaveToDB(); }, [params]);
+  useEffect(() => { if (user) debouncedSaveToDB(); }, [lowStockThreshold]);
+  useEffect(() => { if (user) debouncedSaveToDB(); }, [costVarianceThreshold]);
+  // Save simulation progress when simulation stops or every 30 days
+  useEffect(() => { if (user && !isPlaying && day > 0) debouncedSaveToDB(); }, [isPlaying]);
+  useEffect(() => { if (user && day > 0 && day % 30 === 0) debouncedSaveToDB(); }, [day]);
 
   // Core Simulation Loop (The Heartbeat) — no nested setState
   useEffect(() => {
@@ -549,13 +565,32 @@ function AppContent() {
           if (data) {
             setNodes(data.nodes || []);
             setRoutes(data.routes || []);
-            // Restore params and industryConfig from the saved "params" blob
+
             const saved = data.params || {};
-            if (saved.params) setParams(prev => ({ ...prev, ...saved.params }));
+
+            // Restore simulation params
+            if (saved.simulationParams) setParams(prev => ({ ...prev, ...saved.simulationParams }));
+
+            // Restore industry config
             if (saved.industryConfig) {
               const match = PRESET_INDUSTRIES.find((p: IndustryConfig) => p.id === saved.industryConfig.id);
               setIndustryConfig(match || saved.industryConfig);
             }
+
+            // Restore settings
+            if (saved.lowStockThreshold != null) setLowStockThreshold(saved.lowStockThreshold);
+            if (saved.costVarianceThreshold != null) setCostVarianceThreshold(saved.costVarianceThreshold);
+
+            // Restore simulation progress
+            if (saved.simulation) {
+              const sim = saved.simulation;
+              if (sim.day > 0) setDay(sim.day);
+              if (sim.speed) setSpeed(sim.speed);
+              if (sim.history?.length > 0) setHistory(sim.history);
+              if (sim.logs?.length > 0) setLogs(sim.logs);
+              if (sim.shipments?.length > 0) setShipments(sim.shipments);
+            }
+
             networkIdRef.current = latest.id;
             initialLoadDone.current = true;
             return;
@@ -563,21 +598,7 @@ function AppContent() {
         }
       } catch {}
 
-      // 2. Check user-scoped localStorage (offline fallback)
-      try {
-        const savedNodes = localStorage.getItem(`sc_nodes_${user?.id}`);
-        const savedRoutes = localStorage.getItem(`sc_routes_${user?.id}`);
-        if (savedNodes) {
-          const parsedNodes = JSON.parse(savedNodes) as SupplyNode[];
-          const parsedRoutes = savedRoutes ? JSON.parse(savedRoutes) as Route[] : [];
-          setNodes(parsedNodes);
-          setRoutes(parsedRoutes);
-          initialLoadDone.current = true;
-          return;
-        }
-      } catch {}
-
-      // 3. Fall back to built-in solar chain preset for new users
+      // 2. Fall back to built-in solar chain preset for new users
       setNodes(SOLAR_PRESET_NODES);
       setRoutes(SOLAR_PRESET_ROUTES);
       initialLoadDone.current = true;
