@@ -1,3 +1,0 @@
-# Root requirements file — tells Railway this is a Python project
-# Actual deps are in backend/requirements.txt
--r backend/requirements.txt
