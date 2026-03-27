@@ -1089,9 +1089,9 @@ const NetworkBuilder: React.FC<NetworkBuilderProps> = ({ nodes, routes, setNodes
               exit={{ scale: 0.9, opacity: 0 }}
               className="relative w-full max-w-4xl bg-[#0a0a0a] rounded-2xl md:rounded-3xl border border-white/10 p-4 md:p-8 shadow-2xl max-h-[90vh] overflow-y-auto custom-scrollbar"
             >
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4 md:mb-8">
+              <div className="flex flex-col gap-3 mb-4 md:mb-8">
                 <h3 className="text-lg md:text-2xl font-bold text-white">New Supply Node</h3>
-                <div className="flex overflow-x-auto bg-white/5 p-1 rounded-xl border border-white/5 shrink-0">
+                <div className="flex w-full bg-white/5 p-1 rounded-xl border border-white/5">
                   {(['basic', 'inventory', 'supplier', 'production', 'warehouse', 'demand'] as const)
                     .filter(tab => {
                       if (tab === 'basic' || tab === 'inventory') return true;
@@ -1105,7 +1105,7 @@ const NetworkBuilder: React.FC<NetworkBuilderProps> = ({ nodes, routes, setNodes
                     <button
                       key={tab}
                       onClick={() => setActiveNodeTab(tab)}
-                      className={`px-2 py-1.5 md:px-4 md:py-2 rounded-lg text-[9px] md:text-[10px] font-bold uppercase tracking-widest transition-all whitespace-nowrap ${
+                      className={`flex-1 py-1.5 md:py-2 rounded-lg text-[9px] md:text-[10px] font-bold uppercase tracking-widest transition-all ${
                         activeNodeTab === tab ? 'bg-white text-black' : 'text-white/40 hover:text-white'
                       }`}
                     >
