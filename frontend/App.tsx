@@ -460,27 +460,34 @@ function AppContent() {
   useEffect(() => { paramsRef.current = params; }, [params]);
   useEffect(() => { industryConfigRef.current = industryConfig; }, [industryConfig]);
 
-  // Persist nodes/routes to user-scoped localStorage + auto-save to DB
+  // Persist nodes/routes/industryConfig to user-scoped localStorage + auto-save to DB
   const networkIdRef = useRef<string | null>(null);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const initialLoadDone = useRef(false);
 
   const debouncedSaveToDB = useCallback(() => {
+    if (!initialLoadDone.current) return; // Don't save during initial load
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     saveTimeoutRef.current = setTimeout(async () => {
       const currentNodes = nodesRef.current;
       const currentRoutes = routesRef.current;
-      if (currentNodes.length === 0) return;
+      const saveData = {
+        nodes: currentNodes,
+        routes: currentRoutes,
+        params: paramsRef.current,
+        industryConfig: industryConfigRef.current,
+      };
       if (networkIdRef.current) {
-        await routingService.updateNetwork(networkIdRef.current, 'My Network', currentNodes, currentRoutes, params);
+        await routingService.updateNetwork(networkIdRef.current, 'My Network', currentNodes, currentRoutes, saveData);
       } else {
-        const result = await routingService.saveNetwork('My Network', currentNodes, currentRoutes, params);
+        const result = await routingService.saveNetwork('My Network', currentNodes, currentRoutes, saveData);
         if (result) networkIdRef.current = result.id;
       }
     }, 2000);
-  }, [params]);
+  }, []);
 
   useEffect(() => {
-    if (nodes.length > 0 && user) {
+    if (user) {
       localStorage.setItem(`sc_nodes_${user.id}`, JSON.stringify(nodes));
       debouncedSaveToDB();
     }
@@ -489,9 +496,13 @@ function AppContent() {
   useEffect(() => {
     if (user) {
       localStorage.setItem(`sc_routes_${user.id}`, JSON.stringify(routes));
-      if (nodes.length > 0) debouncedSaveToDB();
+      debouncedSaveToDB();
     }
   }, [routes]);
+
+  useEffect(() => {
+    if (user) debouncedSaveToDB();
+  }, [industryConfig]);
 
   // Core Simulation Loop (The Heartbeat) — no nested setState
   useEffect(() => {
@@ -535,11 +546,18 @@ function AppContent() {
         if (networks.length > 0) {
           const latest = networks[0];
           const data = await routingService.loadNetwork(latest.id);
-          if (data && data.nodes && data.nodes.length > 0) {
-            setNodes(data.nodes);
+          if (data) {
+            setNodes(data.nodes || []);
             setRoutes(data.routes || []);
-            if (data.params) setParams(prev => ({ ...prev, ...data.params }));
+            // Restore params and industryConfig from the saved "params" blob
+            const saved = data.params || {};
+            if (saved.params) setParams(prev => ({ ...prev, ...saved.params }));
+            if (saved.industryConfig) {
+              const match = PRESET_INDUSTRIES.find((p: IndustryConfig) => p.id === saved.industryConfig.id);
+              setIndustryConfig(match || saved.industryConfig);
+            }
             networkIdRef.current = latest.id;
+            initialLoadDone.current = true;
             return;
           }
         }
@@ -549,20 +567,20 @@ function AppContent() {
       try {
         const savedNodes = localStorage.getItem(`sc_nodes_${user?.id}`);
         const savedRoutes = localStorage.getItem(`sc_routes_${user?.id}`);
-        if (savedNodes && savedRoutes) {
+        if (savedNodes) {
           const parsedNodes = JSON.parse(savedNodes) as SupplyNode[];
-          const parsedRoutes = JSON.parse(savedRoutes) as Route[];
-          if (parsedNodes.length > 0) {
-            setNodes(parsedNodes);
-            setRoutes(parsedRoutes);
-            return;
-          }
+          const parsedRoutes = savedRoutes ? JSON.parse(savedRoutes) as Route[] : [];
+          setNodes(parsedNodes);
+          setRoutes(parsedRoutes);
+          initialLoadDone.current = true;
+          return;
         }
       } catch {}
 
       // 3. Fall back to built-in solar chain preset for new users
       setNodes(SOLAR_PRESET_NODES);
       setRoutes(SOLAR_PRESET_ROUTES);
+      initialLoadDone.current = true;
     };
     loadState();
   }, []);
