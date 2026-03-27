@@ -32,16 +32,17 @@ app = FastAPI(
 # Create DB tables on startup (safe — never drops existing data)
 Base.metadata.create_all(bind=engine)
 
-ALLOWED_ORIGINS = os.environ.get(
-    "ALLOWED_ORIGINS",
-    "http://localhost:3000,http://localhost:5173"
-).split(",")
+ALLOWED_ORIGINS = [
+    o.strip() for o in
+    os.environ.get("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:5173").split(",")
+]
+print(f"[CORS] Allowed origins: {ALLOWED_ORIGINS}")
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allow_headers=["Content-Type", "Authorization"],
+    allow_methods=["*"],
+    allow_headers=["*"],
     allow_credentials=True,
 )
 
