@@ -226,50 +226,48 @@ const ResilienceHub: React.FC<ResilienceHubProps> = ({
 
       {/* Header — Score + Presets */}
       <div className="bg-[#050505] rounded-3xl border border-white/5 p-4 md:p-8">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 md:gap-6">
+        {/* Title row + Score side by side */}
+        <div className="flex items-start justify-between gap-4">
           <div>
-            <h2 className="text-2xl md:text-3xl font-bold text-white flex items-center gap-3">
-              <ShieldAlert className="w-7 h-7 text-emerald-500" /> Resilience Hub
+            <h2 className="text-xl md:text-3xl font-bold text-white flex items-center gap-2 md:gap-3">
+              <ShieldAlert className="w-5 h-5 md:w-7 md:h-7 text-emerald-500 shrink-0" /> Resilience Hub
             </h2>
-            <p className="text-white/30 text-sm mt-1">Configure risk parameters and run stress tests</p>
+            <p className="text-white/30 text-xs md:text-sm mt-1">Configure risk parameters and run stress tests</p>
           </div>
-
-          {/* Score */}
-          <div className="flex items-center gap-6">
-            <div className="text-right">
-              <p className="text-xs text-white/40 uppercase tracking-widest mb-1">Resilience Score</p>
-              <span className="text-3xl md:text-5xl font-black tabular-nums" style={{ color: scoreColor }}>
-                {resilienceScore}
-              </span>
-              <p className="text-xs font-bold mt-1" style={{ color: scoreColor }}>{scoreLabel}</p>
-            </div>
-            {/* Scenario presets */}
-            <div className="flex flex-col gap-2">
-              {STRESS_SCENARIOS.map(scenario => (
-                <button
-                  key={scenario.label}
-                  onClick={() => applyScenario(scenario)}
-                  className={`px-4 py-2 rounded-xl text-xs font-bold border transition-all text-left ${
-                    scenario.color === 'amber' ? 'border-amber-500/30 text-amber-400 hover:bg-amber-500/10' :
-                    scenario.color === 'orange' ? 'border-orange-500/30 text-orange-400 hover:bg-orange-500/10' :
-                    'border-red-500/30 text-red-400 hover:bg-red-500/10'
-                  }`}
-                >
-                  {scenario.label}
-                </button>
-              ))}
-            </div>
+          <div className="text-right shrink-0">
+            <p className="text-[9px] md:text-xs text-white/40 uppercase tracking-widest mb-0.5">Score</p>
+            <span className="text-3xl md:text-5xl font-black tabular-nums leading-none" style={{ color: scoreColor }}>
+              {resilienceScore}
+            </span>
+            <p className="text-[10px] md:text-xs font-bold mt-0.5" style={{ color: scoreColor }}>{scoreLabel}</p>
           </div>
         </div>
 
         {/* Score bar */}
-        <div className="mt-6 h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
+        <div className="mt-3 md:mt-4 h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
           <motion.div
             animate={{ width: `${resilienceScore}%` }}
             transition={{ type: 'spring', stiffness: 80 }}
             className="h-full rounded-full"
             style={{ backgroundColor: scoreColor }}
           />
+        </div>
+
+        {/* Scenario presets — horizontal row */}
+        <div className="flex flex-wrap gap-2 mt-4">
+          {STRESS_SCENARIOS.map(scenario => (
+            <button
+              key={scenario.label}
+              onClick={() => applyScenario(scenario)}
+              className={`px-3 py-1.5 md:px-4 md:py-2 rounded-xl text-xs font-bold border transition-all ${
+                scenario.color === 'amber' ? 'border-amber-500/30 text-amber-400 hover:bg-amber-500/10' :
+                scenario.color === 'orange' ? 'border-orange-500/30 text-orange-400 hover:bg-orange-500/10' :
+                'border-red-500/30 text-red-400 hover:bg-red-500/10'
+              }`}
+            >
+              {scenario.label}
+            </button>
+          ))}
         </div>
       </div>
 
@@ -279,16 +277,16 @@ const ResilienceHub: React.FC<ResilienceHubProps> = ({
         <div className="col-span-12 lg:col-span-7 flex flex-col gap-4">
 
           {/* Tab bar */}
-          <div className="flex gap-1 p-1 bg-white/5 rounded-2xl border border-white/5 w-fit">
+          <div className="flex gap-1 p-1 bg-white/5 rounded-2xl border border-white/5 w-full md:w-fit">
             {(['levers', 'risks', 'flags'] as const).map(tab => (
               <button
                 key={tab}
                 onClick={() => setLocalActiveTab(tab)}
-                className={`px-5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wide transition-all ${
+                className={`flex-1 md:flex-none px-3 md:px-5 py-2.5 rounded-xl text-[10px] md:text-xs font-bold uppercase tracking-wide transition-all whitespace-nowrap ${
                   activeTab === tab ? 'bg-white text-black shadow-sm' : 'text-white/40 hover:text-white/70'
                 }`}
               >
-                {tab === 'levers' ? 'Strategic Levers' : tab === 'risks' ? 'Risk Probabilities' : 'Scenario Flags'}
+                {tab === 'levers' ? 'Levers' : tab === 'risks' ? 'Risk' : 'Flags'}
               </button>
             ))}
           </div>
