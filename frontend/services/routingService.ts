@@ -139,6 +139,36 @@ export const routingService = {
     } catch (e) { console.error('Persist Route Error', e); }
   },
 
+  // ── Port atlas search (14K+ UNLOCODE ports) ────────────────────────
+
+  async searchPorts(query: string, type?: string, limit: number = 20): Promise<any[]> {
+    try {
+      const params = new URLSearchParams({ q: query, limit: String(limit) });
+      if (type) params.set('type', type);
+      const res = await fetch(`${API_BASE}/api/ports/search?${params}`);
+      if (!res.ok) return [];
+      return await res.json();
+    } catch { return []; }
+  },
+
+  async searchPortsNearby(lat: number, lon: number, type?: string, limit: number = 10): Promise<any[]> {
+    try {
+      const params = new URLSearchParams({ lat: String(lat), lon: String(lon), limit: String(limit) });
+      if (type) params.set('type', type);
+      const res = await fetch(`${API_BASE}/api/ports/search?${params}`);
+      if (!res.ok) return [];
+      return await res.json();
+    } catch { return []; }
+  },
+
+  async getPortStats(): Promise<{ total: number; sea: number; air: number; both: number } | null> {
+    try {
+      const res = await fetch(`${API_BASE}/api/ports/stats`);
+      if (!res.ok) return null;
+      return await res.json();
+    } catch { return null; }
+  },
+
   // ── User network save / load ──────────────────────────────────────
 
   async listNetworks(): Promise<any[]> {

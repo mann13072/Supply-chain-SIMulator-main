@@ -63,6 +63,77 @@ async def health_check():
     return {"status": "healthy", "engine": "ready"}
 
 
+# ─────────────────────────────────────────────
+#  GLOBAL PORTS ATLAS (14K+ UNLOCODE ports)
+# ─────────────────────────────────────────────
+import math as _math
+
+_PORTS_ATLAS: List[Dict] = []
+_atlas_path = os.path.join(os.path.dirname(__file__), "ports_atlas.json")
+if os.path.exists(_atlas_path):
+    with open(_atlas_path, "r", encoding="utf-8") as _f:
+        _PORTS_ATLAS = json.load(_f)
+
+
+def _haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    R = 6371.0
+    p1, p2 = _math.radians(lat1), _math.radians(lat2)
+    dp, dl = _math.radians(lat2 - lat1), _math.radians(lon2 - lon1)
+    a = _math.sin(dp / 2) ** 2 + _math.cos(p1) * _math.cos(p2) * _math.sin(dl / 2) ** 2
+    return R * 2 * _math.atan2(_math.sqrt(a), _math.sqrt(1 - a))
+
+
+@app.get("/api/ports/search")
+async def search_ports(
+    q: Optional[str] = Query(None, min_length=2, max_length=100, description="Search by name or UNLOCODE"),
+    lat: Optional[float] = Query(None, description="Latitude for proximity search"),
+    lon: Optional[float] = Query(None, description="Longitude for proximity search"),
+    type: Optional[str] = Query(None, pattern="^(sea|air|both)$", description="Filter by port type"),
+    limit: int = Query(20, ge=1, le=100, description="Max results"),
+):
+    """Search the 14K+ UNLOCODE port atlas by name or proximity."""
+    if not _PORTS_ATLAS:
+        raise HTTPException(status_code=503, detail="Port atlas not loaded.")
+
+    results = _PORTS_ATLAS
+
+    # Filter by type
+    if type:
+        results = [p for p in results if p["type"] == type or p["type"] == "both"]
+
+    # Text search (name or code)
+    if q:
+        q_lower = q.lower()
+        results = [
+            p for p in results
+            if q_lower in p["name"].lower() or q_lower in p["id"].lower()
+        ]
+        return results[:limit]
+
+    # Proximity search
+    if lat is not None and lon is not None:
+        scored = [(p, _haversine_km(lat, lon, p["lat"], p["lon"])) for p in results]
+        scored.sort(key=lambda x: x[1])
+        return [
+            {**p, "distance_km": round(d, 1)}
+            for p, d in scored[:limit]
+        ]
+
+    # No filters — return first N (alphabetical)
+    return results[:limit]
+
+
+@app.get("/api/ports/stats")
+async def port_stats():
+    """Returns summary stats of the port atlas."""
+    return {
+        "total": len(_PORTS_ATLAS),
+        "sea": sum(1 for p in _PORTS_ATLAS if p["type"] == "sea"),
+        "air": sum(1 for p in _PORTS_ATLAS if p["type"] == "air"),
+        "both": sum(1 for p in _PORTS_ATLAS if p["type"] == "both"),
+    }
+
+
 @app.get("/api/hubs", response_model=Dict[str, List[Dict]])
 async def list_hubs():
     hubs = {"Air": [], "Sea": []}

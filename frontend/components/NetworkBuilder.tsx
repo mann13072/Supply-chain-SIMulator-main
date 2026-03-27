@@ -68,12 +68,11 @@ const NetworkBuilder: React.FC<NetworkBuilderProps> = ({ nodes, routes, setNodes
   }, []);
 
   const handleLocationChange = (location: string) => {
-    // Fix stale closure: use functional updater
     setNewNode(prev => ({ ...prev, location }));
 
     if (debounceTimer.current) clearTimeout(debounceTimer.current);
 
-    if (location.length <= 2) {
+    if (location.length <= 1) {
       requestIdRef.current++;
       setShowHubSuggestions(false);
       setNearbyHubs([]);
@@ -82,15 +81,45 @@ const NetworkBuilder: React.FC<NetworkBuilderProps> = ({ nodes, routes, setNodes
 
     debounceTimer.current = setTimeout(async () => {
       const requestId = ++requestIdRef.current;
-      const coords = await geocode(location);
+
+      // Search the 14K+ UNLOCODE port atlas by name
+      const results = await routingService.searchPorts(location, undefined, 10);
       if (requestId !== requestIdRef.current) return;
-      if (coords) {
-        const nearby = await routingService.getNearbyHubs(coords.lat, coords.lng);
+
+      if (results.length > 0) {
+        // Map to the format snapToHub expects
+        const mapped = results.map((p: any) => ({
+          id: p.id,
+          name: p.name,
+          lat: p.lat,
+          lon: p.lon,
+          type: p.type === 'sea' ? 'Sea' : p.type === 'air' ? 'Air' : 'Sea/Air',
+          dist: p.distance_km ? Math.round(p.distance_km) : null,
+          country: p.country,
+        }));
+        setNearbyHubs(mapped);
+        setShowHubSuggestions(true);
+      } else {
+        // Fallback: geocode then search nearby ports
+        const coords = await geocode(location);
         if (requestId !== requestIdRef.current) return;
-        setNearbyHubs(nearby);
-        setShowHubSuggestions(nearby.length > 0);
+        if (coords) {
+          const nearby = await routingService.searchPortsNearby(coords.lat, coords.lng, undefined, 10);
+          if (requestId !== requestIdRef.current) return;
+          const mapped = nearby.map((p: any) => ({
+            id: p.id,
+            name: p.name,
+            lat: p.lat,
+            lon: p.lon,
+            type: p.type === 'sea' ? 'Sea' : p.type === 'air' ? 'Air' : 'Sea/Air',
+            dist: p.distance_km ? Math.round(p.distance_km) : null,
+            country: p.country,
+          }));
+          setNearbyHubs(mapped);
+          setShowHubSuggestions(mapped.length > 0);
+        }
       }
-    }, 400);
+    }, 300);
   };
 
   const snapToHub = (hub: any) => {
@@ -1142,8 +1171,8 @@ const NetworkBuilder: React.FC<NetworkBuilderProps> = ({ nodes, routes, setNodes
                           autoComplete="off"
                         />
                         {showHubSuggestions && nearbyHubs.length > 0 && (
-                          <div className="absolute z-10 w-full mt-2 bg-[#111] border border-white/10 rounded-xl shadow-2xl p-2">
-                            <p className="text-[9px] text-white/40 uppercase p-2 tracking-widest">Suggested Logistics Hubs</p>
+                          <div className="absolute z-10 w-full mt-2 bg-[#111] border border-white/10 rounded-xl shadow-2xl p-2 max-h-64 overflow-y-auto custom-scrollbar">
+                            <p className="text-[9px] text-white/40 uppercase p-2 tracking-widest">UNLOCODE Port Atlas • {nearbyHubs.length} results</p>
                             {nearbyHubs.map(hub => (
                               <button
                                 key={hub.id}
@@ -1152,11 +1181,13 @@ const NetworkBuilder: React.FC<NetworkBuilderProps> = ({ nodes, routes, setNodes
                               >
                                 <div className="text-left">
                                   <p className="text-xs font-bold text-white group-hover:text-blue-400">{hub.name}</p>
-                                  <p className="text-[9px] text-white/40 uppercase">{hub.id} • {hub.type}</p>
+                                  <p className="text-[9px] text-white/40 uppercase">{hub.country} • {hub.id} • {hub.type}</p>
                                 </div>
-                                <span className="text-[9px] font-mono text-blue-400/60 bg-blue-400/10 px-2 py-0.5 rounded-full">
-                                  {hub.dist}km
-                                </span>
+                                {hub.dist != null && (
+                                  <span className="text-[9px] font-mono text-blue-400/60 bg-blue-400/10 px-2 py-0.5 rounded-full shrink-0 ml-2">
+                                    {hub.dist}km
+                                  </span>
+                                )}
                               </button>
                             ))}
                           </div>
