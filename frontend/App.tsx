@@ -463,10 +463,6 @@ function AppContent() {
   // Persist nodes/routes to user-scoped localStorage + auto-save to DB
   const networkIdRef = useRef<string | null>(null);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const nodesRef = useRef(nodes);
-  const routesRef = useRef(routes);
-  nodesRef.current = nodes;
-  routesRef.current = routes;
 
   const debouncedSaveToDB = useCallback(() => {
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
