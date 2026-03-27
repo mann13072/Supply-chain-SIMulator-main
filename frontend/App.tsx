@@ -527,9 +527,8 @@ function App() {
       {/* Bottom nav — visible below md (768px): phones + small tablets in portrait */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-black border-t border-white/5 flex">
         {NAV_ITEMS.map(item => (
-          <button key={item.id} onClick={() => setActiveTab(item.id)} className={`flex-1 flex flex-col items-center gap-1 py-3 min-h-[56px] transition-colors ${activeTab === item.id ? 'text-white' : 'text-white/30'}`}>
+          <button key={item.id} onClick={() => setActiveTab(item.id)} className={`flex-1 flex items-center justify-center min-h-[56px] transition-colors ${activeTab === item.id ? 'text-white' : 'text-white/30'}`}>
             <item.icon className="w-5 h-5" />
-            <span className="text-[8px] uppercase tracking-wide font-bold">{item.label}</span>
           </button>
         ))}
       </nav>
