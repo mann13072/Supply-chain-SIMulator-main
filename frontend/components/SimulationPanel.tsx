@@ -112,30 +112,31 @@ const SimulationPanel: React.FC<SimulationPanelProps> = ({ params, setParams, in
         )}
       </div>
 
-      {/* Tab bar */}
+      {/* Tab bar — icon-only on mobile, icon+label on sm+ */}
       <div className="flex border-b border-white/5 bg-white/[0.02]">
         {tabs.map(({ id, label, icon: Icon }) => (
           <button
             key={id}
             onClick={() => setActiveTab(id)}
+            title={label}
             className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-[10px] font-semibold transition-all border-b-2 ${
               activeTab === id
                 ? 'border-white text-white'
                 : 'border-transparent text-white/30 hover:text-white/60 hover:bg-white/[0.02]'
             }`}
           >
-            <Icon className={`w-3.5 h-3.5 ${activeTab === id ? 'text-white' : 'text-white/20'}`} />
-            {label}
+            <Icon className={`w-3.5 h-3.5 shrink-0 ${activeTab === id ? 'text-white' : 'text-white/20'}`} />
+            <span className="hidden sm:inline">{label}</span>
           </button>
         ))}
       </div>
 
       {/* Content */}
-      <div className="p-4 space-y-3">
+      <div className="p-3 sm:p-4 space-y-2.5">
 
         {/* COMMODITIES */}
         {activeTab === 'MATERIALS' && (
-          <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
+          <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
             {industryConfig.commodities.length === 0 ? (
               <div className="py-12 text-center">
                 <p className="text-white/30 text-sm">No commodities configured.</p>
@@ -165,7 +166,7 @@ const SimulationPanel: React.FC<SimulationPanelProps> = ({ params, setParams, in
 
         {/* OPERATIONS */}
         {activeTab === 'OPS' && (
-          <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
+          <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
             <SliderCard
               label="Production Yield Loss"
               sublabel="Factory output degradation per day"
@@ -221,7 +222,7 @@ const SimulationPanel: React.FC<SimulationPanelProps> = ({ params, setParams, in
 
         {/* LOGISTICS */}
         {activeTab === 'LOGISTICS' && (
-          <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
+          <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
             <SliderCard
               label="Freight Cost Index"
               sublabel="100 = baseline, 400 = crisis level"
@@ -265,7 +266,7 @@ const SimulationPanel: React.FC<SimulationPanelProps> = ({ params, setParams, in
 
         {/* MARKET */}
         {activeTab === 'MARKET' && (
-          <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
+          <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
             <SliderCard
               label="Global Demand Surge"
               sublabel="Amplifies consumption at all retail nodes"
