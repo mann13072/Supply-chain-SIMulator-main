@@ -4,7 +4,7 @@ import uvicorn
 from datetime import datetime
 from fastapi import FastAPI, HTTPException, Query, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 from dataclasses import asdict
 from sqlalchemy.orm import Session

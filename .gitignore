@@ -28,4 +28,7 @@ dist-ssr
 # Python
 __pycache__/
 network_state.json
+*.db
+.env
+
 .claude/
