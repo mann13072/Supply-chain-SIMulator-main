@@ -80,7 +80,9 @@ const SimulationPanel: React.FC<SimulationPanelProps> = ({ params, setParams, in
     Object.values(params.commodityPriceChanges).filter(v => v !== 0).length +
     [params.tariffImposition, params.geopoliticalTension, params.weatherEvent, params.logisticDisruption].filter(Boolean).length +
     [params.yieldRateDegradation, params.energyCostChange, params.demandSurge].filter(v => v !== 0).length +
-    (params.freightCostIndex !== 100 ? 1 : 0);
+    (params.freightCostIndex !== 100 ? 1 : 0) +
+    (params.pandemicFactor > 0 ? 1 : 0) +
+    (params.qualityRecallProb > 0.002 ? 1 : 0);
 
   const tabs = [
     { id: 'MATERIALS' as const, label: 'Commodities', icon: Zap },
@@ -176,13 +178,43 @@ const SimulationPanel: React.FC<SimulationPanelProps> = ({ params, setParams, in
             />
             <SliderCard
               label="Energy Cost Spike"
-              sublabel="Increases effective production cost"
+              sublabel="Reduces factory throughput via cost squeeze"
               value={params.energyCostChange}
               min={0} max={200} step={10}
               onChange={(v) => handleChange('energyCostChange', v)}
               displayValue={`+${params.energyCostChange}%`}
               color="#fbbf24"
               accent={params.energyCostChange > 0 ? 'text-amber-400' : 'text-white/50'}
+            />
+            <SliderCard
+              label="Pandemic Factor"
+              sublabel="Probability of factory shutdowns + demand surge"
+              value={params.pandemicFactor}
+              min={0} max={1} step={0.05}
+              onChange={(v) => handleChange('pandemicFactor', v)}
+              displayValue={params.pandemicFactor > 0 ? `${Math.round(params.pandemicFactor * 100)}%` : 'Off'}
+              color="#c084fc"
+              accent={params.pandemicFactor > 0 ? 'text-purple-400' : 'text-white/50'}
+            />
+            <SliderCard
+              label="Quality Recall Probability"
+              sublabel="Chance of 25% inventory quarantine per node/day"
+              value={params.qualityRecallProb}
+              min={0} max={0.05} step={0.001}
+              onChange={(v) => handleChange('qualityRecallProb', v)}
+              displayValue={params.qualityRecallProb > 0 ? `${(params.qualityRecallProb * 100).toFixed(1)}%` : 'Off'}
+              color="#f97316"
+              accent={params.qualityRecallProb > 0 ? 'text-orange-400' : 'text-white/50'}
+            />
+            <SliderCard
+              label="Recovery Time"
+              sublabel="Days to recover from disasters / supplier failures"
+              value={params.recoveryTime}
+              min={1} max={60} step={1}
+              onChange={(v) => handleChange('recoveryTime', v)}
+              displayValue={`${params.recoveryTime}d`}
+              color="#60a5fa"
+              accent="text-blue-400"
             />
           </div>
         )}
@@ -199,6 +231,16 @@ const SimulationPanel: React.FC<SimulationPanelProps> = ({ params, setParams, in
               displayValue={params.freightCostIndex.toString()}
               color={params.freightCostIndex > 150 ? '#f87171' : '#ffffff'}
               accent={params.freightCostIndex > 150 ? 'text-red-400' : params.freightCostIndex > 100 ? 'text-amber-400' : 'text-white/50'}
+            />
+            <SliderCard
+              label="Forecast Accuracy"
+              sublabel="Above 70%: proactive reorders before stockout"
+              value={params.forecastAccuracy}
+              min={0} max={100} step={5}
+              onChange={(v) => handleChange('forecastAccuracy', v)}
+              displayValue={`${params.forecastAccuracy}%`}
+              color={params.forecastAccuracy >= 70 ? '#34d399' : '#fbbf24'}
+              accent={params.forecastAccuracy >= 70 ? 'text-emerald-400' : 'text-amber-400'}
             />
             <div className="bg-white/[0.03] rounded-2xl border border-white/[0.06] p-5 hover:border-white/10 transition-colors">
               <div className="flex items-center justify-between">
@@ -236,21 +278,28 @@ const SimulationPanel: React.FC<SimulationPanelProps> = ({ params, setParams, in
             />
             <div className="grid grid-cols-1 gap-3">
               {[
-                { key: 'tariffImposition',    label: 'Tariff Imposition',     desc: '+2 days customs delay, +8% cost' },
-                { key: 'geopoliticalTension', label: 'Geopolitical Tension',  desc: '+5 days delay on all shipments' },
-                { key: 'weatherEvent',        label: 'Extreme Weather Event', desc: '+3 days stochastic route disruption' },
-              ].map(({ key, label, desc }) => {
+                { key: 'tariffImposition',    label: 'Tariff Imposition',     desc: 'Per-route customs delay + cost uplift', red: true },
+                { key: 'geopoliticalTension', label: 'Geopolitical Tension',  desc: '+5 days delay on all shipments', red: true },
+                { key: 'weatherEvent',        label: 'Extreme Weather Event', desc: '+3 days stochastic route disruption', red: true },
+                { key: 'multiSourcing',       label: 'Multi-Sourcing',        desc: 'Score all suppliers by stock + speed', red: false },
+                { key: 'inventoryPooling',    label: 'Inventory Pooling',     desc: 'Redistribute surplus between sibling nodes', red: false },
+                { key: 'dynamicPricing',      label: 'Dynamic Pricing',       desc: 'Adjust demand via price elasticity at retail', red: false },
+              ].map(({ key, label, desc, red }) => {
                 const isOn = params[key as keyof SimulationParams] as boolean;
                 return (
                   <div
                     key={key}
                     className={`bg-white/[0.03] rounded-2xl border p-5 transition-all ${
-                      isOn ? 'border-red-500/30 bg-red-500/[0.04]' : 'border-white/[0.06] hover:border-white/10'
+                      isOn
+                        ? red
+                          ? 'border-red-500/30 bg-red-500/[0.04]'
+                          : 'border-emerald-500/30 bg-emerald-500/[0.04]'
+                        : 'border-white/[0.06] hover:border-white/10'
                     }`}
                   >
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className={`text-sm font-semibold ${isOn ? 'text-red-300' : 'text-white/80'}`}>{label}</p>
+                        <p className={`text-sm font-semibold ${isOn ? (red ? 'text-red-300' : 'text-emerald-300') : 'text-white/80'}`}>{label}</p>
                         <p className="text-xs text-white/30 mt-0.5">{desc}</p>
                       </div>
                       <Toggle
@@ -285,7 +334,14 @@ const SimulationPanel: React.FC<SimulationPanelProps> = ({ params, setParams, in
             geopoliticalTension: false,
             weatherEvent: false,
             logisticDisruption: false,
-            freightCostIndex: 100
+            freightCostIndex: 100,
+            pandemicFactor: 0,
+            qualityRecallProb: 0.002,
+            recoveryTime: 14,
+            forecastAccuracy: 85,
+            multiSourcing: true,
+            inventoryPooling: false,
+            dynamicPricing: false,
           })}
           className="text-xs font-semibold text-white/30 hover:text-white px-3 py-1.5 rounded-lg hover:bg-white/5 transition-all"
         >

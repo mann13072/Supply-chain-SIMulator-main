@@ -302,16 +302,20 @@ export const DisruptionBreakdownChart: React.FC<{ history: HistorySnapshot[] }> 
       supplierFailure: acc.supplierFailure + h.disruptionCounts.supplierFailure,
       laborStrike: acc.laborStrike + h.disruptionCounts.laborStrike,
       demandShock: acc.demandShock + h.disruptionCounts.demandShock,
+      qualityRecall: acc.qualityRecall + (h.disruptionCounts.qualityRecall ?? 0),
+      pandemicEffect: acc.pandemicEffect + (h.disruptionCounts.pandemicEffect ?? 0),
     }),
-    { naturalDisaster: 0, cyberIncident: 0, supplierFailure: 0, laborStrike: 0, demandShock: 0 }
+    { naturalDisaster: 0, cyberIncident: 0, supplierFailure: 0, laborStrike: 0, demandShock: 0, qualityRecall: 0, pandemicEffect: 0 }
   );
 
   const chartData = [
     { name: 'Natural Disaster', count: totals.naturalDisaster, color: '#ef4444' },
     { name: 'Supplier Failure', count: totals.supplierFailure, color: '#f97316' },
-    { name: 'Labor Strike', count: totals.laborStrike, color: '#f59e0b' },
-    { name: 'Cyber Incident', count: totals.cyberIncident, color: '#8b5cf6' },
-    { name: 'Demand Shock', count: totals.demandShock, color: '#06b6d4' },
+    { name: 'Labor Strike',     count: totals.laborStrike,     color: '#f59e0b' },
+    { name: 'Cyber Incident',   count: totals.cyberIncident,   color: '#8b5cf6' },
+    { name: 'Demand Shock',     count: totals.demandShock,     color: '#06b6d4' },
+    { name: 'Quality Recall',   count: totals.qualityRecall,   color: '#f43f5e' },
+    { name: 'Pandemic Effect',  count: totals.pandemicEffect,  color: '#c084fc' },
   ];
 
   const total = chartData.reduce((sum, d) => sum + d.count, 0);

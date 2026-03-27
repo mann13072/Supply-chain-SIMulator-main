@@ -90,6 +90,10 @@ export interface SupplyNode {
   backorderRate?: number;
   substitutionBehavior?: string;
   priceElasticity?: number;
+
+  // Runtime simulation state (not persisted)
+  offlineRecoveryDaysRemaining?: number;
+  demandShockDaysRemaining?: number;
 }
 
 export interface Route {
@@ -256,6 +260,8 @@ export interface HistorySnapshot {
     supplierFailure: number;
     laborStrike: number;
     demandShock: number;
+    qualityRecall: number;
+    pandemicEffect: number;
   };
   factoryUtilization: { id: string; name: string; util: number }[];
 }

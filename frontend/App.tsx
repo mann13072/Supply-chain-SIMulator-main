@@ -92,23 +92,47 @@ function computeNextSimulationState(
   nextDay: number,
   industryConfig: IndustryConfig
 ): { nextNodes: SupplyNode[]; nextShipments: InTransitShipment[]; newLogs: string[]; snapshot: HistorySnapshot } {
-  // Compute effective cost multiplier from commodity price changes
+
+  // ── Cost multipliers ───────────────────────────────────────────────────────
+  // Commodity price increase squeezes production. Price DROP does NOT boost
+  // production above rated capacity — cap costSqueeze at 1.0.
   const commodityMultiplier = Object.values(params.commodityPriceChanges)
     .reduce((acc, change) => acc * (1 + change / 100), 1.0);
+  const costSqueeze = Math.min(1.0, Math.max(0.1, 1 / commodityMultiplier));
+
+  // Energy cost is a separate drag on factory efficiency
+  const energyFactor = Math.max(0.5, 1 / (1 + params.energyCostChange / 100));
+
   const nextNodes = prevNodes.map(n => ({ ...n }));
   const newLogs: string[] = [];
   const nextShipments: InTransitShipment[] = [];
 
-  // Metrics tracking
+  // Metrics
   let demandTotal = 0;
   let demandFulfilled = 0;
   let stockoutCost = 0;
   let newShipmentsTotal = 0;
   let newShipmentsDelayed = 0;
-  const disruptionCounts = { naturalDisaster: 0, cyberIncident: 0, supplierFailure: 0, laborStrike: 0, demandShock: 0 };
+  const disruptionCounts = {
+    naturalDisaster: 0, cyberIncident: 0, supplierFailure: 0,
+    laborStrike: 0, demandShock: 0, qualityRecall: 0, pandemicEffect: 0,
+  };
   const factoryUtilization: { id: string; name: string; util: number }[] = [];
+  const strikeNodes = new Set<string>();
 
-  // 1. Process arriving shipments (tick down remainingDays, deliver if <= 1)
+  // ── Step 0: Tick OFFLINE recovery timers ──────────────────────────────────
+  nextNodes.forEach(node => {
+    if (node.status === NodeStatus.OFFLINE && (node.offlineRecoveryDaysRemaining ?? 0) > 0) {
+      node.offlineRecoveryDaysRemaining = (node.offlineRecoveryDaysRemaining ?? 1) - 1;
+      if (node.offlineRecoveryDaysRemaining <= 0) {
+        node.offlineRecoveryDaysRemaining = 0;
+        node.status = NodeStatus.WARNING; // Back online at reduced capacity
+        newLogs.push(`Day ${nextDay}: ${node.name} RECOVERED — resuming operations.`);
+      }
+    }
+  });
+
+  // ── Step 1: Process arriving shipments ────────────────────────────────────
   prevShipments.forEach(s => {
     if (s.remainingDays <= 1) {
       const target = nextNodes.find(n => n.id === s.toId);
@@ -121,14 +145,25 @@ function computeNextSimulationState(
     }
   });
 
-  // 2. Apply risk events per node
+  // ── Step 2: Apply risk events per node ────────────────────────────────────
   nextNodes.forEach(node => {
-    // Natural disaster — any node can go OFFLINE
+    if (node.status === NodeStatus.OFFLINE) return; // Already offline, skip further events
+
+    // Natural disaster → OFFLINE with timed recovery
     if (Math.random() < params.naturalDisasterProb) {
       node.status = NodeStatus.OFFLINE;
+      node.offlineRecoveryDaysRemaining = Math.max(1, params.recoveryTime);
       disruptionCounts.naturalDisaster++;
-      newLogs.push(`Day ${nextDay}: NATURAL DISASTER hit ${node.name}! Node offline.`);
+      newLogs.push(`Day ${nextDay}: NATURAL DISASTER hit ${node.name}! Offline for ~${params.recoveryTime} days.`);
       return;
+    }
+
+    // Quality recall — quarantine 25% of current inventory
+    if (params.qualityRecallProb > 0 && Math.random() < params.qualityRecallProb && node.inventoryLevel > 0) {
+      const recalledQty = Math.floor(node.inventoryLevel * 0.25);
+      node.inventoryLevel = Math.max(0, node.inventoryLevel - recalledQty);
+      disruptionCounts.qualityRecall++;
+      newLogs.push(`Day ${nextDay}: QUALITY RECALL at ${node.name}! ${recalledQty} units quarantined.`);
     }
 
     // Cyber attack — DC/Warehouse throughput halved
@@ -139,27 +174,61 @@ function computeNextSimulationState(
       newLogs.push(`Day ${nextDay}: CYBER INCIDENT at ${node.name}. Throughput halved.`);
     }
 
-    // Supplier failure
+    // Supplier failure → CRITICAL with partial recovery time
     if (node.type === NodeType.SUPPLIER && Math.random() < params.supplierFailureProb) {
       node.status = NodeStatus.CRITICAL;
+      node.offlineRecoveryDaysRemaining = Math.max(1, Math.floor(params.recoveryTime / 2));
       disruptionCounts.supplierFailure++;
       newLogs.push(`Day ${nextDay}: SUPPLIER FAILURE at ${node.name}!`);
     }
 
-    // Labor strike — factory production drops to 0 for this tick
-    const isOnStrike = node.type === NodeType.FACTORY && Math.random() < params.laborStrikeProb;
-    if (isOnStrike) {
+    // Labor strike — factory output = 0 this tick
+    if (node.type === NodeType.FACTORY && Math.random() < params.laborStrikeProb) {
+      strikeNodes.add(node.id);
       disruptionCounts.laborStrike++;
-      newLogs.push(`Day ${nextDay}: LABOR STRIKE at ${node.name}. No production this day.`);
+      newLogs.push(`Day ${nextDay}: LABOR STRIKE at ${node.name}. No production today.`);
     }
 
-    // 3. Demand consumption (RETAIL nodes)
+    // Pandemic factor — probabilistic production halt at factories
+    if (params.pandemicFactor > 0 && node.type === NodeType.FACTORY
+        && Math.random() < params.pandemicFactor * 0.1) {
+      strikeNodes.add(node.id);
+      disruptionCounts.pandemicEffect++;
+      newLogs.push(`Day ${nextDay}: PANDEMIC DISRUPTION halted ${node.name}.`);
+    }
+
+    // Demand shock persistence — tick down active shock days
+    if ((node.demandShockDaysRemaining ?? 0) > 0) {
+      node.demandShockDaysRemaining = (node.demandShockDaysRemaining ?? 1) - 1;
+    }
+
+    // ── Demand consumption (RETAIL nodes) ──────────────────────────────────
     if (node.type === NodeType.RETAIL) {
       const surgeFactor = 1 + (params.demandSurge / 100);
-      const baseDemand = (node.demandVolume || 20) * surgeFactor;
-      const isShocked = Math.random() < params.demandShockProb;
-      if (isShocked) disruptionCounts.demandShock++;
-      const demand = Math.max(0, Math.floor(baseDemand * (isShocked ? 2 : 1)));
+      // Pandemic increases demand (panic buying) proportional to pandemicFactor
+      const pandemicDemandBoost = params.pandemicFactor > 0 ? 1 + params.pandemicFactor * 0.5 : 1;
+      const baseDemand = (node.demandVolume || 20) * surgeFactor * pandemicDemandBoost;
+
+      // Dynamic pricing: high inventory → price down → demand up; low → price up → demand down
+      let pricingFactor = 1.0;
+      if (params.dynamicPricing) {
+        const stockRatio = node.inventoryLevel / node.maxCapacity;
+        const elasticity = node.priceElasticity ?? -1.2;
+        pricingFactor = 1 + elasticity * (stockRatio - 0.5) * -0.3;
+        pricingFactor = Math.max(0.7, Math.min(1.3, pricingFactor));
+      }
+
+      // New demand shock → start a multi-day shock period (3–7 days)
+      const newShock = (node.demandShockDaysRemaining ?? 0) === 0
+        && Math.random() < params.demandShockProb;
+      if (newShock) {
+        node.demandShockDaysRemaining = 3 + Math.floor(Math.random() * 5);
+        disruptionCounts.demandShock++;
+        newLogs.push(`Day ${nextDay}: DEMAND SHOCK at ${node.name}! Lasts ${node.demandShockDaysRemaining} days.`);
+      }
+      const isShocked = (node.demandShockDaysRemaining ?? 0) > 0;
+
+      const demand = Math.max(0, Math.floor(baseDemand * pricingFactor * (isShocked ? 2 : 1)));
       demandTotal += demand;
       demandFulfilled += Math.min(demand, node.inventoryLevel);
       node.inventoryLevel = Math.max(0, node.inventoryLevel - demand);
@@ -171,65 +240,147 @@ function computeNextSimulationState(
       }
     }
 
-    // 4. Production (FACTORY nodes)
-    if (node.type === NodeType.FACTORY && !isOnStrike) {
+    // ── Production (FACTORY nodes) ─────────────────────────────────────────
+    if (node.type === NodeType.FACTORY && !strikeNodes.has(node.id)) {
       const degradation = Math.max(0, params.yieldRateDegradation);
       const yieldRate = Math.max(0, ((node.yieldRate || 100) - degradation)) / 100;
-      const costSqueeze = Math.max(0.5, 1 / commodityMultiplier);
-      const netProduction = Math.floor((node.productionCapacity || 100) * yieldRate * costSqueeze);
+      // Both commodity cost and energy cost reduce output; neither can boost above rated capacity
+      const effectiveSqueeze = costSqueeze * energyFactor;
+      const netProduction = Math.floor((node.productionCapacity || 100) * yieldRate * effectiveSqueeze);
       node.inventoryLevel = Math.min(node.maxCapacity, node.inventoryLevel + netProduction);
-      factoryUtilization.push({ id: node.id, name: node.name, util: Math.round(netProduction / (node.productionCapacity || 100) * 100) });
+      factoryUtilization.push({
+        id: node.id, name: node.name,
+        util: Math.round(netProduction / (node.productionCapacity || 100) * 100),
+      });
     }
   });
 
-  // Holding cost after all inventory updates
+  // ── Step 3: Holding cost ───────────────────────────────────────────────────
   const holdingCost = nextNodes.reduce((sum, n) => sum + n.inventoryLevel * (n.holdingCost || 1), 0);
 
-  // 5. Reorder logic — trigger replenishment shipments
+  // ── Step 4: Inventory pooling — redistribute surplus to deficit sibling nodes
+  if (params.inventoryPooling) {
+    const surplus = nextNodes.filter(n =>
+      n.status !== NodeStatus.OFFLINE && n.inventoryLevel > n.maxCapacity * 0.8 && n.type !== NodeType.RETAIL
+    );
+    const deficit = nextNodes.filter(n =>
+      n.status !== NodeStatus.OFFLINE && n.inventoryLevel < (n.reorderPoint || 50) && n.type !== NodeType.RETAIL
+    );
+    surplus.forEach(src => {
+      deficit.forEach(dst => {
+        if (src.type === dst.type) {
+          const transfer = Math.min(
+            Math.floor(src.inventoryLevel * 0.1),
+            dst.maxCapacity - dst.inventoryLevel
+          );
+          if (transfer > 0) {
+            src.inventoryLevel -= transfer;
+            dst.inventoryLevel += transfer;
+            newLogs.push(`Day ${nextDay}: POOL ${src.name}→${dst.name} (${transfer} units)`);
+          }
+        }
+      });
+    });
+  }
+
+  // ── Step 5: Reorder logic ─────────────────────────────────────────────────
   nextNodes.forEach(node => {
     if (node.status === NodeStatus.OFFLINE) return;
-    // Fix: reset CRITICAL to WARNING if inventory was restored by an arriving shipment
-    if (node.status === NodeStatus.CRITICAL && node.inventoryLevel > 0) {
+
+    // Auto-heal: CRITICAL/WARNING → OPTIMAL if inventory recovered
+    if (node.status === NodeStatus.CRITICAL && node.inventoryLevel > 0 && node.type !== NodeType.RETAIL) {
       node.status = node.inventoryLevel < (node.reorderPoint || 50) ? NodeStatus.WARNING : NodeStatus.OPTIMAL;
     }
-    if (node.inventoryLevel < (node.reorderPoint || 50)) {
-      const candidateRoutes = routes.filter(r => r.toId === node.id);
-      const route = candidateRoutes.reduce<Route | null>((best, r) => {
-        if (!best) return r;
+    if (node.status === NodeStatus.WARNING && node.inventoryLevel >= (node.reorderPoint || 50)) {
+      node.status = NodeStatus.OPTIMAL;
+    }
+
+    // Safety stock raises the effective reorder trigger
+    const safetyBuffer = (node.safetyStock || 0) * 0.5;
+    const effectiveReorderPoint = (node.reorderPoint || 50) + safetyBuffer;
+
+    // Forecast-based proactive ordering for retail: trigger before hitting reorder point
+    let shouldReorder = node.inventoryLevel < effectiveReorderPoint;
+    if (!shouldReorder && params.forecastAccuracy > 70 && node.type === NodeType.RETAIL) {
+      const dailyDemand = (node.demandVolume || 20) * (1 + params.demandSurge / 100);
+      if (dailyDemand > 0) {
+        const daysOfSupply = node.inventoryLevel / dailyDemand;
+        const minLeadTime = routes.filter(r => r.toId === node.id)
+          .reduce((min, r) => Math.min(min, r.baseLeadTime), 999);
+        // Accuracy > 70: proactive horizon = lead time × (2 − accuracy/100)
+        const forecastHorizon = minLeadTime * (2 - params.forecastAccuracy / 100);
+        if (daysOfSupply < forecastHorizon) shouldReorder = true;
+      }
+    }
+
+    if (!shouldReorder) return;
+
+    const candidateRoutes = routes.filter(r => r.toId === node.id);
+
+    // Multi-sourcing: score all viable routes by stock availability + speed
+    let selectedRoute: Route | null = null;
+    if (params.multiSourcing && candidateRoutes.length > 1) {
+      const scored = candidateRoutes
+        .map(r => {
+          const src = nextNodes.find(n => n.id === r.fromId);
+          if (!src || src.status === NodeStatus.OFFLINE || src.inventoryLevel <= 0) return null;
+          const stockScore = src.inventoryLevel / src.maxCapacity;   // 0–1
+          const speedScore = 1 / Math.max(1, r.baseLeadTime);        // faster = higher
+          return { route: r, score: stockScore * 0.6 + speedScore * 0.4 };
+        })
+        .filter((x): x is { route: Route; score: number } => x !== null);
+      scored.sort((a, b) => b.score - a.score);
+      selectedRoute = scored[0]?.route ?? null;
+    } else {
+      // Single-source: pick shortest available lead time
+      selectedRoute = candidateRoutes.reduce<Route | null>((best, r) => {
         const src = nextNodes.find(n => n.id === r.fromId);
+        if (!src || src.status === NodeStatus.OFFLINE || src.inventoryLevel <= 0) return best;
+        if (!best) return r;
         const bestSrc = nextNodes.find(n => n.id === best.fromId);
-        if (!src || src.status === NodeStatus.OFFLINE) return best;
         if (!bestSrc || bestSrc.status === NodeStatus.OFFLINE) return r;
         return r.baseLeadTime < best.baseLeadTime ? r : best;
       }, null);
-      if (route) {
-        const source = nextNodes.find(n => n.id === route.fromId);
-        // Fix: allow partial fulfillment — ship whatever the source has, not all-or-nothing
-        if (source && source.status !== NodeStatus.OFFLINE && source.inventoryLevel > 0) {
-          let delayDays = 0;
-          if (params.geopoliticalTension) delayDays += 5;
-          if (params.logisticDisruption) delayDays += 2;
-          if (params.weatherEvent) delayDays += 3;
-          if (Math.random() < params.portCongestionProb) delayDays += 3;
-          if (Math.random() < params.transportDelayProb) delayDays += 1;
-          if (params.tariffImposition) delayDays += 2;
-
-          const orderQty = Math.ceil((node.orderQuantity || 100) * (node.type !== NodeType.RETAIL ? params.bullwhipFactor : 1));
-          const actualQty = Math.min(orderQty, source.inventoryLevel);
-
-          source.inventoryLevel -= actualQty;
-          nextShipments.push({
-            id: Math.random().toString(36).substr(2, 9),
-            toId: node.id,
-            quantity: actualQty,
-            remainingDays: Math.max(1, Math.ceil(route.baseLeadTime + delayDays))
-          });
-          newShipmentsTotal++;
-          if (delayDays > 0) newShipmentsDelayed++;
-          newLogs.push(`Day ${nextDay}: ${source.name} → ${node.name} (${actualQty} units, ${Math.ceil(route.baseLeadTime + delayDays)}d)`);
-        }
-      }
     }
+
+    if (!selectedRoute) return;
+    const source = nextNodes.find(n => n.id === selectedRoute!.fromId);
+    if (!source || source.status === NodeStatus.OFFLINE || source.inventoryLevel <= 0) return;
+
+    // ── Compute total shipment delay ─────────────────────────────────────────
+    let delayDays = 0;
+    if (params.geopoliticalTension) delayDays += 5;
+    if (params.logisticDisruption) delayDays += 2;
+    if (params.weatherEvent) delayDays += 3;
+    // Per-route customs time (only charged when tariff is active)
+    if (params.tariffImposition) delayDays += (selectedRoute.customsTime || 2);
+    if (Math.random() < params.portCongestionProb) delayDays += 3;
+    if (Math.random() < params.transportDelayProb) delayDays += 1;
+
+    // Lead-time variability: stochastic jitter based on route's variability factor
+    const ltv = selectedRoute.leadTimeVariability || 0;
+    if (ltv > 0) {
+      const jitter = Math.round(selectedRoute.baseLeadTime * ltv * (Math.random() * 2 - 1));
+      delayDays += jitter;
+    }
+
+    // Bullwhip amplification for all non-retail upstream nodes
+    const orderQty = Math.ceil(
+      (node.orderQuantity || 100) * (node.type !== NodeType.RETAIL ? params.bullwhipFactor : 1)
+    );
+    const actualQty = Math.min(orderQty, source.inventoryLevel);
+
+    source.inventoryLevel -= actualQty;
+    const totalLeadTime = Math.max(1, selectedRoute.baseLeadTime + delayDays);
+    nextShipments.push({
+      id: Math.random().toString(36).substr(2, 9),
+      toId: node.id,
+      quantity: actualQty,
+      remainingDays: totalLeadTime,
+    });
+    newShipmentsTotal++;
+    if (delayDays > 0) newShipmentsDelayed++;
+    newLogs.push(`Day ${nextDay}: ${source.name} → ${node.name} (${actualQty} units, ${totalLeadTime}d)`);
   });
 
   const snapshot: HistorySnapshot = {
