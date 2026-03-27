@@ -439,17 +439,17 @@ const NetworkBuilder: React.FC<NetworkBuilderProps> = ({ nodes, routes, setNodes
 
       <div className="grid grid-cols-12 gap-8">
         {/* Network Map */}
-        <div className="col-span-12 xl:col-span-8 h-[600px]">
-          <NetworkMap 
-            nodes={nodes} 
-            routes={routes} 
-            onNodeSelect={setSelectedNode} 
-            selectedNodeId={selectedNode?.id || null} 
+        <div className="col-span-12 xl:col-span-8">
+          <NetworkMap
+            nodes={nodes}
+            routes={routes}
+            onNodeSelect={setSelectedNode}
+            selectedNodeId={selectedNode?.id || null}
           />
         </div>
 
         {/* Right Column: Property Inspector / Analytics */}
-        <div className="col-span-12 xl:col-span-4 bg-[#050505] rounded-3xl border border-white/5 p-8 flex flex-col h-[600px]">
+        <div className="col-span-12 xl:col-span-4 bg-[#050505] rounded-3xl border border-white/5 p-8 flex flex-col h-auto xl:h-[600px]">
           <h3 className="text-white font-semibold mb-6 flex items-center gap-2">
             <GlobeIcon className="w-5 h-5 text-white/40" />
             {selectedNode ? 'Node Specification' : selectedRoute ? 'Route Specification' : 'Network Analytics'}
