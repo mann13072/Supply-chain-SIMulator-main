@@ -518,7 +518,15 @@ function App() {
 
       <main className="flex-1 flex flex-col h-screen overflow-hidden">
         <header className="h-14 md:h-20 border-b border-white/5 flex items-center justify-between px-4 md:px-12 shrink-0">
-          <p className="text-[10px] text-white/40 uppercase tracking-[0.3em] font-bold">Session Active • v4.2.0</p>
+          {/* Logo — visible only on mobile where sidebar is hidden */}
+          <div className="flex items-center gap-2 md:hidden">
+            <div className="w-7 h-7 bg-white rounded-lg flex items-center justify-center">
+              <Zap className="w-4 h-4 text-black fill-black" />
+            </div>
+            <span className="text-white font-black tracking-tighter text-base">CHAIN<span className="text-white/40 font-light">SIM</span></span>
+          </div>
+          {/* Session info — hidden on mobile to avoid clutter */}
+          <p className="hidden md:block text-[10px] text-white/40 uppercase tracking-[0.3em] font-bold">Session Active • v4.2.0</p>
           <button className="px-4 md:px-6 py-2 bg-white text-black text-xs font-bold rounded-full min-h-[36px]">DEPLOY</button>
         </header>
         <div className="flex-1 overflow-y-auto p-4 md:p-8 lg:p-12 pb-24 md:pb-8 lg:pb-12 custom-scrollbar">{renderContent()}</div>
