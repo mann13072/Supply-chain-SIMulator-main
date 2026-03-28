@@ -620,6 +620,7 @@ function App() {
 function AppContent() {
   const { user, logout } = useAuth();
   const [activeTab, setActiveTab] = useState('dashboard');
+  const contentRef = useRef<HTMLDivElement>(null);
   const [nodes, setNodes] = useState<SupplyNode[]>(INITIAL_NODES);
   const [routes, setRoutes] = useState<Route[]>(INITIAL_ROUTES);
   const [params, setParams] = useState<SimulationParams>(INITIAL_PARAMS);
@@ -630,6 +631,11 @@ function AppContent() {
   const [showWizard, setShowWizard] = useState(false);
   const globeRef = useRef<HTMLDivElement>(null);
   const [costVarianceThreshold, setCostVarianceThreshold] = useState(15);
+
+  // Scroll content area to top whenever user switches tabs
+  useEffect(() => {
+    contentRef.current?.scrollTo({ top: 0 });
+  }, [activeTab]);
 
   // --- SESSION-LIVE SIMULATION ENGINE ---
   const [isPlaying, setIsPlaying] = useState(false);
@@ -1010,7 +1016,7 @@ function AppContent() {
               </button>
             </div>
           </header>
-          <div className="flex-1 overflow-y-auto p-4 md:p-8 lg:p-12 pb-24 md:pb-8 lg:pb-12 custom-scrollbar">{renderContent()}</div>
+          <div ref={contentRef} className="flex-1 overflow-y-auto p-4 md:p-8 lg:p-12 pb-24 md:pb-8 lg:pb-12 custom-scrollbar">{renderContent()}</div>
         </main>
 
         {/* Bottom nav — visible below md (768px): phones + small tablets in portrait */}
