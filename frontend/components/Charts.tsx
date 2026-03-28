@@ -204,8 +204,14 @@ export const InTransitInventoryChart: React.FC<{ history: HistorySnapshot[] }> =
 export const CostBreakdownChart: React.FC<{ history: HistorySnapshot[]; industryConfig: IndustryConfig }> = ({ history, industryConfig }) => {
   const chartData = sample(history).map(h => ({
     name: `D${h.day}`,
+    production: Math.round(h.productionCost || 0),
+    transport: Math.round(h.transportCost || 0),
+    warehousing: Math.round(h.warehousingCost || 0),
     holding: Math.round(h.holdingCost),
     stockout: Math.round(h.stockoutCost),
+    tariff: Math.round(h.tariffCost || 0),
+    wc: Math.round(h.workingCapitalCost || 0),
+    expediting: Math.round(h.expeditingCost || 0),
   }));
 
   if (chartData.length === 0) return <div className="h-40 md:h-56 w-full"><EmptyState text="Run simulation to see cost breakdown" /></div>;
@@ -219,8 +225,14 @@ export const CostBreakdownChart: React.FC<{ history: HistorySnapshot[]; industry
           <YAxis {...AXIS_PROPS} tickFormatter={v => formatCurrencyCompact(v, industryConfig)} />
           <Tooltip contentStyle={CHART_STYLE} formatter={(v: number, name: string) => [formatCurrencyCompact(v, industryConfig), name]} />
           <Legend wrapperStyle={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '1px' }} />
-          <Bar dataKey="holding" name="Holding Cost" stackId="cost" fill="#3b82f6" radius={[0, 0, 0, 0]} />
-          <Bar dataKey="stockout" name="Stockout Penalty" stackId="cost" fill="#ef4444" radius={[4, 4, 0, 0]} />
+          <Bar dataKey="production" name="Production" stackId="cost" fill="#8b5cf6" radius={[0, 0, 0, 0]} />
+          <Bar dataKey="transport" name="Transport" stackId="cost" fill="#6366f1" radius={[0, 0, 0, 0]} />
+          <Bar dataKey="warehousing" name="Warehousing" stackId="cost" fill="#a78bfa" radius={[0, 0, 0, 0]} />
+          <Bar dataKey="holding" name="Holding" stackId="cost" fill="#3b82f6" radius={[0, 0, 0, 0]} />
+          <Bar dataKey="tariff" name="Tariff" stackId="cost" fill="#f97316" radius={[0, 0, 0, 0]} />
+          <Bar dataKey="wc" name="Working Capital" stackId="cost" fill="#f472b6" radius={[0, 0, 0, 0]} />
+          <Bar dataKey="expediting" name="Expediting" stackId="cost" fill="#f43f5e" radius={[0, 0, 0, 0]} />
+          <Bar dataKey="stockout" name="Stockout" stackId="cost" fill="#ef4444" radius={[4, 4, 0, 0]} />
         </BarChart>
       </ResponsiveContainer>
     </div>
@@ -228,12 +240,13 @@ export const CostBreakdownChart: React.FC<{ history: HistorySnapshot[]; industry
 };
 
 export const CumulativeCostChart: React.FC<{ history: HistorySnapshot[]; industryConfig: IndustryConfig }> = ({ history, industryConfig }) => {
-  let cumHolding = 0;
-  let cumStockout = 0;
+  let cumTotal = 0, cumRevenue = 0, cumCogs = 0;
   const chartData = sample(history).map(h => {
-    cumHolding += h.holdingCost;
-    cumStockout += h.stockoutCost;
-    return { name: `D${h.day}`, holding: Math.round(cumHolding), stockout: Math.round(cumStockout), total: Math.round(cumHolding + cumStockout) };
+    const dayCost = h.holdingCost + h.stockoutCost + (h.tariffCost || 0) + (h.transportCost || 0) + (h.productionCost || 0) + (h.warehousingCost || 0) + (h.workingCapitalCost || 0) + (h.expeditingCost || 0);
+    cumTotal += dayCost;
+    cumRevenue += (h.revenue || 0);
+    cumCogs += (h.cogs || 0);
+    return { name: `D${h.day}`, cost: Math.round(cumTotal), revenue: Math.round(cumRevenue), profit: Math.round(cumRevenue - cumCogs - cumTotal) };
   });
 
   if (chartData.length === 0) return <div className="h-40 md:h-56 w-full"><EmptyState text="Run simulation to see cumulative costs" /></div>;
@@ -247,15 +260,19 @@ export const CumulativeCostChart: React.FC<{ history: HistorySnapshot[]; industr
               <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.2} />
               <stop offset="95%" stopColor="#f59e0b" stopOpacity={0} />
             </linearGradient>
+            <linearGradient id="revenueGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor="#10b981" stopOpacity={0.15} />
+              <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+            </linearGradient>
           </defs>
           <CartesianGrid strokeDasharray="3 3" stroke="#ffffff" strokeOpacity={0.05} vertical={false} />
           <XAxis dataKey="name" {...AXIS_PROPS} />
           <YAxis {...AXIS_PROPS} tickFormatter={v => formatCurrencyCompact(v, industryConfig)} />
           <Tooltip contentStyle={CHART_STYLE} formatter={(v: number, name: string) => [formatCurrencyCompact(v, industryConfig), name]} />
           <Legend wrapperStyle={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '1px' }} />
-          <Area type="monotone" dataKey="holding" name="Cumulative Holding" stroke="#3b82f6" strokeWidth={1.5} fill="none" dot={false} />
-          <Area type="monotone" dataKey="stockout" name="Cumulative Stockout" stroke="#ef4444" strokeWidth={1.5} fill="none" dot={false} />
-          <Area type="monotone" dataKey="total" name="Total Cost" stroke="#f59e0b" strokeWidth={2} fill="url(#totalCostGrad)" dot={false} />
+          <Area type="monotone" dataKey="revenue" name="Cum. Revenue" stroke="#10b981" strokeWidth={2} fill="url(#revenueGrad)" dot={false} />
+          <Area type="monotone" dataKey="cost" name="Cum. Total Cost" stroke="#f59e0b" strokeWidth={2} fill="url(#totalCostGrad)" dot={false} />
+          <Area type="monotone" dataKey="profit" name="Cum. Net Profit" stroke="#22d3ee" strokeWidth={1.5} fill="none" dot={false} strokeDasharray="4 2" />
         </AreaChart>
       </ResponsiveContainer>
     </div>

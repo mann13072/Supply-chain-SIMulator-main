@@ -442,14 +442,14 @@ export default function IndustryWizard({ onComplete }: IndustryWizardProps) {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.45 }}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black"
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black"
       style={{
         backgroundImage:
           'radial-gradient(ellipse 80% 60% at 50% 0%, rgba(99,102,241,0.06) 0%, transparent 70%)',
       }}
     >
       {/* Step indicator */}
-      <div className="absolute top-6 left-1/2 -translate-x-1/2 flex items-center gap-2">
+      <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[60] flex items-center gap-2">
         {[0, 1, 2].map((s) => (
           <div
             key={s}
@@ -463,11 +463,13 @@ export default function IndustryWizard({ onComplete }: IndustryWizardProps) {
       </div>
 
       {/* Steps */}
-      <AnimatePresence mode="wait" custom={direction}>
-        {step === 0 && renderStep0()}
-        {step === 1 && renderStep1()}
-        {step === 2 && renderStep2()}
-      </AnimatePresence>
+      <div className="w-full my-auto py-20 flex items-center justify-center min-h-min">
+        <AnimatePresence mode="wait" custom={direction}>
+          {step === 0 && renderStep0()}
+          {step === 1 && renderStep1()}
+          {step === 2 && renderStep2()}
+        </AnimatePresence>
+      </div>
     </motion.div>
   );
 }

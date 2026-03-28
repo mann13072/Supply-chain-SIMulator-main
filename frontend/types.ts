@@ -52,6 +52,7 @@ export interface SupplyNode {
   supplierRecoveryTime?: number;
   alternativeSuppliersCount?: number;
   supplierSwitchingCost?: number;
+  materialId?: string;  // which commodity this supplier provides
 
   // Production / Manufacturing Variables (if Factory)
   productionCapacity?: number;
@@ -65,6 +66,9 @@ export interface SupplyNode {
   reworkRate?: number;
   schedulingRule?: string;
   overtimeCapacity?: number;
+  inputMaterialIds?: string[];  // commodities consumed by this factory
+  outputProduct?: string;       // what this factory produces (label)
+  unitProductionCost?: number;  // per-node override (falls back to global param)
 
   // Warehouse / Distribution Variables (if Warehouse/DC)
   storageCapacity?: number;
@@ -78,6 +82,8 @@ export interface SupplyNode {
   automationLevel?: number;
   fulfillmentAccuracy?: number;
   warehouseCapabilities?: string[];
+  warehousingCostOverride?: number;   // per-node override for warehousing cost
+  carryingCostOverride?: number;      // per-node override for inventory carrying %
 
   // Demand & Market Variables (if Retail)
   demandVolume?: number;
@@ -90,10 +96,17 @@ export interface SupplyNode {
   backorderRate?: number;
   substitutionBehavior?: string;
   priceElasticity?: number;
+  markupPct?: number;             // per-retail markup override (falls back to global)
+
+  // Financial tracking (computed at runtime)
+  accumulatedUnitCost?: number;  // weighted-avg cost per unit at this node
+  sellingPricePerUnit?: number;  // retail selling price (if RETAIL)
 
   // Runtime simulation state (not persisted)
   offlineRecoveryDaysRemaining?: number;
   demandShockDaysRemaining?: number;
+  cyberRecoveryDaysRemaining?: number;  // cyber attack recovery timer
+  _baseThroughputCapacity?: number;     // original throughput before cyber attack
 }
 
 export interface Route {
@@ -200,6 +213,9 @@ export interface SimulationParams {
 
   // Tariff cost (F10)
   tariffRate: number; // percentage, e.g. 25 = 25% tariff on procurement cost
+
+  // Financial (Phase 3-5)
+  defaultMarkupPct?: number;  // retail markup over COGS, default 50%
 }
 
 export interface SimulationResult {
@@ -245,11 +261,14 @@ export interface Scenario {
 
 export interface InTransitShipment {
   id: string;
+  fromId?: string;
   toId: string;
   quantity: number;
   remainingDays: number;
-  carbonKg?: number;    // F9: CO2 emissions for this shipment
-  tariffCost?: number;  // F10: tariff cost for this shipment
+  carbonKg?: number;       // F9: CO2 emissions for this shipment
+  tariffCost?: number;     // F10: tariff cost for this shipment
+  transportCost?: number;  // transport cost for this shipment
+  unitCost?: number;       // accumulated cost per unit being shipped
 }
 
 export interface HistorySnapshot {
@@ -279,6 +298,15 @@ export interface HistorySnapshot {
   defectUnits: number;        // F8: units lost to factory defects
   tariffCost: number;         // F10: total tariff cost this day
   carbonEmissions: number;    // F9: kg CO2 emitted by shipments created this day
+
+  // Financial enrichments (all optional for backward compat with old snapshots)
+  transportCost?: number;     // total transport cost this day
+  productionCost?: number;    // total production cost this day
+  warehousingCost?: number;   // total warehousing cost this day
+  revenue?: number;           // total revenue this day (retail sales)
+  cogs?: number;              // cost of goods sold this day
+  workingCapitalCost?: number; // daily financing cost on capital tied up
+  expeditingCost?: number;    // extra cost for emergency shipments
 }
 
 export interface OptimizationResult {

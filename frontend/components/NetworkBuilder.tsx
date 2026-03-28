@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Plus, Trash2, Link as LinkIcon, MapPin, Factory, Warehouse, Truck, ShoppingCart, Layers, Globe as GlobeIcon, Zap, Loader2 } from 'lucide-react';
-import { SupplyNode, NodeType, NodeStatus, Route, TransportMode } from '../types';
+import { SupplyNode, NodeType, NodeStatus, Route, TransportMode, IndustryConfig } from '../types';
 import { motion, AnimatePresence } from 'framer-motion';
 import { geocode } from '../utils/geocoding';
 import { routingService, Hub } from '../services/routingService';
@@ -20,9 +20,10 @@ interface NetworkBuilderProps {
   routes: Route[];
   setNodes: React.Dispatch<React.SetStateAction<SupplyNode[]>>;
   setRoutes: React.Dispatch<React.SetStateAction<Route[]>>;
+  industryConfig?: IndustryConfig;
 }
 
-const NetworkBuilder: React.FC<NetworkBuilderProps> = ({ nodes, routes, setNodes, setRoutes }) => {
+const NetworkBuilder: React.FC<NetworkBuilderProps> = ({ nodes, routes, setNodes, setRoutes, industryConfig }) => {
   const [selectedNode, setSelectedNode] = useState<SupplyNode | null>(null);
   const [selectedRoute, setSelectedRoute] = useState<Route | null>(null);
   const [isAddingNode, setIsAddingNode] = useState(false);
@@ -1246,7 +1247,21 @@ const NetworkBuilder: React.FC<NetworkBuilderProps> = ({ nodes, routes, setNodes
                 {activeNodeTab === 'supplier' && (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
                     <div className="space-y-4">
-                      <h4 className="text-[10px] text-white/40 uppercase tracking-widest border-b border-white/5 pb-2">Lead Times</h4>
+                      <h4 className="text-[10px] text-white/40 uppercase tracking-widest border-b border-white/5 pb-2">Raw Material</h4>
+                      <div>
+                        <label className="text-[10px] text-white/40 uppercase tracking-widest mb-1 block">Supplies Commodity</label>
+                        <select
+                          value={newNode.materialId || ''}
+                          onChange={(e) => setNewNode({...newNode, materialId: e.target.value || undefined})}
+                          className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 md:px-4 md:py-3 text-white appearance-none cursor-pointer"
+                        >
+                          <option value="" className="bg-[#111]">— None (generic) —</option>
+                          {(industryConfig?.commodities || []).map(c => (
+                            <option key={c.id} value={c.id} className="bg-[#111]">{c.name} ({industryConfig?.currencySymbol}{c.basePrice}/{c.unit})</option>
+                          ))}
+                        </select>
+                      </div>
+                      <h4 className="text-[10px] text-white/40 uppercase tracking-widest border-b border-white/5 pb-2 mt-2">Lead Times</h4>
                       <div className="grid grid-cols-2 gap-4">
                         <div>
                           <label className="text-[10px] text-white/40 uppercase tracking-widest mb-1 block">Lead Time (d)</label>
@@ -1259,7 +1274,7 @@ const NetworkBuilder: React.FC<NetworkBuilderProps> = ({ nodes, routes, setNodes
                       </div>
                     </div>
                     <div className="space-y-4">
-                      <h4 className="text-[10px] text-white/40 uppercase tracking-widest border-b border-white/5 pb-2">Capability</h4>
+                      <h4 className="text-[10px] text-white/40 uppercase tracking-widest border-b border-white/5 pb-2">Capability & Cost</h4>
                       <div className="grid grid-cols-2 gap-4">
                         <div>
                           <label className="text-[10px] text-white/40 uppercase tracking-widest mb-1 block">Reliability %</label>
@@ -1270,6 +1285,11 @@ const NetworkBuilder: React.FC<NetworkBuilderProps> = ({ nodes, routes, setNodes
                           <input type="number" value={newNode.supplierCostPerUnit} onChange={(e) => setNewNode({...newNode, supplierCostPerUnit: parseInt(e.target.value)})} className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 md:px-4 md:py-3 text-white" />
                         </div>
                       </div>
+                      {newNode.materialId && (
+                        <p className="text-[10px] text-cyan-400/60 mt-1">
+                          Linked to <span className="font-bold">{industryConfig?.commodities.find(c => c.id === newNode.materialId)?.name}</span> — commodity price changes will affect this supplier's cost
+                        </p>
+                      )}
                     </div>
                   </div>
                 )}
@@ -1277,7 +1297,40 @@ const NetworkBuilder: React.FC<NetworkBuilderProps> = ({ nodes, routes, setNodes
                 {activeNodeTab === 'production' && (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
                     <div className="space-y-4">
-                      <h4 className="text-[10px] text-white/40 uppercase tracking-widest border-b border-white/5 pb-2">Output</h4>
+                      <h4 className="text-[10px] text-white/40 uppercase tracking-widest border-b border-white/5 pb-2">Materials & Output</h4>
+                      {(industryConfig?.commodities || []).length > 0 && (
+                        <div>
+                          <label className="text-[10px] text-white/40 uppercase tracking-widest mb-1 block">Input Materials</label>
+                          <div className="flex flex-wrap gap-1.5">
+                            {(industryConfig?.commodities || []).map(c => {
+                              const selected = (newNode.inputMaterialIds || []).includes(c.id);
+                              return (
+                                <button
+                                  key={c.id}
+                                  onClick={() => {
+                                    const current = newNode.inputMaterialIds || [];
+                                    setNewNode({...newNode, inputMaterialIds: selected ? current.filter(id => id !== c.id) : [...current, c.id]});
+                                  }}
+                                  className={`px-2.5 py-1.5 rounded-lg text-[10px] font-semibold transition-all border ${
+                                    selected
+                                      ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40'
+                                      : 'bg-white/[0.04] text-white/30 border-white/[0.06] hover:text-white/50'
+                                  }`}
+                                >
+                                  {selected ? '✓ ' : ''}{c.name}
+                                </button>
+                              );
+                            })}
+                          </div>
+                          {(newNode.inputMaterialIds || []).length > 0 && (
+                            <p className="text-[10px] text-cyan-400/60 mt-1.5">Commodity price changes for selected materials will affect this factory's production cost</p>
+                          )}
+                        </div>
+                      )}
+                      <div>
+                        <label className="text-[10px] text-white/40 uppercase tracking-widest mb-1 block">Output Product</label>
+                        <input type="text" value={newNode.outputProduct || ''} onChange={(e) => setNewNode({...newNode, outputProduct: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 md:px-4 md:py-3 text-white" placeholder="e.g. Solar Panels" />
+                      </div>
                       <div className="grid grid-cols-2 gap-4">
                         <div>
                           <label className="text-[10px] text-white/40 uppercase tracking-widest mb-1 block">Capacity / Day</label>
@@ -1290,7 +1343,17 @@ const NetworkBuilder: React.FC<NetworkBuilderProps> = ({ nodes, routes, setNodes
                       </div>
                     </div>
                     <div className="space-y-4">
-                      <h4 className="text-[10px] text-white/40 uppercase tracking-widest border-b border-white/5 pb-2">Operations</h4>
+                      <h4 className="text-[10px] text-white/40 uppercase tracking-widest border-b border-white/5 pb-2">Cost & Operations</h4>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="text-[10px] text-white/40 uppercase tracking-widest mb-1 block">Production Cost/Unit</label>
+                          <input type="number" value={newNode.unitProductionCost ?? ''} onChange={(e) => setNewNode({...newNode, unitProductionCost: e.target.value ? parseFloat(e.target.value) : undefined})} className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 md:px-4 md:py-3 text-white" placeholder="Global default" />
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-white/40 uppercase tracking-widest mb-1 block">Defect Rate %</label>
+                          <input type="number" value={newNode.defectRate ?? 0} onChange={(e) => setNewNode({...newNode, defectRate: parseFloat(e.target.value)})} className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 md:px-4 md:py-3 text-white" />
+                        </div>
+                      </div>
                       <div className="grid grid-cols-2 gap-4">
                         <div>
                           <label className="text-[10px] text-white/40 uppercase tracking-widest mb-1 block">Batch Size</label>
@@ -1308,7 +1371,7 @@ const NetworkBuilder: React.FC<NetworkBuilderProps> = ({ nodes, routes, setNodes
                 {activeNodeTab === 'warehouse' && (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
                     <div className="space-y-4">
-                      <h4 className="text-[10px] text-white/40 uppercase tracking-widest border-b border-white/5 pb-2">Space</h4>
+                      <h4 className="text-[10px] text-white/40 uppercase tracking-widest border-b border-white/5 pb-2">Space & Cost</h4>
                       <div className="grid grid-cols-2 gap-4">
                         <div>
                           <label className="text-[10px] text-white/40 uppercase tracking-widest mb-1 block">Storage Cap</label>
@@ -1317,6 +1380,16 @@ const NetworkBuilder: React.FC<NetworkBuilderProps> = ({ nodes, routes, setNodes
                         <div>
                           <label className="text-[10px] text-white/40 uppercase tracking-widest mb-1 block">Throughput</label>
                           <input type="number" value={newNode.throughputCapacity} onChange={(e) => setNewNode({...newNode, throughputCapacity: parseInt(e.target.value)})} className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 md:px-4 md:py-3 text-white" />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="text-[10px] text-white/40 uppercase tracking-widest mb-1 block">Warehousing $/unit</label>
+                          <input type="number" value={newNode.warehousingCostOverride ?? ''} onChange={(e) => setNewNode({...newNode, warehousingCostOverride: e.target.value ? parseFloat(e.target.value) : undefined})} className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 md:px-4 md:py-3 text-white" placeholder="Global default" />
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-white/40 uppercase tracking-widest mb-1 block">Carrying Cost %</label>
+                          <input type="number" value={newNode.carryingCostOverride ?? ''} onChange={(e) => setNewNode({...newNode, carryingCostOverride: e.target.value ? parseFloat(e.target.value) : undefined})} className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 md:px-4 md:py-3 text-white" placeholder="Global default" />
                         </div>
                       </div>
                     </div>
@@ -1352,7 +1425,17 @@ const NetworkBuilder: React.FC<NetworkBuilderProps> = ({ nodes, routes, setNodes
                       </div>
                     </div>
                     <div className="space-y-4">
-                      <h4 className="text-[10px] text-white/40 uppercase tracking-widest border-b border-white/5 pb-2">Growth</h4>
+                      <h4 className="text-[10px] text-white/40 uppercase tracking-widest border-b border-white/5 pb-2">Pricing & Growth</h4>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="text-[10px] text-white/40 uppercase tracking-widest mb-1 block">Markup %</label>
+                          <input type="number" value={newNode.markupPct ?? ''} onChange={(e) => setNewNode({...newNode, markupPct: e.target.value ? parseFloat(e.target.value) : undefined})} className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 md:px-4 md:py-3 text-white" placeholder="Global default" />
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-white/40 uppercase tracking-widest mb-1 block">Selling Price</label>
+                          <input type="number" value={newNode.sellingPricePerUnit ?? ''} onChange={(e) => setNewNode({...newNode, sellingPricePerUnit: e.target.value ? parseFloat(e.target.value) : undefined})} className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 md:px-4 md:py-3 text-white" placeholder="Auto from markup" />
+                        </div>
+                      </div>
                       <div className="grid grid-cols-2 gap-4">
                         <div>
                           <label className="text-[10px] text-white/40 uppercase tracking-widest mb-1 block">Growth Rate %</label>

@@ -15,7 +15,7 @@ const DEFAULT_PARAMS: SimulationParams = {
   commodityPriceChanges: {},
   yieldRateDegradation: 0,
   energyCostChange: 0,
-  unitProductionCost: 100,
+  unitProductionCost: 20,
   procurementCost: 50,
   transportationCost: 20,
   inventoryCarryingCost: 5,

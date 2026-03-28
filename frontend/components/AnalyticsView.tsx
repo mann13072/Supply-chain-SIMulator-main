@@ -100,8 +100,17 @@ const AnalyticsView: React.FC<AnalyticsViewProps> = ({ history, nodes, industryC
   const totalHoldingCost  = history.reduce((s, h) => s + h.holdingCost, 0);
   const totalStockoutCost = history.reduce((s, h) => s + h.stockoutCost, 0);
   const totalTariffCost   = history.reduce((s, h) => s + (h.tariffCost || 0), 0);
-  const totalCost         = totalHoldingCost + totalStockoutCost + totalTariffCost;
+  const totalTransportCost = history.reduce((s, h) => s + (h.transportCost || 0), 0);
+  const totalProductionCost = history.reduce((s, h) => s + (h.productionCost || 0), 0);
+  const totalWarehousingCost = history.reduce((s, h) => s + (h.warehousingCost || 0), 0);
+  const totalWCCost       = history.reduce((s, h) => s + (h.workingCapitalCost || 0), 0);
+  const totalExpeditingCost = history.reduce((s, h) => s + (h.expeditingCost || 0), 0);
+  const totalRevenue      = history.reduce((s, h) => s + (h.revenue || 0), 0);
+  const totalCOGS         = history.reduce((s, h) => s + (h.cogs || 0), 0);
+  const grossMargin       = totalRevenue > 0 ? ((totalRevenue - totalCOGS) / totalRevenue * 100) : 0;
+  const totalCost         = totalHoldingCost + totalStockoutCost + totalTariffCost + totalTransportCost + totalProductionCost + totalWarehousingCost + totalWCCost + totalExpeditingCost;
   const avgDailyCost      = history.length > 0 ? totalCost / history.length : 0;
+  const netProfit         = totalRevenue - totalCOGS - totalCost;
 
   // Phase 1 metrics: carbon, defects, expired, tariff
   const totalCarbonKg     = history.reduce((s, h) => s + (h.carbonEmissions || 0), 0);
@@ -218,21 +227,40 @@ const AnalyticsView: React.FC<AnalyticsViewProps> = ({ history, nodes, industryC
       case 'cost':
         return (
           <div className="space-y-6">
-            <SectionHeader title="Cost Performance" sub="Holding costs, penalty costs, and total spend" color="#10b981" />
+            <SectionHeader title="Cost & Financial Performance" sub="Revenue, margins, cost breakdown, and total spend" color="#10b981" />
+
+            {/* P&L Summary Row */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <KPICard label="Total Holding Cost" value={formatCurrencyCompact(totalHoldingCost, industryConfig)} sub="Σ inventory × holding rate" accent="#3b82f6" />
-              <KPICard label="Total Stockout Penalty" value={formatCurrencyCompact(totalStockoutCost, industryConfig)} sub="Σ stockout events × penalty" accent="#ef4444" />
-              <KPICard label="Total Tariff Cost" value={formatCurrencyCompact(totalTariffCost, industryConfig)} sub="Import tariff on shipments" accent="#f97316" />
-              <KPICard label="Total Cost" value={formatCurrencyCompact(totalCost, industryConfig)} sub="Holding + stockout + tariff" accent="#f59e0b" />
+              <KPICard label="Total Revenue" value={formatCurrencyCompact(totalRevenue, industryConfig)} sub="Retail sales revenue" accent="#10b981" />
+              <KPICard label="COGS" value={formatCurrencyCompact(totalCOGS, industryConfig)} sub="Cost of goods sold" accent="#3b82f6" />
+              <KPICard label="Gross Margin" value={`${grossMargin.toFixed(1)}%`} sub="(Revenue − COGS) / Revenue" accent={grossMargin >= 30 ? '#10b981' : grossMargin >= 15 ? '#f59e0b' : '#ef4444'} />
+              <KPICard label="Net Profit" value={formatCurrencyCompact(netProfit, industryConfig)} sub="Revenue − COGS − all costs" accent={netProfit >= 0 ? '#10b981' : '#ef4444'} />
+            </div>
+
+            {/* Cost Breakdown Row */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <KPICard label="Production Cost" value={formatCurrencyCompact(totalProductionCost, industryConfig)} sub="Factory output × unit cost" accent="#8b5cf6" />
+              <KPICard label="Transport Cost" value={formatCurrencyCompact(totalTransportCost, industryConfig)} sub="Freight × distance × index" accent="#6366f1" />
+              <KPICard label="Warehousing Cost" value={formatCurrencyCompact(totalWarehousingCost, industryConfig)} sub="WH/DC capacity × rate" accent="#a78bfa" />
+              <KPICard label="Holding Cost" value={formatCurrencyCompact(totalHoldingCost, industryConfig)} sub="Inventory value × carrying %" accent="#818cf8" />
             </div>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <KPICard label="Stockout Penalty" value={formatCurrencyCompact(totalStockoutCost, industryConfig)} sub="Lost sales penalty cost" accent="#ef4444" />
+              <KPICard label="Tariff Cost" value={formatCurrencyCompact(totalTariffCost, industryConfig)} sub="Import duty on shipments" accent="#f97316" />
+              <KPICard label="Working Capital Cost" value={formatCurrencyCompact(totalWCCost, industryConfig)} sub="Financing cost on tied-up capital" accent="#f472b6" />
+              <KPICard label="Expediting Cost" value={formatCurrencyCompact(totalExpeditingCost, industryConfig)} sub="Premium for emergency orders" accent="#f43f5e" />
+            </div>
+
+            {/* Totals + Sustainability */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <KPICard label="Total Cost" value={formatCurrencyCompact(totalCost, industryConfig)} sub="All cost categories combined" accent="#f59e0b" />
               <KPICard label="Avg Daily Cost" value={formatCurrencyCompact(avgDailyCost, industryConfig)} sub="Per simulation day" accent="#10b981" />
               <KPICard label="CO₂ Emissions" value={totalCarbonKg >= 1000 ? `${(totalCarbonKg / 1000).toFixed(1)}t` : `${Math.round(totalCarbonKg)}kg`} sub="Total transport carbon footprint" accent="#06b6d4" />
-              <KPICard label="Expired Units" value={totalExpiredUnits.toLocaleString()} sub="Lost to shelf-life expiry" accent={totalExpiredUnits > 0 ? '#f59e0b' : '#10b981'} />
-              <KPICard label="Defect Units" value={totalDefectUnits.toLocaleString()} sub="Lost to factory quality defects" accent={totalDefectUnits > 0 ? '#f97316' : '#10b981'} />
+              <KPICard label="Quality Losses" value={`${totalExpiredUnits.toLocaleString()} / ${totalDefectUnits.toLocaleString()}`} sub="Expired units / defect units" accent={(totalExpiredUnits + totalDefectUnits) > 0 ? '#f59e0b' : '#10b981'} />
             </div>
+
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <ChartCard title="Daily Cost Breakdown" sub="Holding vs stockout penalty per day">
+              <ChartCard title="Daily Cost Breakdown" sub="All cost categories per day">
                 <CostBreakdownChart history={history} industryConfig={industryConfig} />
               </ChartCard>
               <ChartCard title="Cumulative Cost Trend" sub="Compounding costs over simulation run">
