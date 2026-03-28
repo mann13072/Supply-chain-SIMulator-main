@@ -1,5 +1,6 @@
-import React from 'react';
-import { Play, Pause, RotateCcw, Activity } from 'lucide-react';
+import React, { useState } from 'react';
+import { Play, Pause, RotateCcw, Activity, AlertTriangle, X } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { SupplyNode, Route, NodeStatus, NodeType, InTransitShipment, SimulationParams, IndustryConfig } from '../types';
 import SimulationPanel from './SimulationPanel';
 import { formatCurrencyCompact } from '../utils/formatting';
@@ -25,6 +26,22 @@ const SimulationEngine: React.FC<SimulationEngineProps> = ({
   nodes, routes, day, isPlaying, setIsPlaying, speed, setSpeed, logs, shipments, resetSimulation,
   params, setParams, industryConfig
 }) => {
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
+
+  const handleResetClick = () => {
+    // If simulation hasn't run yet, just reset silently
+    if (day === 0) {
+      resetSimulation();
+      return;
+    }
+    setIsPlaying(false);
+    setShowResetConfirm(true);
+  };
+
+  const confirmReset = () => {
+    setShowResetConfirm(false);
+    resetSimulation();
+  };
 
   const serviceLevel = nodes.length > 0 ? Math.round(
     (nodes.filter(n => n.status === NodeStatus.OPTIMAL).length / nodes.length) * 100
@@ -110,7 +127,7 @@ const SimulationEngine: React.FC<SimulationEngineProps> = ({
           {/* Controls inline on sm+ only */}
           <div className="hidden sm:flex items-center gap-1 shrink-0">
             <div className="h-4 w-px bg-white/10 mr-1" />
-            <button onClick={resetSimulation} className="p-1.5 text-white/25 hover:text-white hover:bg-white/5 rounded-lg transition-all" title="Reset">
+            <button onClick={handleResetClick} className="p-1.5 text-white/25 hover:text-white hover:bg-white/5 rounded-lg transition-all" title="Reset">
               <RotateCcw className="w-3.5 h-3.5" />
             </button>
             <button
@@ -140,7 +157,7 @@ const SimulationEngine: React.FC<SimulationEngineProps> = ({
 
         {/* Row 2 — mobile only: reset | play | speed */}
         <div className={`sm:hidden flex items-center gap-2 px-3 pb-2 border-t border-white/[0.05]`}>
-          <button onClick={resetSimulation} className="p-1.5 text-white/25 hover:text-white hover:bg-white/5 rounded-lg transition-all" title="Reset">
+          <button onClick={handleResetClick} className="p-1.5 text-white/25 hover:text-white hover:bg-white/5 rounded-lg transition-all" title="Reset">
             <RotateCcw className="w-3.5 h-3.5" />
           </button>
           <button
@@ -267,6 +284,84 @@ const SimulationEngine: React.FC<SimulationEngineProps> = ({
 
       {/* ── Simulation Parameters Panel ──────────────────────────────── */}
       <SimulationPanel params={params} setParams={setParams} industryConfig={industryConfig} />
+
+      {/* ── Reset Confirmation Modal ───────────────────────────────── */}
+      <AnimatePresence>
+        {showResetConfirm && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+            onClick={() => setShowResetConfirm(false)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              transition={{ duration: 0.2, ease: 'easeOut' }}
+              className="bg-[#111] border border-white/10 rounded-2xl shadow-2xl shadow-black/60 w-full max-w-sm mx-4 overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="flex items-center gap-3 px-5 pt-5 pb-3">
+                <div className="w-10 h-10 rounded-xl bg-red-500/10 flex items-center justify-center shrink-0">
+                  <AlertTriangle className="w-5 h-5 text-red-400" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-white font-semibold text-sm">Reset Simulation?</h3>
+                  <p className="text-white/35 text-xs mt-0.5">This action cannot be undone</p>
+                </div>
+                <button
+                  onClick={() => setShowResetConfirm(false)}
+                  className="p-1.5 text-white/20 hover:text-white/50 transition-colors rounded-lg hover:bg-white/5"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Body */}
+              <div className="px-5 pb-4">
+                <p className="text-white/50 text-xs leading-relaxed">
+                  This will reset <span className="text-white font-medium">Day {day}</span> of simulation data including:
+                </p>
+                <ul className="mt-2 space-y-1.5">
+                  <li className="flex items-center gap-2 text-xs text-white/40">
+                    <span className="w-1 h-1 rounded-full bg-red-400/60" />
+                    All node inventories and statuses restored to pre-simulation values
+                  </li>
+                  <li className="flex items-center gap-2 text-xs text-white/40">
+                    <span className="w-1 h-1 rounded-full bg-red-400/60" />
+                    Simulation history and analytics data cleared
+                  </li>
+                  <li className="flex items-center gap-2 text-xs text-white/40">
+                    <span className="w-1 h-1 rounded-full bg-red-400/60" />
+                    All in-transit shipments and event logs removed
+                  </li>
+                </ul>
+              </div>
+
+              {/* Actions */}
+              <div className="flex gap-2 px-5 pb-5">
+                <button
+                  onClick={() => setShowResetConfirm(false)}
+                  className="flex-1 py-2.5 rounded-xl text-sm text-white/50 bg-white/5 hover:bg-white/10 border border-white/5 transition-all"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={confirmReset}
+                  className="flex-1 py-2.5 rounded-xl text-sm font-semibold bg-red-500 hover:bg-red-600 text-white transition-all flex items-center justify-center gap-1.5"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  Reset
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

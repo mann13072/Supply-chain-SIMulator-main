@@ -452,6 +452,9 @@ function AppContent() {
   const [logs, setLogs] = useState<string[]>([]);
   const [shipments, setShipments] = useState<InTransitShipment[]>([]);
 
+  // Snapshot of node state before simulation — used by resetSimulation to restore original values
+  const preSimNodesRef = useRef<SupplyNode[] | null>(null);
+
   // Refs so the interval callback always reads the latest state without stale closures
   const nodesRef = useRef<SupplyNode[]>(nodes);
   const shipmentsRef = useRef<InTransitShipment[]>(shipments);
@@ -530,6 +533,10 @@ function AppContent() {
   // Core Simulation Loop (The Heartbeat) — no nested setState
   useEffect(() => {
     if (!isPlaying) return;
+    // Snapshot node state at the start of the very first play so reset can restore it
+    if (preSimNodesRef.current === null) {
+      preSimNodesRef.current = nodesRef.current.map(n => ({ ...n }));
+    }
     const interval = setInterval(() => {
       const nextDay = dayRef.current + 1;
       const { nextNodes, nextShipments, newLogs, snapshot } = computeNextSimulationState(
@@ -559,6 +566,11 @@ function AppContent() {
     setLogs([]);
     setShipments([]);
     setHistory([]);
+    // Restore nodes to their pre-simulation state (inventory, status, etc.)
+    if (preSimNodesRef.current) {
+      setNodes(preSimNodesRef.current.map(n => ({ ...n })));
+      preSimNodesRef.current = null;
+    }
   };
 
   const handleWizardComplete = (config: IndustryConfig) => {
