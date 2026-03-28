@@ -17,7 +17,7 @@ except ImportError:
 
 # Auth + DB imports
 from database import engine, get_db
-from models import Base, User, UserNetwork
+from models import Base, User, UserNetwork, SimulationRun
 from auth import hash_password, verify_password, create_access_token, get_current_user
 
 # Import our optimized engine
@@ -549,6 +549,308 @@ def delete_network(
     db.delete(network)
     db.commit()
     return {"status": "deleted"}
+
+
+# ─────────────────────────────────────────────
+#  SIMULATION HISTORY ENDPOINTS
+# ─────────────────────────────────────────────
+
+import gzip as _gzip
+
+class SimRunSaveRequest(BaseModel):
+    name: str
+    description: Optional[str] = None
+    network_id: Optional[str] = None
+    nodes_snapshot: List[Any]
+    routes_snapshot: List[Any]
+    params_snapshot: Dict[str, Any]
+    industry_config: Optional[Dict[str, Any]] = None
+    history: List[Dict[str, Any]]
+    tags: Optional[List[str]] = None
+
+
+class SimRunUpdateRequest(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    tags: Optional[List[str]] = None
+
+
+def _compute_run_summary(history: List[Dict]) -> Dict:
+    """Extract denormalized KPI summary from history snapshots."""
+    total_days = len(history)
+    total_revenue = sum(h.get("revenue", 0) or 0 for h in history)
+    total_cost = sum(
+        (h.get("holdingCost", 0) or 0)
+        + (h.get("stockoutCost", 0) or 0)
+        + (h.get("transportCost", 0) or 0)
+        + (h.get("productionCost", 0) or 0)
+        + (h.get("warehousingCost", 0) or 0)
+        + (h.get("tariffCost", 0) or 0)
+        + (h.get("expeditingCost", 0) or 0)
+        for h in history
+    )
+    demand_total = sum(h.get("demandTotal", 0) or 0 for h in history)
+    demand_fulfilled = sum(h.get("demandFulfilled", 0) or 0 for h in history)
+    avg_fill_rate = (demand_fulfilled / demand_total * 100) if demand_total > 0 else 0
+    total_disruptions = sum(
+        sum((h.get("disruptionCounts") or {}).values())
+        for h in history
+    )
+    total_carbon = sum(h.get("carbonEmissions", 0) or 0 for h in history)
+    return {
+        "total_days": total_days,
+        "total_revenue": round(total_revenue, 2),
+        "total_cost": round(total_cost, 2),
+        "avg_fill_rate": round(avg_fill_rate, 2),
+        "total_disruptions": total_disruptions,
+        "total_carbon_kg": round(total_carbon, 2),
+    }
+
+
+@app.post("/api/simulation-runs")
+def save_simulation_run(
+    req: SimRunSaveRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Save a completed simulation run with gzip-compressed history."""
+    # Size guard — reject if uncompressed history exceeds 10 MB
+    raw_json = json.dumps(req.history).encode("utf-8")
+    if len(raw_json) > 10 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="History data too large (>10 MB).")
+
+    compressed = _gzip.compress(raw_json, compresslevel=6)
+    summary = _compute_run_summary(req.history)
+
+    run = SimulationRun(
+        owner_id=current_user.id,
+        network_id=req.network_id,
+        name=req.name,
+        description=req.description,
+        nodes_snapshot=req.nodes_snapshot,
+        routes_snapshot=req.routes_snapshot,
+        params_snapshot=req.params_snapshot,
+        industry_config=req.industry_config,
+        history_data=compressed,
+        total_days=summary["total_days"],
+        total_revenue=summary["total_revenue"],
+        total_cost=summary["total_cost"],
+        avg_fill_rate=summary["avg_fill_rate"],
+        total_disruptions=summary["total_disruptions"],
+        total_carbon_kg=summary["total_carbon_kg"],
+        tags=req.tags or [],
+    )
+    db.add(run)
+    db.commit()
+    db.refresh(run)
+    return {"id": run.id, "name": run.name}
+
+
+@app.get("/api/simulation-runs")
+def list_simulation_runs(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """List all simulation runs for the current user (summaries only, no history)."""
+    runs = (
+        db.query(SimulationRun)
+        .filter(SimulationRun.owner_id == current_user.id)
+        .order_by(SimulationRun.created_at.desc())
+        .all()
+    )
+    return [
+        {
+            "id": r.id,
+            "name": r.name,
+            "description": r.description,
+            "total_days": r.total_days,
+            "total_revenue": r.total_revenue,
+            "total_cost": r.total_cost,
+            "avg_fill_rate": r.avg_fill_rate,
+            "total_disruptions": r.total_disruptions,
+            "total_carbon_kg": r.total_carbon_kg,
+            "tags": r.tags or [],
+            "is_shared": r.is_shared,
+            "created_at": r.created_at.isoformat() if r.created_at else None,
+            "node_count": len(r.nodes_snapshot or []),
+            "route_count": len(r.routes_snapshot or []),
+        }
+        for r in runs
+    ]
+
+
+@app.get("/api/simulation-runs/{run_id}")
+def load_simulation_run(
+    run_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Load a full simulation run including decompressed history."""
+    run = db.query(SimulationRun).filter(
+        SimulationRun.id == run_id,
+        SimulationRun.owner_id == current_user.id,
+    ).first()
+    if not run:
+        raise HTTPException(status_code=404, detail="Simulation run not found.")
+
+    history = json.loads(_gzip.decompress(run.history_data).decode("utf-8"))
+    return {
+        "id": run.id,
+        "name": run.name,
+        "description": run.description,
+        "nodes_snapshot": run.nodes_snapshot,
+        "routes_snapshot": run.routes_snapshot,
+        "params_snapshot": run.params_snapshot,
+        "industry_config": run.industry_config,
+        "history": history,
+        "tags": run.tags or [],
+        "is_shared": run.is_shared,
+        "share_token": run.share_token,
+        "created_at": run.created_at.isoformat() if run.created_at else None,
+        "total_days": run.total_days,
+        "total_revenue": run.total_revenue,
+        "total_cost": run.total_cost,
+        "avg_fill_rate": run.avg_fill_rate,
+        "total_disruptions": run.total_disruptions,
+        "total_carbon_kg": run.total_carbon_kg,
+    }
+
+
+@app.patch("/api/simulation-runs/{run_id}")
+def update_simulation_run(
+    run_id: str,
+    req: SimRunUpdateRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Update name, description, or tags of a simulation run."""
+    run = db.query(SimulationRun).filter(
+        SimulationRun.id == run_id,
+        SimulationRun.owner_id == current_user.id,
+    ).first()
+    if not run:
+        raise HTTPException(status_code=404, detail="Simulation run not found.")
+
+    if req.name is not None:
+        run.name = req.name
+    if req.description is not None:
+        run.description = req.description
+    if req.tags is not None:
+        run.tags = req.tags
+    db.commit()
+    return {"id": run.id, "name": run.name}
+
+
+@app.delete("/api/simulation-runs/{run_id}")
+def delete_simulation_run(
+    run_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Delete a simulation run."""
+    run = db.query(SimulationRun).filter(
+        SimulationRun.id == run_id,
+        SimulationRun.owner_id == current_user.id,
+    ).first()
+    if not run:
+        raise HTTPException(status_code=404, detail="Simulation run not found.")
+    db.delete(run)
+    db.commit()
+    return {"status": "deleted"}
+
+
+@app.post("/api/simulation-runs/{run_id}/share")
+def toggle_share_simulation_run(
+    run_id: str,
+    body: Dict[str, Any],
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Enable or disable public sharing for a simulation run."""
+    run = db.query(SimulationRun).filter(
+        SimulationRun.id == run_id,
+        SimulationRun.owner_id == current_user.id,
+    ).first()
+    if not run:
+        raise HTTPException(status_code=404, detail="Simulation run not found.")
+
+    enabled = body.get("enabled", False)
+    if enabled:
+        if not run.share_token:
+            import uuid as _uuid
+            run.share_token = str(_uuid.uuid4())
+        run.is_shared = True
+    else:
+        run.is_shared = False
+        run.share_token = None
+    db.commit()
+    return {
+        "is_shared": run.is_shared,
+        "share_token": run.share_token,
+    }
+
+
+@app.get("/api/shared/runs/{share_token}")
+def load_shared_run(share_token: str, db: Session = Depends(get_db)):
+    """Public endpoint — load a shared simulation run (no auth required)."""
+    run = db.query(SimulationRun).filter(
+        SimulationRun.share_token == share_token,
+        SimulationRun.is_shared == True,
+    ).first()
+    if not run:
+        raise HTTPException(status_code=404, detail="Shared run not found or sharing disabled.")
+
+    history = json.loads(_gzip.decompress(run.history_data).decode("utf-8"))
+    return {
+        "id": run.id,
+        "name": run.name,
+        "description": run.description,
+        "nodes_snapshot": run.nodes_snapshot,
+        "routes_snapshot": run.routes_snapshot,
+        "params_snapshot": run.params_snapshot,
+        "industry_config": run.industry_config,
+        "history": history,
+        "tags": run.tags or [],
+        "created_at": run.created_at.isoformat() if run.created_at else None,
+        "total_days": run.total_days,
+        "total_revenue": run.total_revenue,
+        "total_cost": run.total_cost,
+        "avg_fill_rate": run.avg_fill_rate,
+        "total_disruptions": run.total_disruptions,
+        "total_carbon_kg": run.total_carbon_kg,
+    }
+
+
+@app.post("/api/simulation-runs/compare")
+def compare_simulation_runs(
+    body: Dict[str, Any],
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Compare summaries of up to 5 simulation runs side by side."""
+    run_ids = body.get("run_ids", [])
+    if not run_ids or len(run_ids) > 5:
+        raise HTTPException(status_code=400, detail="Provide 1-5 run IDs.")
+
+    runs = (
+        db.query(SimulationRun)
+        .filter(SimulationRun.id.in_(run_ids), SimulationRun.owner_id == current_user.id)
+        .all()
+    )
+    return [
+        {
+            "id": r.id,
+            "name": r.name,
+            "total_days": r.total_days,
+            "total_revenue": r.total_revenue,
+            "total_cost": r.total_cost,
+            "avg_fill_rate": r.avg_fill_rate,
+            "total_disruptions": r.total_disruptions,
+            "total_carbon_kg": r.total_carbon_kg,
+            "created_at": r.created_at.isoformat() if r.created_at else None,
+        }
+        for r in runs
+    ]
 
 
 if __name__ == "__main__":

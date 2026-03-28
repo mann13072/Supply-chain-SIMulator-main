@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { Play, Pause, RotateCcw, Activity, AlertTriangle, X } from 'lucide-react';
+import { Play, Pause, RotateCcw, Activity, AlertTriangle, X, Save, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { SupplyNode, Route, NodeStatus, NodeType, InTransitShipment, SimulationParams, IndustryConfig } from '../types';
+import { SupplyNode, Route, NodeStatus, NodeType, InTransitShipment, SimulationParams, IndustryConfig, HistorySnapshot } from '../types';
 import SimulationPanel from './SimulationPanel';
 import { formatCurrencyCompact } from '../utils/formatting';
+import { routingService } from '../services/routingService';
 
 interface SimulationEngineProps {
   nodes: SupplyNode[];
@@ -20,13 +21,46 @@ interface SimulationEngineProps {
   params: SimulationParams;
   setParams: (params: SimulationParams) => void;
   industryConfig: IndustryConfig;
+  history: HistorySnapshot[];
 }
 
 const SimulationEngine: React.FC<SimulationEngineProps> = ({
   nodes, routes, day, isPlaying, setIsPlaying, speed, setSpeed, logs, shipments, resetSimulation,
-  params, setParams, industryConfig
+  params, setParams, industryConfig, history
 }) => {
   const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [showSaveModal, setShowSaveModal] = useState(false);
+  const [saveName, setSaveName] = useState('');
+  const [saveDesc, setSaveDesc] = useState('');
+  const [saveTags, setSaveTags] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+
+  const handleSaveRun = async () => {
+    if (!saveName.trim() || history.length === 0) return;
+    setIsSaving(true);
+    const result = await routingService.saveSimulationRun({
+      name: saveName.trim(),
+      description: saveDesc.trim() || undefined,
+      nodes_snapshot: nodes,
+      routes_snapshot: routes,
+      params_snapshot: params,
+      industry_config: industryConfig,
+      history,
+      tags: saveTags ? saveTags.split(',').map(t => t.trim()).filter(Boolean) : undefined,
+    });
+    setIsSaving(false);
+    if (result) {
+      setSaveSuccess(true);
+      setTimeout(() => {
+        setShowSaveModal(false);
+        setSaveName('');
+        setSaveDesc('');
+        setSaveTags('');
+        setSaveSuccess(false);
+      }, 1200);
+    }
+  };
 
   const handleResetClick = () => {
     // If simulation hasn't run yet, just reset silently
@@ -130,6 +164,15 @@ const SimulationEngine: React.FC<SimulationEngineProps> = ({
             <button onClick={handleResetClick} className="p-1.5 text-white/25 hover:text-white hover:bg-white/5 rounded-lg transition-all" title="Reset">
               <RotateCcw className="w-3.5 h-3.5" />
             </button>
+            {day > 0 && !isPlaying && (
+              <button
+                onClick={() => setShowSaveModal(true)}
+                className="p-1.5 text-white/25 hover:text-emerald-400 hover:bg-emerald-500/10 rounded-lg transition-all"
+                title="Save Run"
+              >
+                <Save className="w-3.5 h-3.5" />
+              </button>
+            )}
             <button
               onClick={() => setIsPlaying(!isPlaying)}
               className={`px-3 py-1.5 rounded-lg font-bold text-xs flex items-center gap-1.5 transition-all duration-300 ${
@@ -160,6 +203,15 @@ const SimulationEngine: React.FC<SimulationEngineProps> = ({
           <button onClick={handleResetClick} className="p-1.5 text-white/25 hover:text-white hover:bg-white/5 rounded-lg transition-all" title="Reset">
             <RotateCcw className="w-3.5 h-3.5" />
           </button>
+          {day > 0 && !isPlaying && (
+            <button
+              onClick={() => setShowSaveModal(true)}
+              className="p-1.5 text-white/25 hover:text-emerald-400 hover:bg-emerald-500/10 rounded-lg transition-all"
+              title="Save Run"
+            >
+              <Save className="w-3.5 h-3.5" />
+            </button>
+          )}
           <button
             onClick={() => setIsPlaying(!isPlaying)}
             className={`flex-1 py-1.5 rounded-lg font-bold text-xs flex items-center justify-center gap-1.5 transition-all duration-300 ${
@@ -284,6 +336,92 @@ const SimulationEngine: React.FC<SimulationEngineProps> = ({
 
       {/* ── Simulation Parameters Panel ──────────────────────────────── */}
       <SimulationPanel params={params} setParams={setParams} industryConfig={industryConfig} />
+
+      {/* ── Save Run Modal ──────────────────────────────────────────── */}
+      <AnimatePresence>
+        {showSaveModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+            onClick={() => setShowSaveModal(false)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              transition={{ duration: 0.2, ease: 'easeOut' }}
+              className="bg-[#111] border border-white/10 rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="px-5 pt-5 pb-3">
+                <h3 className="text-white font-semibold text-base flex items-center gap-2">
+                  <Save className="w-4 h-4 text-emerald-400" />
+                  Save Simulation Run
+                </h3>
+                <p className="text-white/35 text-xs mt-1">Day {day} &middot; {history.length} snapshots &middot; {nodes.length} nodes</p>
+              </div>
+
+              <div className="px-5 pb-4 space-y-3">
+                <div>
+                  <label className="text-[9px] text-white/30 uppercase tracking-widest mb-1 block">Name *</label>
+                  <input
+                    type="text"
+                    value={saveName}
+                    onChange={e => setSaveName(e.target.value)}
+                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-white/25 transition-all"
+                    placeholder="e.g. Peak Season Stress Test"
+                    autoFocus
+                  />
+                </div>
+                <div>
+                  <label className="text-[9px] text-white/30 uppercase tracking-widest mb-1 block">Description</label>
+                  <textarea
+                    value={saveDesc}
+                    onChange={e => setSaveDesc(e.target.value)}
+                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-white/25 transition-all h-16 resize-none"
+                    placeholder="Optional notes about this run..."
+                  />
+                </div>
+                <div>
+                  <label className="text-[9px] text-white/30 uppercase tracking-widest mb-1 block">Tags (comma-separated)</label>
+                  <input
+                    type="text"
+                    value={saveTags}
+                    onChange={e => setSaveTags(e.target.value)}
+                    className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-white/25 transition-all"
+                    placeholder="e.g. baseline, q4, stress-test"
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-2 px-5 pb-5">
+                <button
+                  onClick={() => setShowSaveModal(false)}
+                  className="flex-1 py-2.5 rounded-xl text-sm text-white/50 bg-white/5 hover:bg-white/10 border border-white/5 transition-all"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSaveRun}
+                  disabled={!saveName.trim() || isSaving}
+                  className="flex-1 py-2.5 rounded-xl text-sm font-semibold bg-emerald-500 hover:bg-emerald-600 text-white transition-all flex items-center justify-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {isSaving ? (
+                    <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  ) : saveSuccess ? (
+                    <><Check className="w-3.5 h-3.5" /> Saved!</>
+                  ) : (
+                    <><Save className="w-3.5 h-3.5" /> Save Run</>
+                  )}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* ── Reset Confirmation Modal ───────────────────────────────── */}
       <AnimatePresence>

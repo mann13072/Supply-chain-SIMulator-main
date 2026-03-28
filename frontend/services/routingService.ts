@@ -219,4 +219,97 @@ export const routingService = {
       return res.ok;
     } catch { return false; }
   },
+
+  // ── Simulation History ──────────────────────────────────────
+
+  async saveSimulationRun(data: {
+    name: string;
+    description?: string;
+    network_id?: string;
+    nodes_snapshot: any[];
+    routes_snapshot: any[];
+    params_snapshot: any;
+    industry_config?: any;
+    history: any[];
+    tags?: string[];
+  }): Promise<{ id: string; name: string } | null> {
+    try {
+      const res = await fetch(`${API_BASE}/api/simulation-runs`, {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) return null;
+      return await res.json();
+    } catch { return null; }
+  },
+
+  async listSimulationRuns(): Promise<any[]> {
+    try {
+      const res = await fetch(`${API_BASE}/api/simulation-runs`, { headers: authHeaders() });
+      if (!res.ok) return [];
+      return await res.json();
+    } catch { return []; }
+  },
+
+  async loadSimulationRun(runId: string): Promise<any | null> {
+    try {
+      const res = await fetch(`${API_BASE}/api/simulation-runs/${runId}`, { headers: authHeaders() });
+      if (!res.ok) return null;
+      return await res.json();
+    } catch { return null; }
+  },
+
+  async updateSimulationRun(runId: string, data: { name?: string; description?: string; tags?: string[] }): Promise<boolean> {
+    try {
+      const res = await fetch(`${API_BASE}/api/simulation-runs/${runId}`, {
+        method: 'PATCH',
+        headers: authHeaders(),
+        body: JSON.stringify(data),
+      });
+      return res.ok;
+    } catch { return false; }
+  },
+
+  async deleteSimulationRun(runId: string): Promise<boolean> {
+    try {
+      const res = await fetch(`${API_BASE}/api/simulation-runs/${runId}`, {
+        method: 'DELETE',
+        headers: authHeaders(),
+      });
+      return res.ok;
+    } catch { return false; }
+  },
+
+  async shareSimulationRun(runId: string, enabled: boolean): Promise<{ is_shared: boolean; share_token: string | null } | null> {
+    try {
+      const res = await fetch(`${API_BASE}/api/simulation-runs/${runId}/share`, {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({ enabled }),
+      });
+      if (!res.ok) return null;
+      return await res.json();
+    } catch { return null; }
+  },
+
+  async loadSharedRun(shareToken: string): Promise<any | null> {
+    try {
+      const res = await fetch(`${API_BASE}/api/shared/runs/${shareToken}`);
+      if (!res.ok) return null;
+      return await res.json();
+    } catch { return null; }
+  },
+
+  async compareSimulationRuns(runIds: string[]): Promise<any[]> {
+    try {
+      const res = await fetch(`${API_BASE}/api/simulation-runs/compare`, {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({ run_ids: runIds }),
+      });
+      if (!res.ok) return [];
+      return await res.json();
+    } catch { return []; }
+  },
 };

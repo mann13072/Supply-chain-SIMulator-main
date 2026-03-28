@@ -309,6 +309,32 @@ export interface HistorySnapshot {
   expeditingCost?: number;    // extra cost for emergency shipments
 }
 
+export interface SimulationRunSummary {
+  id: string;
+  name: string;
+  description?: string;
+  total_days: number;
+  total_revenue?: number;
+  total_cost?: number;
+  avg_fill_rate?: number;
+  total_disruptions?: number;
+  total_carbon_kg?: number;
+  tags: string[];
+  is_shared: boolean;
+  created_at: string;
+  node_count: number;
+  route_count: number;
+}
+
+export interface SimulationRunDetail extends SimulationRunSummary {
+  nodes_snapshot: SupplyNode[];
+  routes_snapshot: Route[];
+  params_snapshot: SimulationParams;
+  industry_config?: IndustryConfig;
+  history: HistorySnapshot[];
+  share_token?: string;
+}
+
 export interface OptimizationResult {
   suggestedChanges: {
     type: 'NODE' | 'ROUTE' | 'POLICY';

@@ -14,7 +14,8 @@ import { ThemeProvider } from './contexts/ThemeContext';
 import IndustryWizard from './components/IndustryWizard';
 import IndustryView from './components/IndustryView';
 import DeployMenu from './components/DeployMenu';
-import { LayoutDashboard, Network, PlayCircle, BarChart3, Settings, Zap, ShieldAlert, Activity, CheckCircle2, Circle, LogOut, Factory } from 'lucide-react';
+import SimulationHistoryView from './components/SimulationHistoryView';
+import { LayoutDashboard, Network, PlayCircle, BarChart3, Settings, Zap, ShieldAlert, Activity, CheckCircle2, Circle, LogOut, Factory, Clock } from 'lucide-react';
 import { useAuth } from './contexts/AuthContext';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
@@ -628,6 +629,7 @@ function AppContent() {
   const [history, setHistory] = useState<HistorySnapshot[]>([]);
   const [industryConfig, setIndustryConfig] = useState<IndustryConfig>(PRESET_INDUSTRIES[0]);
   const [lowStockThreshold, setLowStockThreshold] = useState(20);
+  const [viewingRun, setViewingRun] = useState<any | null>(null);
   const [showWizard, setShowWizard] = useState(false);
   const globeRef = useRef<HTMLDivElement>(null);
   const [costVarianceThreshold, setCostVarianceThreshold] = useState(15);
@@ -857,6 +859,11 @@ function AppContent() {
     { label: 'Optimize', done: false,                            tab: 'optimization' },
   ];
 
+  const handleLoadRun = (run: any) => {
+    setViewingRun(run);
+    setActiveTab('analytics');
+  };
+
   const renderContent = () => {
     switch (activeTab) {
       case 'dashboard':
@@ -925,10 +932,34 @@ function AppContent() {
             speed={speed} setSpeed={setSpeed} logs={logs}
             shipments={shipments} resetSimulation={resetSimulation}
             params={params} setParams={setParams} industryConfig={industryConfig}
+            history={history}
           />
         );
       case 'analytics':
-        return <AnalyticsView history={history} nodes={nodes} industryConfig={industryConfig} />;
+        return (
+          <div className="space-y-4">
+            {viewingRun && (
+              <div className="flex items-center gap-3 bg-blue-500/10 border border-blue-500/20 rounded-xl px-4 py-3">
+                <Clock className="w-4 h-4 text-blue-400 shrink-0" />
+                <span className="text-sm text-blue-300 flex-1">
+                  Viewing saved run: <span className="font-bold text-white">{viewingRun.name}</span>
+                  <span className="text-blue-400/60 ml-2">&middot; {viewingRun.total_days} days</span>
+                </span>
+                <button
+                  onClick={() => setViewingRun(null)}
+                  className="px-3 py-1 text-xs bg-white/10 hover:bg-white/20 text-white rounded-lg transition-all"
+                >
+                  Return to Live
+                </button>
+              </div>
+            )}
+            <AnalyticsView
+              history={viewingRun ? viewingRun.history : history}
+              nodes={viewingRun ? viewingRun.nodes_snapshot : nodes}
+              industryConfig={industryConfig}
+            />
+          </div>
+        );
       case 'resilience':
         return <ResilienceHub nodes={nodes} routes={routes} params={params} setParams={setParams} setIsPlaying={setIsPlaying} setActiveTab={setActiveTab} resetSimulation={resetSimulation} />;
       case 'optimization':
@@ -940,6 +971,8 @@ function AppContent() {
           resetSimulation={resetSimulation}
           onOpenWizard={() => setShowWizard(true)}
         />;
+      case 'history':
+        return <SimulationHistoryView industryConfig={industryConfig} onLoadRun={handleLoadRun} />;
       case 'settings':
         return <SettingsView
           industryConfig={industryConfig} setIndustryConfig={setIndustryConfig}
@@ -960,6 +993,7 @@ function AppContent() {
     { id: 'simulation', label: 'Simulation', icon: PlayCircle },
     { id: 'resilience', label: 'Resilience', icon: ShieldAlert },
     { id: 'analytics', label: 'Analytics', icon: BarChart3 },
+    { id: 'history', label: 'History', icon: Clock },
     { id: 'optimization', label: 'Optimize', icon: Zap },
     { id: 'settings', label: 'Settings', icon: Settings },
   ];
