@@ -87,7 +87,10 @@ const INITIAL_PARAMS: SimulationParams = {
   weatherEvent: false,
   geopoliticalTension: false,
   freightCostIndex: 100,
-  logisticDisruption: false
+  logisticDisruption: false,
+  seasonalityPattern: 'none',
+  seasonalityAmplitude: 0,
+  tariffRate: 10,
 };
 
 // Pure function: computes next simulation state from current state.
@@ -127,6 +130,13 @@ function computeNextSimulationState(
   };
   const factoryUtilization: { id: string; name: string; util: number }[] = [];
   const strikeNodes = new Set<string>();
+  let expiredUnits = 0;   // F8: shelf-life expiry tracking
+  let defectUnits = 0;    // F8: factory defect tracking
+  let tariffCostTotal = 0; // F10: tariff cost tracking
+  let carbonTotal = 0;    // F9: carbon emissions tracking
+
+  // F9: CO2 emission factors (g CO2 per ton-km)
+  const CARBON_FACTORS: Record<string, number> = { Sea: 15, Road: 62, Rail: 22, Air: 500 };
 
   // ── Step 0: Tick OFFLINE recovery timers ──────────────────────────────────
   nextNodes.forEach(node => {
@@ -215,7 +225,25 @@ function computeNextSimulationState(
       const surgeFactor = 1 + (params.demandSurge / 100);
       // Pandemic increases demand (panic buying) proportional to pandemicFactor
       const pandemicDemandBoost = params.pandemicFactor > 0 ? 1 + params.pandemicFactor * 0.5 : 1;
-      const baseDemand = (node.demandVolume || 20) * surgeFactor * pandemicDemandBoost;
+
+      // F4: Demand seasonality — cyclical demand multiplier
+      let seasonalFactor = 1.0;
+      const amp = (node.demandSeasonality || params.seasonalityAmplitude || 0) / 100;
+      if (amp > 0) {
+        const pattern = params.seasonalityPattern || 'none';
+        if (pattern === 'weekly') {
+          seasonalFactor = 1 + amp * Math.sin(2 * Math.PI * (nextDay % 7) / 7);
+        } else if (pattern === 'monthly') {
+          seasonalFactor = 1 + amp * Math.sin(2 * Math.PI * (nextDay % 30) / 30);
+        } else if (pattern === 'holiday') {
+          const dayOfYear = nextDay % 365;
+          seasonalFactor = (dayOfYear > 340 || dayOfYear < 10) ? 1 + amp * 2
+            : (dayOfYear > 148 && dayOfYear < 162) ? 1 + amp
+            : 1.0;
+        }
+      }
+
+      const baseDemand = (node.demandVolume || 20) * surgeFactor * pandemicDemandBoost * seasonalFactor;
 
       // Dynamic pricing: high inventory → price down → demand up; low → price up → demand down
       let pricingFactor = 1.0;
@@ -254,17 +282,39 @@ function computeNextSimulationState(
       const yieldRate = Math.max(0, ((node.yieldRate || 100) - degradation)) / 100;
       // Both commodity cost and energy cost reduce output; neither can boost above rated capacity
       const effectiveSqueeze = costSqueeze * energyFactor;
-      const netProduction = Math.floor((node.productionCapacity || 100) * yieldRate * effectiveSqueeze);
+      const grossProduction = Math.floor((node.productionCapacity || 100) * yieldRate * effectiveSqueeze);
+
+      // F8b: Defect rate — lose units to quality defects
+      const defectRate = (node.defectRate || 0) / 100;
+      const defectsThisTick = defectRate > 0 ? Math.floor(grossProduction * defectRate) : 0;
+      const netProduction = grossProduction - defectsThisTick;
+      defectUnits += defectsThisTick;
+
       node.inventoryLevel = Math.min(node.maxCapacity, node.inventoryLevel + netProduction);
       factoryUtilization.push({
         id: node.id, name: node.name,
-        util: Math.round(netProduction / (node.productionCapacity || 100) * 100),
+        util: Math.round(grossProduction / (node.productionCapacity || 100) * 100),
       });
     }
   });
 
   // ── Step 3: Holding cost ───────────────────────────────────────────────────
   const holdingCost = nextNodes.reduce((sum, n) => sum + n.inventoryLevel * (n.holdingCost || 1), 0);
+
+  // ── Step 3b: Shelf-life expiry (F8) ─────────────────────────────────────
+  nextNodes.forEach(node => {
+    if (node.shelfLife && node.shelfLife > 0 && node.inventoryLevel > 0) {
+      // Approximate: each day, 1/shelfLife fraction of inventory expires
+      const expired = Math.floor(node.inventoryLevel * (1 / node.shelfLife));
+      if (expired > 0) {
+        node.inventoryLevel = Math.max(0, node.inventoryLevel - expired);
+        expiredUnits += expired;
+        if (expired > 50) {
+          newLogs.push(`Day ${nextDay}: ${expired} units EXPIRED at ${node.name} (shelf life: ${node.shelfLife}d)`);
+        }
+      }
+    }
+  });
 
   // ── Step 4: Inventory pooling — redistribute surplus to deficit sibling nodes
   if (params.inventoryPooling) {
@@ -380,11 +430,26 @@ function computeNextSimulationState(
 
     source.inventoryLevel -= actualQty;
     const totalLeadTime = Math.max(1, selectedRoute.baseLeadTime + delayDays);
+    // F10: Tariff cost — percentage of procurement cost per unit
+    let shipmentTariffCost = 0;
+    if (params.tariffImposition && params.tariffRate > 0) {
+      const unitCost = params.procurementCost || 10;
+      shipmentTariffCost = actualQty * unitCost * (params.tariffRate / 100);
+      tariffCostTotal += shipmentTariffCost;
+    }
+
+    // F9: Carbon emissions — based on distance, quantity, and transport mode
+    const modeFactor = CARBON_FACTORS[selectedRoute.mode] || 62;
+    const shipmentCarbonKg = (actualQty * 0.01) * selectedRoute.distance * modeFactor / 1000;
+    carbonTotal += shipmentCarbonKg;
+
     nextShipments.push({
       id: Math.random().toString(36).substr(2, 9),
       toId: node.id,
       quantity: actualQty,
       remainingDays: totalLeadTime,
+      carbonKg: Math.round(shipmentCarbonKg * 100) / 100,
+      tariffCost: Math.round(shipmentTariffCost * 100) / 100,
     });
     newShipmentsTotal++;
     if (delayDays > 0) newShipmentsDelayed++;
@@ -404,6 +469,10 @@ function computeNextSimulationState(
     stockoutCost,
     disruptionCounts,
     factoryUtilization,
+    expiredUnits,
+    defectUnits,
+    tariffCost: Math.round(tariffCostTotal * 100) / 100,
+    carbonEmissions: Math.round(carbonTotal * 100) / 100,
   };
 
   return { nextNodes, nextShipments, newLogs, snapshot };

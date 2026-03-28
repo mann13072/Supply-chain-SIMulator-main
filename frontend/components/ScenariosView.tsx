@@ -52,7 +52,10 @@ const DEFAULT_PARAMS: SimulationParams = {
   weatherEvent: false,
   geopoliticalTension: false,
   freightCostIndex: 100,
-  logisticDisruption: false
+  logisticDisruption: false,
+  seasonalityPattern: 'none',
+  seasonalityAmplitude: 0,
+  tariffRate: 10,
 };
 
 const ScenariosView: React.FC<ScenariosViewProps> = ({ nodes, routes, setNodes, setRoutes }) => {

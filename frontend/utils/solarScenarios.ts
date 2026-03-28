@@ -536,6 +536,9 @@ const BASE_PARAMS: SimulationParams = {
   geopoliticalTension: false,
   freightCostIndex: 100,
   logisticDisruption: false,
+  seasonalityPattern: 'none',
+  seasonalityAmplitude: 0,
+  tariffRate: 10,
 };
 
 export const SOLAR_SCENARIO_PARAMS: Record<string, SimulationParams> = {

@@ -99,8 +99,14 @@ const AnalyticsView: React.FC<AnalyticsViewProps> = ({ history, nodes, industryC
   // Cost
   const totalHoldingCost  = history.reduce((s, h) => s + h.holdingCost, 0);
   const totalStockoutCost = history.reduce((s, h) => s + h.stockoutCost, 0);
-  const totalCost         = totalHoldingCost + totalStockoutCost;
+  const totalTariffCost   = history.reduce((s, h) => s + (h.tariffCost || 0), 0);
+  const totalCost         = totalHoldingCost + totalStockoutCost + totalTariffCost;
   const avgDailyCost      = history.length > 0 ? totalCost / history.length : 0;
+
+  // Phase 1 metrics: carbon, defects, expired, tariff
+  const totalCarbonKg     = history.reduce((s, h) => s + (h.carbonEmissions || 0), 0);
+  const totalExpiredUnits = history.reduce((s, h) => s + (h.expiredUnits || 0), 0);
+  const totalDefectUnits  = history.reduce((s, h) => s + (h.defectUnits || 0), 0);
 
   // Risk & Resilience
   const allDisruptions = history.reduce(
@@ -216,8 +222,14 @@ const AnalyticsView: React.FC<AnalyticsViewProps> = ({ history, nodes, industryC
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <KPICard label="Total Holding Cost" value={formatCurrencyCompact(totalHoldingCost, industryConfig)} sub="Σ inventory × holding rate" accent="#3b82f6" />
               <KPICard label="Total Stockout Penalty" value={formatCurrencyCompact(totalStockoutCost, industryConfig)} sub="Σ stockout events × penalty" accent="#ef4444" />
-              <KPICard label="Total Cost" value={formatCurrencyCompact(totalCost, industryConfig)} sub="Holding + stockout penalties" accent="#f59e0b" />
+              <KPICard label="Total Tariff Cost" value={formatCurrencyCompact(totalTariffCost, industryConfig)} sub="Import tariff on shipments" accent="#f97316" />
+              <KPICard label="Total Cost" value={formatCurrencyCompact(totalCost, industryConfig)} sub="Holding + stockout + tariff" accent="#f59e0b" />
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <KPICard label="Avg Daily Cost" value={formatCurrencyCompact(avgDailyCost, industryConfig)} sub="Per simulation day" accent="#10b981" />
+              <KPICard label="CO₂ Emissions" value={totalCarbonKg >= 1000 ? `${(totalCarbonKg / 1000).toFixed(1)}t` : `${Math.round(totalCarbonKg)}kg`} sub="Total transport carbon footprint" accent="#06b6d4" />
+              <KPICard label="Expired Units" value={totalExpiredUnits.toLocaleString()} sub="Lost to shelf-life expiry" accent={totalExpiredUnits > 0 ? '#f59e0b' : '#10b981'} />
+              <KPICard label="Defect Units" value={totalDefectUnits.toLocaleString()} sub="Lost to factory quality defects" accent={totalDefectUnits > 0 ? '#f97316' : '#10b981'} />
             </div>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <ChartCard title="Daily Cost Breakdown" sub="Holding vs stockout penalty per day">

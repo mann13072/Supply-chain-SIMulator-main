@@ -277,6 +277,51 @@ const SimulationPanel: React.FC<SimulationPanelProps> = ({ params, setParams, in
               color="#34d399"
               accent={params.demandSurge > 0 ? 'text-emerald-400' : 'text-white/50'}
             />
+
+            {/* F4: Demand Seasonality */}
+            <div className="bg-white/[0.03] rounded-xl border border-white/[0.06] p-3.5 hover:border-white/10 transition-colors">
+              <p className="text-xs font-semibold text-white/80 mb-1">Demand Seasonality</p>
+              <p className="text-[10px] text-white/25 mb-2.5">Cyclical demand pattern at retail nodes</p>
+              <div className="flex gap-1.5 mb-2">
+                {(['none', 'weekly', 'monthly', 'holiday'] as const).map(pattern => (
+                  <button
+                    key={pattern}
+                    onClick={() => handleChange('seasonalityPattern', pattern)}
+                    className={`flex-1 px-2 py-1.5 rounded-lg text-[10px] font-semibold transition-all ${
+                      (params.seasonalityPattern || 'none') === pattern
+                        ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
+                        : 'bg-white/[0.04] text-white/30 border border-white/[0.06] hover:text-white/50'
+                    }`}
+                  >
+                    {pattern.charAt(0).toUpperCase() + pattern.slice(1)}
+                  </button>
+                ))}
+              </div>
+              {(params.seasonalityPattern || 'none') !== 'none' && (
+                <SliderCard
+                  label="Amplitude"
+                  sublabel="% swing from baseline demand"
+                  value={params.seasonalityAmplitude ?? 0}
+                  min={0} max={100} step={5}
+                  onChange={(v) => handleChange('seasonalityAmplitude', v)}
+                  displayValue={`±${params.seasonalityAmplitude ?? 0}%`}
+                  color="#22d3ee"
+                  accent={params.seasonalityAmplitude > 0 ? 'text-cyan-400' : 'text-white/50'}
+                />
+              )}
+            </div>
+
+            {/* F10: Tariff Rate */}
+            <SliderCard
+              label="Tariff Rate"
+              sublabel="% surcharge on procurement cost per shipment"
+              value={params.tariffRate ?? 10}
+              min={0} max={100} step={1}
+              onChange={(v) => handleChange('tariffRate', v)}
+              displayValue={`${params.tariffRate ?? 10}%`}
+              color="#f87171"
+              accent={params.tariffRate > 0 ? 'text-red-400' : 'text-white/50'}
+            />
             <div className="grid grid-cols-1 gap-2">
               {[
                 { key: 'tariffImposition',    label: 'Tariff Imposition',     desc: 'Per-route customs delay + cost uplift', red: true },
@@ -343,6 +388,9 @@ const SimulationPanel: React.FC<SimulationPanelProps> = ({ params, setParams, in
             multiSourcing: true,
             inventoryPooling: false,
             dynamicPricing: false,
+            seasonalityPattern: 'none',
+            seasonalityAmplitude: 0,
+            tariffRate: 10,
           })}
           className="text-xs font-semibold text-white/30 hover:text-white px-3 py-1.5 rounded-lg hover:bg-white/5 transition-all"
         >

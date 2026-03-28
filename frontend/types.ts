@@ -193,6 +193,13 @@ export interface SimulationParams {
   geopoliticalTension: boolean;
   freightCostIndex: number;
   logisticDisruption: boolean;
+
+  // Demand Seasonality (F4)
+  seasonalityPattern: 'none' | 'weekly' | 'monthly' | 'holiday';
+  seasonalityAmplitude: number; // 0-100, % swing from baseline
+
+  // Tariff cost (F10)
+  tariffRate: number; // percentage, e.g. 25 = 25% tariff on procurement cost
 }
 
 export interface SimulationResult {
@@ -241,6 +248,8 @@ export interface InTransitShipment {
   toId: string;
   quantity: number;
   remainingDays: number;
+  carbonKg?: number;    // F9: CO2 emissions for this shipment
+  tariffCost?: number;  // F10: tariff cost for this shipment
 }
 
 export interface HistorySnapshot {
@@ -264,6 +273,12 @@ export interface HistorySnapshot {
     pandemicEffect: number;
   };
   factoryUtilization: { id: string; name: string; util: number }[];
+
+  // Phase 1 enrichments
+  expiredUnits: number;       // F8: units lost to shelf-life expiry
+  defectUnits: number;        // F8: units lost to factory defects
+  tariffCost: number;         // F10: total tariff cost this day
+  carbonEmissions: number;    // F9: kg CO2 emitted by shipments created this day
 }
 
 export interface OptimizationResult {
