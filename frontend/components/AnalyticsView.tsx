@@ -138,12 +138,14 @@ const AnalyticsView: React.FC<AnalyticsViewProps> = ({ history, nodes, industryC
       ? Math.round(nodeHistory.reduce((s, n) => s + n.inv, 0) / nodeHistory.length)
       : node.inventoryLevel;
     // Bug 4 fix: label as service level (% of days with stock), not fill rate (units)
-    const serviceLevelForNode = node.type === NodeType.RETAIL
-      ? Math.max(0, 100 - Math.round(criticalDaysForNode / Math.max(1, nodeHistory.length) * 100))
+    // Only show when simulation has actually run (nodeHistory has data)
+    const serviceLevelForNode = node.type === NodeType.RETAIL && nodeHistory.length > 0
+      ? Math.max(0, 100 - Math.round(criticalDaysForNode / nodeHistory.length * 100))
       : null;
     // Bug 5 fix: use avgInv as fallback so DoS isn't 0 just because simulation stopped at a stockout
+    // Only show when simulation has actually run
     const dosInv = nodeHistory.length > 0 ? avgInv : node.inventoryLevel;
-    const dos = node.type === NodeType.RETAIL && (node.demandVolume || 0) > 0
+    const dos = node.type === NodeType.RETAIL && (node.demandVolume || 0) > 0 && nodeHistory.length > 0
       ? Math.round(dosInv / (node.demandVolume || 20))
       : null;
     return { node, criticalDaysForNode, stockoutDaysForNode, avgInv, serviceLevelForNode, dos };
