@@ -13,6 +13,7 @@ import { getStarterNetwork } from './utils/starterNetworks';
 import { ThemeProvider } from './contexts/ThemeContext';
 import IndustryWizard from './components/IndustryWizard';
 import IndustryView from './components/IndustryView';
+import DeployMenu from './components/DeployMenu';
 import { LayoutDashboard, Network, PlayCircle, BarChart3, Settings, Zap, ShieldAlert, Activity, CheckCircle2, Circle, LogOut, Factory } from 'lucide-react';
 import { useAuth } from './contexts/AuthContext';
 import LoginPage from './pages/LoginPage';
@@ -789,7 +790,14 @@ function AppContent() {
               {user?.name || user?.email} • <span style={{ color: currentTheme.accent }}>{industryConfig.name}</span>
             </p>
             <div className="flex items-center gap-2">
-              <button className="px-4 md:px-6 py-2 text-xs font-bold rounded-full min-h-[36px] text-black" style={{ backgroundColor: currentTheme.accent }}>DEPLOY</button>
+              <DeployMenu
+                nodes={nodes}
+                routes={routes}
+                industryConfig={industryConfig}
+                params={params}
+                history={history}
+                day={day}
+              />
               <button
                 onClick={logout}
                 title="Sign out"
