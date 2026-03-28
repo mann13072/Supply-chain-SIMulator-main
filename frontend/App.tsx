@@ -508,6 +508,7 @@ function AppContent() {
           history: historyRef.current,
           logs: logsRef.current.slice(0, 200),
           shipments: shipmentsRef2.current,
+          preSimNodes: preSimNodesRef.current,
         },
       };
       if (networkIdRef.current) {
@@ -618,6 +619,10 @@ function AppContent() {
               if (sim.history?.length > 0) setHistory(sim.history);
               if (sim.logs?.length > 0) setLogs(sim.logs);
               if (sim.shipments?.length > 0) setShipments(sim.shipments);
+              // Restore pre-simulation snapshot so reset works across sessions
+              if (sim.preSimNodes?.length > 0) {
+                preSimNodesRef.current = sim.preSimNodes;
+              }
             }
 
             networkIdRef.current = latest.id;
