@@ -8,7 +8,7 @@ import { Play, Pause, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
 interface GlobeProps {
   nodes: SupplyNode[];
   routes: Route[];
-  onNodeSelect: (node: SupplyNode) => void;
+  onNodeSelect: (node: SupplyNode | null) => void;
   selectedNodeId: string | null;
   onNodeDrop?: (nodeId: string, lat: number, lng: number, locationName: string) => void;
 }
@@ -23,20 +23,31 @@ const Globe: React.FC<GlobeProps> = ({ nodes, routes, onNodeSelect, selectedNode
   const targetZoom = useRef(1);
   const lastMousePos = useRef({ x: 0, y: 0 });
   const projectionRef = useRef<d3.GeoProjection | null>(null);
+  const autoResumeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const selectedNodeIdRef = useRef(selectedNodeId);
+  const onNodeSelectRef = useRef(onNodeSelect);
+  selectedNodeIdRef.current = selectedNodeId;
+  onNodeSelectRef.current = onNodeSelect;
 
   // Handle zooming to selected node
   useEffect(() => {
+    // Clear any pending auto-resume timer
+    if (autoResumeTimer.current) {
+      clearTimeout(autoResumeTimer.current);
+      autoResumeTimer.current = null;
+    }
+
     if (selectedNodeId) {
       const node = nodes.find(n => n.id === selectedNodeId);
       if (node && node.coordinates.lat && node.coordinates.lng) {
         isAutoPaused.current = true;
         const targetRotation = [-node.coordinates.lng, -node.coordinates.lat];
-        
+
         let frameId: number;
         const animate = () => {
           const dx = targetRotation[0] - rotationRef.current[0];
           const dy = targetRotation[1] - rotationRef.current[1];
-          
+
           rotationRef.current[0] += dx * 0.05;
           rotationRef.current[1] += dy * 0.05;
           targetZoom.current = 2.5;
@@ -46,13 +57,25 @@ const Globe: React.FC<GlobeProps> = ({ nodes, routes, onNodeSelect, selectedNode
           }
         };
         animate();
-        return () => cancelAnimationFrame(frameId);
+
+        // Auto-deselect after 10 seconds and resume globe rotation
+        autoResumeTimer.current = setTimeout(() => {
+          onNodeSelect(null);
+        }, 10000);
+
+        return () => {
+          cancelAnimationFrame(frameId);
+          if (autoResumeTimer.current) {
+            clearTimeout(autoResumeTimer.current);
+            autoResumeTimer.current = null;
+          }
+        };
       }
     } else {
       isAutoPaused.current = false;
       targetZoom.current = 1;
     }
-  }, [selectedNodeId, nodes]);
+  }, [selectedNodeId, nodes, onNodeSelect]);
 
   useEffect(() => {
     fetch('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json')
@@ -75,11 +98,16 @@ const Globe: React.FC<GlobeProps> = ({ nodes, routes, onNodeSelect, selectedNode
       if (!isDragging.current) return;
       const dx = e.clientX - lastMousePos.current.x;
       const dy = e.clientY - lastMousePos.current.y;
-      
+
+      // If user drags while focused on a node, deselect to resume globe
+      if (selectedNodeIdRef.current && (Math.abs(dx) > 3 || Math.abs(dy) > 3)) {
+        onNodeSelectRef.current(null);
+      }
+
       rotationRef.current[0] += dx * 0.5;
       rotationRef.current[1] -= dy * 0.5;
       rotationRef.current[1] = Math.max(-90, Math.min(90, rotationRef.current[1]));
-      
+
       lastMousePos.current = { x: e.clientX, y: e.clientY };
     };
 
@@ -195,7 +223,7 @@ const Globe: React.FC<GlobeProps> = ({ nodes, routes, onNodeSelect, selectedNode
         const isVisible = d3.geoDistance([node.coordinates.lng, node.coordinates.lat], [-rotationRef.current[0], -rotationRef.current[1]]) < Math.PI / 2;
         
         if (isVisible) {
-          const isSelected = selectedNodeId === node.id;
+          const isSelected = selectedNodeIdRef.current === node.id;
           const color = getNodeColor(node.status);
 
           if (isSelected || node.status === NodeStatus.CRITICAL) {
@@ -230,7 +258,7 @@ const Globe: React.FC<GlobeProps> = ({ nodes, routes, onNodeSelect, selectedNode
     render();
 
     return () => cancelAnimationFrame(animationFrameId);
-  }, [worldData, nodes, routes, selectedNodeId, manualPaused]);
+  }, [worldData, nodes, routes, manualPaused]);
 
   const getNodeColor = (status: NodeStatus) => {
     switch (status) {

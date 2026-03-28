@@ -436,6 +436,7 @@ function AppContent() {
   const [history, setHistory] = useState<HistorySnapshot[]>([]);
   const [industryConfig, setIndustryConfig] = useState<IndustryConfig>(PRESET_INDUSTRIES[0]);
   const [lowStockThreshold, setLowStockThreshold] = useState(20);
+  const globeRef = useRef<HTMLDivElement>(null);
   const [costVarianceThreshold, setCostVarianceThreshold] = useState(15);
 
   // --- SESSION-LIVE SIMULATION ENGINE ---
@@ -669,7 +670,7 @@ function AppContent() {
                     <h3 className={`text-2xl md:text-4xl font-bold tracking-tighter ${riskLevel === 'HIGH' ? 'text-red-500' : 'text-white'}`}>{riskLevel}</h3>
                   </div>
                 </div>
-                <div className="min-h-[250px] sm:min-h-[350px] md:min-h-[500px] relative">
+                <div ref={globeRef} className="min-h-[250px] sm:min-h-[350px] md:min-h-[500px] relative">
                   <Globe nodes={nodes} routes={routes} onNodeSelect={setSelectedNode} selectedNodeId={selectedNode?.id || null} />
                 </div>
               </div>
@@ -679,7 +680,7 @@ function AppContent() {
                     <p className="text-[10px] text-white/30 uppercase tracking-widest mb-4">{industryConfig.name}</p>
                     <div className="flex-1 overflow-y-auto space-y-3 custom-scrollbar">
                       {nodes.map(node => (
-                        <div key={node.id} onClick={() => setSelectedNode(node)} className="bg-white/5 border border-white/10 rounded-2xl p-4 cursor-pointer">
+                        <div key={node.id} onClick={() => { setSelectedNode(node); if (window.innerWidth < 1024 && globeRef.current) { globeRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' }); } }} className="bg-white/5 border border-white/10 rounded-2xl p-4 cursor-pointer">
                           <div className="flex justify-between items-center"><span className="text-sm font-bold text-white">{node.name}</span><div className={`w-2 h-2 rounded-full ${node.status === NodeStatus.OPTIMAL ? 'bg-emerald-500' : node.status === NodeStatus.OFFLINE ? 'bg-gray-500' : 'bg-red-500'}`} /></div>
                           <p className="text-xs text-white/40">{node.type} • {node.inventoryLevel} units</p>
                         </div>

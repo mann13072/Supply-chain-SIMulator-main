@@ -24,8 +24,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Restore session from localStorage on mount
+  // In dev mode, skip login and use a local dev user automatically
+  // In production, restore session from localStorage
   useEffect(() => {
+    if (import.meta.env.DEV) {
+      setUser({ id: 'dev', email: 'dev@localhost', name: 'Dev User' });
+      setToken('dev-mode');
+      setIsLoading(false);
+      return;
+    }
     const storedToken = localStorage.getItem('sc_token');
     const storedUser = localStorage.getItem('sc_user');
     if (storedToken && storedUser) {
@@ -76,6 +83,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const logout = useCallback(() => {
+    if (import.meta.env.DEV) return; // no-op in dev mode
     localStorage.removeItem('sc_token');
     localStorage.removeItem('sc_user');
     setToken(null);

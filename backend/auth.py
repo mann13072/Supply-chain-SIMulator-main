@@ -14,6 +14,7 @@ from models import User
 SECRET_KEY = os.environ.get("JWT_SECRET", "dev-secret-change-in-production")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_HOURS = 24
+IS_PRODUCTION = os.environ.get("JWT_SECRET") is not None
 
 bearer_scheme = HTTPBearer(auto_error=False)
 
@@ -32,10 +33,30 @@ def create_access_token(user_id: str, email: str) -> str:
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
 
+def _get_or_create_dev_user(db: Session) -> User:
+    """Return a local dev user, creating one if it doesn't exist."""
+    dev_email = "dev@localhost"
+    user = db.query(User).filter(User.email == dev_email).first()
+    if not user:
+        user = User(
+            email=dev_email,
+            hashed_password=hash_password("devdevdev"),
+            name="Dev User",
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+    return user
+
+
 def get_current_user(
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme),
     db: Session = Depends(get_db),
 ) -> User:
+    # In local/dev mode, skip auth and use a dev user automatically
+    if not IS_PRODUCTION and not credentials:
+        return _get_or_create_dev_user(db)
+
     if not credentials:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
