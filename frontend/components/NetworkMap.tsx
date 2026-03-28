@@ -2,6 +2,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import * as d3 from 'd3';
 import * as topojson from 'topojson-client';
 import { SupplyNode, NodeStatus, Route } from '../types';
+import { useTheme } from '../contexts/ThemeContext';
 
 interface NetworkMapProps {
   nodes: SupplyNode[];
@@ -11,6 +12,7 @@ interface NetworkMapProps {
 }
 
 const NetworkMap: React.FC<NetworkMapProps> = ({ nodes, routes, onNodeSelect, selectedNodeId }) => {
+  const theme = useTheme();
   const [worldData, setWorldData] = useState<any>(null);
   const width = 800;
   const height = 400;
@@ -74,7 +76,7 @@ const NetworkMap: React.FC<NetworkMapProps> = ({ nodes, routes, onNodeSelect, se
           key={route.id}
           d={`M ${x1} ${y1} Q ${midX} ${midY} ${x2} ${y2}`}
           fill="none"
-          stroke="#3b82f6"
+          stroke={theme.accent}
           strokeWidth="1.5"
           strokeDasharray="4,4"
           className="opacity-40"

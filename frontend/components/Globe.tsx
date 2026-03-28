@@ -4,6 +4,7 @@ import * as topojson from 'topojson-client';
 import { SupplyNode, NodeStatus, Route } from '../types';
 import { reverseGeocode } from '../utils/geocoding';
 import { Play, Pause, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
+import { useTheme } from '../contexts/ThemeContext';
 
 interface GlobeProps {
   nodes: SupplyNode[];
@@ -14,6 +15,7 @@ interface GlobeProps {
 }
 
 const Globe: React.FC<GlobeProps> = ({ nodes, routes, onNodeSelect, selectedNodeId, onNodeDrop }) => {
+  const theme = useTheme();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [worldData, setWorldData] = useState<any>(null);
   const rotationRef = useRef([0, -30]);
@@ -26,8 +28,10 @@ const Globe: React.FC<GlobeProps> = ({ nodes, routes, onNodeSelect, selectedNode
   const autoResumeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const selectedNodeIdRef = useRef(selectedNodeId);
   const onNodeSelectRef = useRef(onNodeSelect);
+  const themeRef = useRef(theme);
   selectedNodeIdRef.current = selectedNodeId;
   onNodeSelectRef.current = onNodeSelect;
+  themeRef.current = theme;
 
   // Handle zooming to selected node
   useEffect(() => {
@@ -203,7 +207,7 @@ const Globe: React.FC<GlobeProps> = ({ nodes, routes, onNodeSelect, selectedNode
               [toNode.coordinates.lng, toNode.coordinates.lat]
             ]
           });
-          context.strokeStyle = '#3b82f6';
+          context.strokeStyle = themeRef.current.accent;
           context.lineWidth = 1;
           context.setLineDash([5, 5]);
           context.globalAlpha = 0.4;

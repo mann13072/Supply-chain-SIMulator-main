@@ -1,5 +1,23 @@
 import { IndustryConfig } from '../types';
 
+export interface IndustryTheme {
+  accent: string;
+  accentLight: string;
+  accentMuted: string;
+  icon: string;
+  description: string;
+  gradient: string;
+}
+
+export const INDUSTRY_THEMES: Record<string, IndustryTheme> = {
+  solar:      { accent: '#f59e0b', accentLight: '#f59e0b15', accentMuted: '#f59e0b80', icon: 'Sun',          description: 'Polysilicon to panel — global solar manufacturing chain',           gradient: 'from-amber-500/20 to-orange-500/5' },
+  automotive: { accent: '#ef4444', accentLight: '#ef444415', accentMuted: '#ef444480', icon: 'Car',          description: 'Steel, chips & rubber — JIT automotive supply network',             gradient: 'from-red-500/20 to-rose-500/5' },
+  pharma:     { accent: '#10b981', accentLight: '#10b98115', accentMuted: '#10b98180', icon: 'Pill',         description: 'APIs to patients — cold-chain pharmaceutical logistics',             gradient: 'from-emerald-500/20 to-teal-500/5' },
+  fmcg:       { accent: '#f97316', accentLight: '#f9731615', accentMuted: '#f9731680', icon: 'ShoppingCart', description: 'Farm to shelf — fast-moving consumer goods distribution',            gradient: 'from-orange-500/20 to-amber-500/5' },
+  tech:       { accent: '#8b5cf6', accentLight: '#8b5cf615', accentMuted: '#8b5cf680', icon: 'Cpu',          description: 'Wafers to devices — semiconductor & electronics supply chain',      gradient: 'from-violet-500/20 to-purple-500/5' },
+  custom:     { accent: '#6366f1', accentLight: '#6366f115', accentMuted: '#6366f180', icon: 'Wrench',       description: 'Build your own industry from scratch',                               gradient: 'from-indigo-500/20 to-blue-500/5' },
+};
+
 export const CURRENCIES: Record<string, { symbol: string; name: string }> = {
   USD: { symbol: '$',  name: 'US Dollar' },
   EUR: { symbol: '€',  name: 'Euro' },

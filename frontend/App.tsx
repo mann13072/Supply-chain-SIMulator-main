@@ -8,8 +8,12 @@ import ResilienceHub from './components/ResilienceHub';
 import OptimizationView from './components/OptimizationView';
 import { SupplyNode, NodeType, NodeStatus, Route, TransportMode, SimulationParams, InTransitShipment, HistorySnapshot, IndustryConfig, WorkflowState } from './types';
 import { routingService } from './services/routingService';
-import { PRESET_INDUSTRIES } from './utils/industries';
-import { LayoutDashboard, Network, PlayCircle, BarChart3, Settings, Zap, ShieldAlert, Activity, CheckCircle2, Circle, LogOut } from 'lucide-react';
+import { PRESET_INDUSTRIES, INDUSTRY_THEMES } from './utils/industries';
+import { getStarterNetwork } from './utils/starterNetworks';
+import { ThemeProvider } from './contexts/ThemeContext';
+import IndustryWizard from './components/IndustryWizard';
+import IndustryView from './components/IndustryView';
+import { LayoutDashboard, Network, PlayCircle, BarChart3, Settings, Zap, ShieldAlert, Activity, CheckCircle2, Circle, LogOut, Factory } from 'lucide-react';
 import { useAuth } from './contexts/AuthContext';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
@@ -436,6 +440,7 @@ function AppContent() {
   const [history, setHistory] = useState<HistorySnapshot[]>([]);
   const [industryConfig, setIndustryConfig] = useState<IndustryConfig>(PRESET_INDUSTRIES[0]);
   const [lowStockThreshold, setLowStockThreshold] = useState(20);
+  const [showWizard, setShowWizard] = useState(false);
   const globeRef = useRef<HTMLDivElement>(null);
   const [costVarianceThreshold, setCostVarianceThreshold] = useState(15);
 
@@ -555,6 +560,16 @@ function AppContent() {
     setHistory([]);
   };
 
+  const handleWizardComplete = (config: IndustryConfig) => {
+    setIndustryConfig(config);
+    const starter = getStarterNetwork(config.id);
+    setNodes(starter.nodes);
+    setRoutes(starter.routes);
+    resetSimulation();
+    setShowWizard(false);
+    setActiveTab('dashboard');
+  };
+
   useEffect(() => {
     const loadState = async () => {
       // 1. Try user's saved network from the database first
@@ -599,9 +614,8 @@ function AppContent() {
         }
       } catch {}
 
-      // 2. Fall back to built-in solar chain preset for new users
-      setNodes(SOLAR_PRESET_NODES);
-      setRoutes(SOLAR_PRESET_ROUTES);
+      // 2. Show industry wizard for new users
+      setShowWizard(true);
       initialLoadDone.current = true;
     };
     loadState();
@@ -625,7 +639,7 @@ function AppContent() {
                    nodes.some(n => n.status === NodeStatus.WARNING) ? 'MED' : 'LOW';
 
   const workflowSteps = [
-    { label: 'Industry', done: workflowState.industryConfigured, tab: 'settings' },
+    { label: 'Industry', done: workflowState.industryConfigured, tab: 'industry' },
     { label: 'Network',  done: workflowState.networkBuilt,       tab: 'builder' },
     { label: 'Risk',     done: workflowState.riskConfigured,     tab: 'resilience' },
     { label: 'Simulate', done: workflowState.simulationRun,      tab: 'simulation' },
@@ -644,12 +658,12 @@ function AppContent() {
                 <React.Fragment key={step.tab}>
                   <button onClick={() => setActiveTab(step.tab)} className="flex flex-col items-center gap-1 group">
                     {step.done
-                      ? <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+                      ? <CheckCircle2 className="w-5 h-5" style={{ color: currentTheme.accent }} />
                       : <Circle className="w-5 h-5 text-white/20 group-hover:text-white/40 transition-colors" />}
-                    <span className={`text-[9px] uppercase tracking-widest font-bold ${step.done ? 'text-emerald-400' : 'text-white/30'}`}>{step.label}</span>
+                    <span className="text-[9px] uppercase tracking-widest font-bold" style={step.done ? { color: currentTheme.accent } : { color: 'rgba(255,255,255,0.3)' }}>{step.label}</span>
                   </button>
                   {i < workflowSteps.length - 1 && (
-                    <div className={`flex-1 h-px ${step.done ? 'bg-emerald-400/40' : 'bg-white/10'}`} />
+                    <div className="flex-1 h-px" style={{ backgroundColor: step.done ? currentTheme.accentMuted : 'rgba(255,255,255,0.1)' }} />
                   )}
                 </React.Fragment>
               ))}
@@ -709,6 +723,13 @@ function AppContent() {
         return <ResilienceHub nodes={nodes} routes={routes} params={params} setParams={setParams} setIsPlaying={setIsPlaying} setActiveTab={setActiveTab} resetSimulation={resetSimulation} />;
       case 'optimization':
         return <OptimizationView nodes={nodes} routes={routes} history={history} params={params} industryConfig={industryConfig} analysisReady={workflowState.analysisReady} />;
+      case 'industry':
+        return <IndustryView
+          industryConfig={industryConfig} setIndustryConfig={setIndustryConfig}
+          setNodes={setNodes} setRoutes={setRoutes}
+          resetSimulation={resetSimulation}
+          onOpenWizard={() => setShowWizard(true)}
+        />;
       case 'settings':
         return <SettingsView
           industryConfig={industryConfig} setIndustryConfig={setIndustryConfig}
@@ -724,6 +745,7 @@ function AppContent() {
 
   const NAV_ITEMS = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { id: 'industry', label: 'Industry', icon: Factory },
     { id: 'builder', label: 'Builder', icon: Network },
     { id: 'simulation', label: 'Simulation', icon: PlayCircle },
     { id: 'resilience', label: 'Resilience', icon: ShieldAlert },
@@ -732,56 +754,67 @@ function AppContent() {
     { id: 'settings', label: 'Settings', icon: Settings },
   ];
 
+  const currentTheme = INDUSTRY_THEMES[industryConfig.id] || INDUSTRY_THEMES.solar;
+
   return (
-    <div className="flex min-h-screen bg-black">
-      {/* Sidebar — hidden below md (768px), icon-only at md, full at lg */}
-      <nav className="hidden md:flex w-20 lg:w-64 border-r border-white/5 flex-col shrink-0">
-        <div className="p-4 lg:p-8 flex items-center justify-center lg:justify-start"><h1 className="text-white font-black text-2xl tracking-tighter hidden lg:flex items-center gap-2"><Zap className="w-8 h-8 fill-white" />ChainSim</h1><Zap className="lg:hidden w-7 h-7 fill-white" /></div>
-        <div className="flex-1 px-2 lg:px-4 space-y-2">
+    <ThemeProvider industryId={industryConfig.id}>
+      {showWizard && <IndustryWizard onComplete={handleWizardComplete} />}
+      <div className="flex min-h-screen bg-black">
+        {/* Sidebar — hidden below md (768px), icon-only at md, full at lg */}
+        <nav className="hidden md:flex w-20 lg:w-64 border-r border-white/5 flex-col shrink-0">
+          <div className="p-4 lg:p-8 flex items-center justify-center lg:justify-start"><h1 className="text-white font-black text-2xl tracking-tighter hidden lg:flex items-center gap-2"><Zap className="w-8 h-8" style={{ fill: currentTheme.accent, color: currentTheme.accent }} />ChainSim</h1><Zap className="lg:hidden w-7 h-7" style={{ fill: currentTheme.accent, color: currentTheme.accent }} /></div>
+          <div className="flex-1 px-2 lg:px-4 space-y-2">
+            {NAV_ITEMS.map(item => (
+              <button key={item.id} onClick={() => setActiveTab(item.id)}
+                className={`w-full flex items-center justify-center lg:justify-start gap-4 px-2 lg:px-4 py-3 lg:py-4 rounded-2xl transition-all min-h-[44px] ${activeTab === item.id ? 'text-white' : 'text-white/40'}`}
+                style={activeTab === item.id ? { backgroundColor: currentTheme.accentLight, borderLeft: `3px solid ${currentTheme.accent}` } : {}}
+              >
+                <item.icon className="w-5 h-5 shrink-0" /><span className="hidden lg:block text-[10px] font-bold uppercase">{item.label}</span>
+              </button>
+            ))}
+          </div>
+        </nav>
+
+        <main className="flex-1 flex flex-col h-screen overflow-hidden">
+          <header className="h-14 md:h-20 border-b border-white/5 flex items-center justify-between px-4 md:px-12 shrink-0">
+            {/* Logo — visible only on mobile where sidebar is hidden */}
+            <div className="flex items-center gap-2 md:hidden">
+              <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ backgroundColor: currentTheme.accent }}>
+                <Zap className="w-4 h-4 text-black fill-black" />
+              </div>
+              <span className="text-white font-black tracking-tighter text-base">CHAIN<span className="text-white/40 font-light">SIM</span></span>
+            </div>
+            {/* Session info — hidden on mobile to avoid clutter */}
+            <p className="hidden md:block text-[10px] text-white/40 uppercase tracking-[0.3em] font-bold">
+              {user?.name || user?.email} • <span style={{ color: currentTheme.accent }}>{industryConfig.name}</span>
+            </p>
+            <div className="flex items-center gap-2">
+              <button className="px-4 md:px-6 py-2 text-xs font-bold rounded-full min-h-[36px] text-black" style={{ backgroundColor: currentTheme.accent }}>DEPLOY</button>
+              <button
+                onClick={logout}
+                title="Sign out"
+                className="p-2 text-white/40 hover:text-white transition-colors"
+              >
+                <LogOut className="w-4 h-4" />
+              </button>
+            </div>
+          </header>
+          <div className="flex-1 overflow-y-auto p-4 md:p-8 lg:p-12 pb-24 md:pb-8 lg:pb-12 custom-scrollbar">{renderContent()}</div>
+        </main>
+
+        {/* Bottom nav — visible below md (768px): phones + small tablets in portrait */}
+        <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-black border-t border-white/5 flex">
           {NAV_ITEMS.map(item => (
-            <button key={item.id} onClick={() => setActiveTab(item.id)} className={`w-full flex items-center justify-center lg:justify-start gap-4 px-2 lg:px-4 py-3 lg:py-4 rounded-2xl transition-all min-h-[44px] ${activeTab === item.id ? 'bg-white text-black' : 'text-white/40'}`}>
-              <item.icon className="w-5 h-5 shrink-0" /><span className="hidden lg:block text-[10px] font-bold uppercase">{item.label}</span>
+            <button key={item.id} onClick={() => setActiveTab(item.id)}
+              className={`flex-1 flex items-center justify-center min-h-[56px] transition-colors ${activeTab === item.id ? '' : 'text-white/30'}`}
+              style={activeTab === item.id ? { color: currentTheme.accent } : {}}
+            >
+              <item.icon className="w-5 h-5" />
             </button>
           ))}
-        </div>
-      </nav>
-
-      <main className="flex-1 flex flex-col h-screen overflow-hidden">
-        <header className="h-14 md:h-20 border-b border-white/5 flex items-center justify-between px-4 md:px-12 shrink-0">
-          {/* Logo — visible only on mobile where sidebar is hidden */}
-          <div className="flex items-center gap-2 md:hidden">
-            <div className="w-7 h-7 bg-white rounded-lg flex items-center justify-center">
-              <Zap className="w-4 h-4 text-black fill-black" />
-            </div>
-            <span className="text-white font-black tracking-tighter text-base">CHAIN<span className="text-white/40 font-light">SIM</span></span>
-          </div>
-          {/* Session info — hidden on mobile to avoid clutter */}
-          <p className="hidden md:block text-[10px] text-white/40 uppercase tracking-[0.3em] font-bold">
-            {user?.name || user?.email} • v4.2.0
-          </p>
-          <div className="flex items-center gap-2">
-            <button className="px-4 md:px-6 py-2 bg-white text-black text-xs font-bold rounded-full min-h-[36px]">DEPLOY</button>
-            <button
-              onClick={logout}
-              title="Sign out"
-              className="p-2 text-white/40 hover:text-white transition-colors"
-            >
-              <LogOut className="w-4 h-4" />
-            </button>
-          </div>
-        </header>
-        <div className="flex-1 overflow-y-auto p-4 md:p-8 lg:p-12 pb-24 md:pb-8 lg:pb-12 custom-scrollbar">{renderContent()}</div>
-      </main>
-
-      {/* Bottom nav — visible below md (768px): phones + small tablets in portrait */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-black border-t border-white/5 flex">
-        {NAV_ITEMS.map(item => (
-          <button key={item.id} onClick={() => setActiveTab(item.id)} className={`flex-1 flex items-center justify-center min-h-[56px] transition-colors ${activeTab === item.id ? 'text-white' : 'text-white/30'}`}>
-            <item.icon className="w-5 h-5" />
-          </button>
-        ))}
-      </nav>
-    </div>
+        </nav>
+      </div>
+    </ThemeProvider>
   );
 }
 
