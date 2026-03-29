@@ -39,7 +39,7 @@ const SOLAR_PRESET_NODES: SupplyNode[] = [
 ];
 
 const SOLAR_PRESET_ROUTES: Route[] = [
-  { id: 'r_baotou_shanghai',    fromId: 'BAOTOU_SILICON', toId: 'SHANGHAI_CELL',  mode: TransportMode.AIR, distance: 1580,  baseLeadTime: 1,  leadTimeVariability: 0.1, costPerUnitDistance: 0.008, vehicleCapacity: 100,  shipmentFrequency: 1, fuelPrice: 1.5, customsTime: 0, disruptionProb: 0.01 },
+  { id: 'r_baotou_shanghai',    fromId: 'BAOTOU_SILICON', toId: 'SHANGHAI_CELL',  mode: TransportMode.AIR, distance: 1580,  baseLeadTime: 1,  leadTimeVariability: 0.1, costPerUnitDistance: 0.008, vehicleCapacity: 2000, shipmentFrequency: 1, fuelPrice: 1.5, customsTime: 0, disruptionProb: 0.01 },
   { id: 'r_shanghai_haiphong',  fromId: 'SHANGHAI_CELL',  toId: 'HAIPHONG_ASSY',  mode: TransportMode.SEA, distance: 1720,  baseLeadTime: 2,  leadTimeVariability: 0.2, costPerUnitDistance: 0.002, vehicleCapacity: 1000, shipmentFrequency: 1, fuelPrice: 1.5, customsTime: 1, disruptionProb: 0.02 },
   { id: 'r_haiphong_singapore', fromId: 'HAIPHONG_ASSY',  toId: 'SINGAPORE_DC',   mode: TransportMode.SEA, distance: 2160,  baseLeadTime: 3,  leadTimeVariability: 0.2, costPerUnitDistance: 0.002, vehicleCapacity: 1000, shipmentFrequency: 1, fuelPrice: 1.5, customsTime: 1, disruptionProb: 0.02 },
   { id: 'r_singapore_rotterdam',fromId: 'SINGAPORE_DC',   toId: 'ROTTERDAM_WH',   mode: TransportMode.SEA, distance: 10500, baseLeadTime: 11, leadTimeVariability: 0.3, costPerUnitDistance: 0.002, vehicleCapacity: 5000, shipmentFrequency: 1, fuelPrice: 1.5, customsTime: 3, disruptionProb: 0.05 },
@@ -173,6 +173,34 @@ function computeNextSimulationState(
       node.accumulatedUnitCost = baseCost * matMult;
     }
   });
+
+  // ── Step 0b: Bootstrap accumulatedUnitCost for non-supplier nodes (first tick or if missing) ──
+  // Walk the supply chain graph so downstream nodes inherit realistic upstream costs
+  if (nextDay <= 1 || nextNodes.some(n => n.type !== NodeType.SUPPLIER && !n.accumulatedUnitCost)) {
+    // Multiple passes to propagate through multi-tier chains (supplier→factory→DC→warehouse→retail)
+    for (let pass = 0; pass < 5; pass++) {
+      nextNodes.forEach(node => {
+        if (node.type === NodeType.SUPPLIER) return; // already set above
+        if (node.accumulatedUnitCost && node.accumulatedUnitCost > (node.supplierCostPerUnit || 10) && nextDay > 1) return; // already has a real value
+        // Find the best upstream node via inbound routes
+        const inboundRoutes = routes.filter(r => r.toId === node.id);
+        if (inboundRoutes.length === 0) return;
+        const upstreamCosts = inboundRoutes.map(r => {
+          const src = nextNodes.find(n => n.id === r.fromId);
+          if (!src || !src.accumulatedUnitCost) return null;
+          const transportPerUnit = (r.costPerUnitDistance || 0) * r.distance;
+          return src.accumulatedUnitCost + transportPerUnit;
+        }).filter((c): c is number => c !== null);
+        if (upstreamCosts.length === 0) return;
+        const avgUpstreamCost = upstreamCosts.reduce((a, b) => a + b, 0) / upstreamCosts.length;
+        // Factories add production cost on top
+        const prodCostAdder = (node.type === NodeType.FACTORY)
+          ? ((node.unitProductionCost ?? params.unitProductionCost ?? 20) * inflationMult * subsidyMult)
+          : 0;
+        node.accumulatedUnitCost = avgUpstreamCost + prodCostAdder;
+      });
+    }
+  }
 
   // ── Step 1: Process arriving shipments (with COGS accumulation) ─────────
   prevShipments.forEach(s => {
@@ -323,12 +351,24 @@ function computeNextSimulationState(
       const effectiveSqueeze = costSqueeze * energyFactor;
       const grossProduction = Math.floor((node.productionCapacity || 100) * yieldRate * effectiveSqueeze);
 
+      // Demand-driven production: cap output based on downstream pull signals
+      // Sum outbound order quantities (what downstream nodes ask for) + keep a 20% buffer
+      const downstreamDemand = routes.filter(r => r.fromId === node.id).reduce((sum, r) => {
+        const dst = nextNodes.find(n => n.id === r.toId);
+        if (!dst) return sum;
+        // Retail nodes signal their demandVolume; others signal their orderQuantity
+        const signal = dst.type === NodeType.RETAIL ? (dst.demandVolume || 50) : (dst.orderQuantity || 100);
+        return sum + signal;
+      }, 0);
+      const demandCap = downstreamDemand > 0 ? Math.ceil(downstreamDemand * 1.2) : grossProduction;
+      const targetProduction = Math.min(grossProduction, demandCap);
+
       const defectRate = (node.defectRate || 0) / 100;
-      const defectsThisTick = defectRate > 0 ? Math.floor(grossProduction * defectRate) : 0;
-      const netProduction = grossProduction - defectsThisTick;
+      const defectsThisTick = defectRate > 0 ? Math.floor(targetProduction * defectRate) : 0;
+      const netProduction = targetProduction - defectsThisTick;
       defectUnits += defectsThisTick;
 
-      // FIX: Only produce what fits — don't charge for units that overflow capacity
+      // Only produce what fits — don't charge for units that overflow capacity
       const spaceAvailable = node.maxCapacity - node.inventoryLevel;
       const actualProduced = Math.min(netProduction, spaceAvailable);
 
@@ -338,7 +378,7 @@ function computeNextSimulationState(
       if (node.inputMaterialIds && node.inputMaterialIds.length > 0) {
         inputMaterialMult = node.inputMaterialIds.reduce((acc, matId) => acc * (commodityPriceMults[matId] ?? 1), 1);
       }
-      const unitProdCost = (node.unitProductionCost ?? params.unitProductionCost ?? 100) * inflationMult * subsidyMult * inputMaterialMult;
+      const unitProdCost = (node.unitProductionCost ?? params.unitProductionCost ?? 20) * inflationMult * subsidyMult * inputMaterialMult;
       const dailyProdCost = actualProduced * unitProdCost;
       productionCostTotal += dailyProdCost;
 
@@ -353,7 +393,7 @@ function computeNextSimulationState(
         }
       }
 
-      node.inventoryLevel = Math.min(node.maxCapacity, node.inventoryLevel + netProduction);
+      node.inventoryLevel = Math.min(node.maxCapacity, node.inventoryLevel + actualProduced);
       // Utilization reflects actual output vs capacity (capped by space)
       factoryUtilization.push({
         id: node.id, name: node.name,

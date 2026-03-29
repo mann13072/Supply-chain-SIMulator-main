@@ -172,7 +172,12 @@ const SimulationHistoryView: React.FC<SimulationHistoryViewProps> = ({ industryC
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filtered.map(run => {
             const isSelected = selectedIds.has(run.id);
-            const profit = (run.total_revenue || 0) - (run.total_cost || 0);
+            // Same formula as AnalyticsView: Revenue - COGS - operating overhead
+            // For old runs missing COGS data, fall back to Revenue - total_cost
+            const hasCogs = run.total_cogs != null && run.total_cogs > 0;
+            const profit = hasCogs
+              ? (run.total_revenue || 0) - run.total_cogs - (run.total_operating_cost || 0)
+              : (run.total_revenue || 0) - (run.total_cost || 0);
             return (
               <motion.div
                 layout

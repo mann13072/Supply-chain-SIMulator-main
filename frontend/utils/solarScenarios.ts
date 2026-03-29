@@ -596,7 +596,7 @@ export const SOLAR_SCENARIO_PARAMS: Record<string, SimulationParams> = {
     demandSurge: 12,                 // Demand stabilised
     bullwhipFactor: 1.3,             // Reduced by digital twin visibility
     freightCostIndex: 125,           // Partially normalised
-    unitProductionCost: 100,
+    unitProductionCost: 20,
     transportationCost: 22,
     inventoryCarryingCost: 8,
     stockoutPenalty: 400,

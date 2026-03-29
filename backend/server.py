@@ -579,6 +579,17 @@ def _compute_run_summary(history: List[Dict]) -> Dict:
     """Extract denormalized KPI summary from history snapshots."""
     total_days = len(history)
     total_revenue = sum(h.get("revenue", 0) or 0 for h in history)
+    total_cogs = sum(h.get("cogs", 0) or 0 for h in history)
+    # Operating costs (non-COGS overhead — production/transport/tariff are already in COGS via accumulatedUnitCost)
+    total_operating = sum(
+        (h.get("holdingCost", 0) or 0)
+        + (h.get("stockoutCost", 0) or 0)
+        + (h.get("warehousingCost", 0) or 0)
+        + (h.get("workingCapitalCost", 0) or 0)
+        + (h.get("expeditingCost", 0) or 0)
+        for h in history
+    )
+    # Total cost includes all categories (for breakdown display)
     total_cost = sum(
         (h.get("holdingCost", 0) or 0)
         + (h.get("stockoutCost", 0) or 0)
@@ -600,7 +611,9 @@ def _compute_run_summary(history: List[Dict]) -> Dict:
     return {
         "total_days": total_days,
         "total_revenue": round(total_revenue, 2),
+        "total_cogs": round(total_cogs, 2),
         "total_cost": round(total_cost, 2),
+        "total_operating_cost": round(total_operating, 2),
         "avg_fill_rate": round(avg_fill_rate, 2),
         "total_disruptions": total_disruptions,
         "total_carbon_kg": round(total_carbon, 2),
@@ -634,7 +647,9 @@ def save_simulation_run(
         history_data=compressed,
         total_days=summary["total_days"],
         total_revenue=summary["total_revenue"],
+        total_cogs=summary["total_cogs"],
         total_cost=summary["total_cost"],
+        total_operating_cost=summary["total_operating_cost"],
         avg_fill_rate=summary["avg_fill_rate"],
         total_disruptions=summary["total_disruptions"],
         total_carbon_kg=summary["total_carbon_kg"],
@@ -665,7 +680,9 @@ def list_simulation_runs(
             "description": r.description,
             "total_days": r.total_days,
             "total_revenue": r.total_revenue,
+            "total_cogs": r.total_cogs,
             "total_cost": r.total_cost,
+            "total_operating_cost": r.total_operating_cost,
             "avg_fill_rate": r.avg_fill_rate,
             "total_disruptions": r.total_disruptions,
             "total_carbon_kg": r.total_carbon_kg,
@@ -709,7 +726,9 @@ def load_simulation_run(
         "created_at": run.created_at.isoformat() if run.created_at else None,
         "total_days": run.total_days,
         "total_revenue": run.total_revenue,
+        "total_cogs": run.total_cogs,
         "total_cost": run.total_cost,
+        "total_operating_cost": run.total_operating_cost,
         "avg_fill_rate": run.avg_fill_rate,
         "total_disruptions": run.total_disruptions,
         "total_carbon_kg": run.total_carbon_kg,
@@ -814,7 +833,9 @@ def load_shared_run(share_token: str, db: Session = Depends(get_db)):
         "created_at": run.created_at.isoformat() if run.created_at else None,
         "total_days": run.total_days,
         "total_revenue": run.total_revenue,
+        "total_cogs": run.total_cogs,
         "total_cost": run.total_cost,
+        "total_operating_cost": run.total_operating_cost,
         "avg_fill_rate": run.avg_fill_rate,
         "total_disruptions": run.total_disruptions,
         "total_carbon_kg": run.total_carbon_kg,
@@ -843,7 +864,9 @@ def compare_simulation_runs(
             "name": r.name,
             "total_days": r.total_days,
             "total_revenue": r.total_revenue,
+            "total_cogs": r.total_cogs,
             "total_cost": r.total_cost,
+            "total_operating_cost": r.total_operating_cost,
             "avg_fill_rate": r.avg_fill_rate,
             "total_disruptions": r.total_disruptions,
             "total_carbon_kg": r.total_carbon_kg,

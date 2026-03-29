@@ -315,7 +315,9 @@ export interface SimulationRunSummary {
   description?: string;
   total_days: number;
   total_revenue?: number;
+  total_cogs?: number;
   total_cost?: number;
+  total_operating_cost?: number;
   avg_fill_rate?: number;
   total_disruptions?: number;
   total_carbon_kg?: number;

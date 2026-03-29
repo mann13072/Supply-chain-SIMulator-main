@@ -108,9 +108,14 @@ const AnalyticsView: React.FC<AnalyticsViewProps> = ({ history, nodes, industryC
   const totalRevenue      = history.reduce((s, h) => s + (h.revenue || 0), 0);
   const totalCOGS         = history.reduce((s, h) => s + (h.cogs || 0), 0);
   const grossMargin       = totalRevenue > 0 ? ((totalRevenue - totalCOGS) / totalRevenue * 100) : 0;
+  // NOTE: Production cost is already embedded in COGS via accumulatedUnitCost flowing through the chain.
+  // Transport & tariff costs are also embedded in COGS via shipment unitCost accumulation.
+  // The "operating costs" below are the non-COGS overhead costs.
+  const totalOperatingCost = totalHoldingCost + totalStockoutCost + totalWarehousingCost + totalWCCost + totalExpeditingCost;
+  // Total cost for reference (all cost categories, including those in COGS, for breakdown display)
   const totalCost         = totalHoldingCost + totalStockoutCost + totalTariffCost + totalTransportCost + totalProductionCost + totalWarehousingCost + totalWCCost + totalExpeditingCost;
   const avgDailyCost      = history.length > 0 ? totalCost / history.length : 0;
-  const netProfit         = totalRevenue - totalCOGS - totalCost;
+  const netProfit         = totalRevenue - totalCOGS - totalOperatingCost;
 
   // Phase 1 metrics: carbon, defects, expired, tariff
   const totalCarbonKg     = history.reduce((s, h) => s + (h.carbonEmissions || 0), 0);
