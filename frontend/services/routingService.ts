@@ -232,16 +232,38 @@ export const routingService = {
     industry_config?: any;
     history: any[];
     tags?: string[];
-  }): Promise<{ id: string; name: string } | null> {
+  }): Promise<{ id: string; name: string; error?: string } | null> {
     try {
+      // Gzip-compress history on the client to stay under proxy body limits
+      const historyJson = JSON.stringify(data.history);
+      const historyBytes = new TextEncoder().encode(historyJson);
+      const cs = new CompressionStream('gzip');
+      const writer = cs.writable.getWriter();
+      writer.write(historyBytes);
+      writer.close();
+      const compressedBuf = await new Response(cs.readable).arrayBuffer();
+      const compressedB64 = btoa(
+        String.fromCharCode(...new Uint8Array(compressedBuf))
+      );
+
+      const { history: _h, ...rest } = data;
+      const payload = { ...rest, history_gz_b64: compressedB64 };
+
       const res = await fetch(`${API_BASE}/api/simulation-runs`, {
         method: 'POST',
         headers: authHeaders(),
-        body: JSON.stringify(data),
+        body: JSON.stringify(payload),
       });
-      if (!res.ok) return null;
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: res.statusText }));
+        console.error('Save simulation run failed:', res.status, err);
+        return { id: '', name: '', error: err.detail || `Server error ${res.status}` };
+      }
       return await res.json();
-    } catch { return null; }
+    } catch (e) {
+      console.error('Save simulation run error:', e);
+      return { id: '', name: '', error: 'Network error — check your connection.' };
+    }
   },
 
   async listSimulationRuns(): Promise<any[]> {

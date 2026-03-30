@@ -35,10 +35,12 @@ const SimulationEngine: React.FC<SimulationEngineProps> = ({
   const [saveTags, setSaveTags] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [saveError, setSaveError] = useState('');
 
   const handleSaveRun = async () => {
     if (!saveName.trim() || history.length === 0) return;
     setIsSaving(true);
+    setSaveError('');
     const result = await routingService.saveSimulationRun({
       name: saveName.trim(),
       description: saveDesc.trim() || undefined,
@@ -50,7 +52,9 @@ const SimulationEngine: React.FC<SimulationEngineProps> = ({
       tags: saveTags ? saveTags.split(',').map(t => t.trim()).filter(Boolean) : undefined,
     });
     setIsSaving(false);
-    if (result) {
+    if (result && result.error) {
+      setSaveError(result.error);
+    } else if (result && result.id) {
       setSaveSuccess(true);
       setTimeout(() => {
         setShowSaveModal(false);
@@ -59,6 +63,8 @@ const SimulationEngine: React.FC<SimulationEngineProps> = ({
         setSaveTags('');
         setSaveSuccess(false);
       }, 1200);
+    } else {
+      setSaveError('Failed to save — please try again.');
     }
   };
 
@@ -397,9 +403,14 @@ const SimulationEngine: React.FC<SimulationEngineProps> = ({
                 </div>
               </div>
 
+              {saveError && (
+                <div className="mx-5 mb-3 px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-xs">
+                  {saveError}
+                </div>
+              )}
               <div className="flex gap-2 px-5 pb-5">
                 <button
-                  onClick={() => setShowSaveModal(false)}
+                  onClick={() => { setShowSaveModal(false); setSaveError(''); }}
                   className="flex-1 py-2.5 rounded-xl text-sm text-white/50 bg-white/5 hover:bg-white/10 border border-white/5 transition-all"
                 >
                   Cancel

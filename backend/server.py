@@ -565,7 +565,8 @@ class SimRunSaveRequest(BaseModel):
     routes_snapshot: List[Any]
     params_snapshot: Dict[str, Any]
     industry_config: Optional[Dict[str, Any]] = None
-    history: List[Dict[str, Any]]
+    history: Optional[List[Dict[str, Any]]] = None
+    history_gz_b64: Optional[str] = None  # gzip-compressed, base64-encoded history
     tags: Optional[List[str]] = None
 
 
@@ -627,13 +628,28 @@ def save_simulation_run(
     db: Session = Depends(get_db),
 ):
     """Save a completed simulation run with gzip-compressed history."""
-    # Size guard — reject if uncompressed history exceeds 10 MB
-    raw_json = json.dumps(req.history).encode("utf-8")
-    if len(raw_json) > 10 * 1024 * 1024:
-        raise HTTPException(status_code=413, detail="History data too large (>10 MB).")
+    import base64
 
-    compressed = _gzip.compress(raw_json, compresslevel=6)
-    summary = _compute_run_summary(req.history)
+    # Accept either pre-compressed base64 (from production) or raw history (legacy/local)
+    if req.history_gz_b64:
+        try:
+            compressed = base64.b64decode(req.history_gz_b64)
+            raw_json = _gzip.decompress(compressed)
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid compressed history data.")
+        if len(raw_json) > 10 * 1024 * 1024:
+            raise HTTPException(status_code=413, detail="History data too large (>10 MB).")
+        history = json.loads(raw_json.decode("utf-8"))
+    elif req.history:
+        raw_json = json.dumps(req.history).encode("utf-8")
+        if len(raw_json) > 10 * 1024 * 1024:
+            raise HTTPException(status_code=413, detail="History data too large (>10 MB).")
+        compressed = _gzip.compress(raw_json, compresslevel=6)
+        history = req.history
+    else:
+        raise HTTPException(status_code=400, detail="No history data provided.")
+
+    summary = _compute_run_summary(history)
 
     run = SimulationRun(
         owner_id=current_user.id,
