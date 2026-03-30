@@ -32,6 +32,27 @@ app = FastAPI(
 # Create DB tables on startup (safe — never drops existing data)
 Base.metadata.create_all(bind=engine)
 
+# Auto-migrate: add any missing columns to existing tables (safe, idempotent)
+from sqlalchemy import inspect as _sa_inspect, text as _sa_text
+def _auto_migrate():
+    """Add missing columns to existing tables without dropping data."""
+    _insp = _sa_inspect(engine)
+    with engine.begin() as conn:
+        for table in Base.metadata.sorted_tables:
+            if not _insp.has_table(table.name):
+                continue
+            existing = {c["name"] for c in _insp.get_columns(table.name)}
+            for col in table.columns:
+                if col.name not in existing:
+                    col_type = col.type.compile(dialect=engine.dialect)
+                    sql = f'ALTER TABLE {table.name} ADD COLUMN "{col.name}" {col_type}'
+                    print(f"[migrate] {sql}")
+                    conn.execute(_sa_text(sql))
+try:
+    _auto_migrate()
+except Exception as e:
+    print(f"[migrate] warning: {e}")
+
 ALLOWED_ORIGINS = [
     o.strip() for o in
     os.environ.get("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:5173").split(",")
