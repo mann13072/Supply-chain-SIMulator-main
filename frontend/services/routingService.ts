@@ -242,9 +242,12 @@ export const routingService = {
       writer.write(historyBytes);
       writer.close();
       const compressedBuf = await new Response(cs.readable).arrayBuffer();
-      const compressedB64 = btoa(
-        String.fromCharCode(...new Uint8Array(compressedBuf))
-      );
+      const bytes = new Uint8Array(compressedBuf);
+      let binary = '';
+      for (let i = 0; i < bytes.length; i += 8192) {
+        binary += String.fromCharCode(...bytes.subarray(i, i + 8192));
+      }
+      const compressedB64 = btoa(binary);
 
       const { history: _h, ...rest } = data;
       const payload = { ...rest, history_gz_b64: compressedB64 };
