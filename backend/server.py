@@ -2,7 +2,7 @@ import os
 import json
 import uvicorn
 from datetime import datetime
-from fastapi import FastAPI, HTTPException, Query, Depends
+from fastapi import FastAPI, HTTPException, Query, Depends, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
@@ -911,6 +911,251 @@ def compare_simulation_runs(
         }
         for r in runs
     ]
+
+
+# ─────────────────────────────────────────────
+#  FILE IMPORT ENDPOINT (Excel / PDF)
+# ─────────────────────────────────────────────
+
+import tempfile
+from importer.import_supply_chain import import_file as _import_file
+
+
+@app.post("/api/networks/import")
+async def import_network_file(file: UploadFile = File(...)):
+    """
+    Upload an .xlsx or .pdf file and get back parsed nodes, routes, commodities.
+    No auth required — the data is returned to the client which then sets it in state.
+    """
+    allowed_ext = (".xlsx", ".xls", ".pdf")
+    filename = file.filename or ""
+    ext = os.path.splitext(filename)[1].lower()
+    if ext not in allowed_ext:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported file type '{ext}'. Allowed: {', '.join(allowed_ext)}",
+        )
+
+    # Write to temp file
+    suffix = ext
+    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+        contents = await file.read()
+        tmp.write(contents)
+        tmp_path = tmp.name
+
+    try:
+        result = _import_file(tmp_path)
+    finally:
+        os.unlink(tmp_path)
+
+    if result["errors"]:
+        return {
+            "status": "error",
+            "errors": result["errors"],
+            "warnings": result["warnings"],
+            "summary": result["summary"],
+            "nodes": [],
+            "routes": [],
+            "commodities": [],
+        }
+
+    return {
+        "status": "success",
+        "nodes": result["nodes"],
+        "routes": result["routes"],
+        "commodities": result["commodities"],
+        "warnings": result["warnings"],
+        "summary": result["summary"],
+    }
+
+
+from fastapi.responses import StreamingResponse
+import io
+
+
+@app.get("/api/networks/import/template")
+def download_import_template():
+    """
+    Generate a blank Excel template with separate sheets per node type.
+    Each sheet only shows the columns relevant to that type — no chance of
+    filling the wrong fields.
+    """
+    import openpyxl
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    from openpyxl.utils import get_column_letter
+
+    wb = openpyxl.Workbook()
+    hdr_font = Font(bold=True, color="FFFFFF", size=11)
+    min_fill = PatternFill(start_color="D32F2F", end_color="D32F2F", fill_type="solid")
+    opt_fill = PatternFill(start_color="2B579A", end_color="2B579A", fill_type="solid")
+    type_fill = PatternFill(start_color="1B5E20", end_color="1B5E20", fill_type="solid")
+    border = Border(
+        left=Side(style="thin"), right=Side(style="thin"),
+        top=Side(style="thin"), bottom=Side(style="thin"),
+    )
+
+    def _write_headers(ws, headers, minimum_cols, type_specific_start=None):
+        for c, h in enumerate(headers, 1):
+            cell = ws.cell(row=1, column=c, value=h)
+            cell.font = hdr_font
+            cell.border = border
+            cell.alignment = Alignment(horizontal="center", wrap_text=True)
+            if h in minimum_cols:
+                cell.fill = min_fill
+            elif type_specific_start and c >= type_specific_start:
+                cell.fill = type_fill
+            else:
+                cell.fill = opt_fill
+        # Legend row
+        ws.cell(row=2, column=1, value="RED = required").font = Font(italic=True, color="D32F2F", size=9)
+        ws.cell(row=2, column=3, value="BLUE = optional (defaults applied)").font = Font(italic=True, color="2B579A", size=9)
+        if type_specific_start:
+            ws.cell(row=2, column=type_specific_start, value="GREEN = type-specific").font = Font(italic=True, color="1B5E20", size=9)
+        # Auto-width
+        for c in range(1, len(headers) + 1):
+            ws.column_dimensions[get_column_letter(c)].width = max(len(headers[c - 1]) + 4, 14)
+        # Freeze header row
+        ws.freeze_panes = "A3"
+
+    # ── Common columns for all node types ──
+    common_cols = ["name", "location", "lat", "lng",
+                   "inventoryLevel", "maxCapacity", "reorderPoint", "orderQuantity",
+                   "safetyStock", "holdingCost", "shelfLife"]
+    min_cols = {"name"}
+
+    # ── Per-type specific columns ──
+    type_sheets = {
+        "Suppliers": {
+            "tab_color": "E65100",
+            "type_value": "SUPPLIER",
+            "specific": ["supplierLeadTime", "supplierLeadTimeVariability",
+                         "supplierCapacity", "supplierReliability",
+                         "supplierCostPerUnit", "supplierMinOrderQuantity",
+                         "supplierDisruptionProb", "supplierRecoveryTime"],
+        },
+        "Factories": {
+            "tab_color": "1565C0",
+            "type_value": "FACTORY",
+            "specific": ["productionCapacity", "yieldRate", "defectRate",
+                         "batchSize", "setupTime", "setupCost",
+                         "cycleTime", "reworkRate", "schedulingRule",
+                         "overtimeCapacity"],
+        },
+        "Warehouses": {
+            "tab_color": "2E7D32",
+            "type_value": "WAREHOUSE",
+            "specific": ["storageCapacity", "throughputCapacity",
+                         "pickingRate", "packingRate", "handlingCost",
+                         "laborAvailability", "crossDocking",
+                         "processingTime", "automationLevel",
+                         "fulfillmentAccuracy"],
+        },
+        "Distribution Centers": {
+            "tab_color": "6A1B9A",
+            "type_value": "DISTRIBUTION_CENTER",
+            "specific": ["storageCapacity", "throughputCapacity",
+                         "pickingRate", "packingRate", "handlingCost",
+                         "laborAvailability", "crossDocking",
+                         "processingTime", "automationLevel",
+                         "fulfillmentAccuracy"],
+        },
+        "Retail": {
+            "tab_color": "C62828",
+            "type_value": "RETAIL",
+            "specific": ["demandVolume", "demandVariability",
+                         "demandSeasonality", "demandGrowthRate",
+                         "orderFrequency", "leadTimeTolerance",
+                         "backorderRate", "priceElasticity"],
+        },
+    }
+
+    # Create one sheet per node type
+    first = True
+    for sheet_name, cfg in type_sheets.items():
+        if first:
+            ws = wb.active
+            ws.title = sheet_name
+            first = False
+        else:
+            ws = wb.create_sheet(sheet_name)
+        ws.sheet_properties.tabColor = cfg["tab_color"]
+
+        headers = common_cols + cfg["specific"]
+        type_specific_start = len(common_cols) + 1
+        _write_headers(ws, headers, min_cols, type_specific_start)
+
+        # Pre-fill the 'type' as a note so import script knows the type
+        # Actually: we auto-detect type from sheet name in the reader.
+        # But also add a small note in row 3 as a hint.
+        ws.cell(row=3, column=1, value=f"(Add your {cfg['type_value']} nodes below — type is auto-set from sheet name)").font = Font(
+            italic=True, color="888888", size=9
+        )
+
+    # ── Routes sheet ──
+    ws_routes = wb.create_sheet("Routes")
+    ws_routes.sheet_properties.tabColor = "FF8F00"
+    _write_headers(ws_routes, [
+        "from", "to", "mode",
+        "costPerUnitDistance", "baseLeadTime", "leadTimeVariability",
+        "vehicleCapacity", "shipmentFrequency", "fuelPrice",
+        "customsTime", "disruptionProb",
+    ], {"from", "to"})
+
+    # ── Commodities sheet ──
+    ws_comm = wb.create_sheet("Commodities")
+    _write_headers(ws_comm, ["name", "unit", "basePrice", "color"], {"name", "unit", "basePrice"})
+
+    # ── Instructions sheet ──
+    ws_help = wb.create_sheet("Instructions")
+    ws_help.sheet_properties.tabColor = "FF6600"
+    instructions = [
+        ("SUPPLY CHAIN NETWORK IMPORT TEMPLATE", ""),
+        ("", ""),
+        ("HOW TO USE:", ""),
+        ("1.", "Each node type has its own sheet — Suppliers, Factories, Warehouses, Distribution Centers, Retail"),
+        ("2.", "Only fill the sheet(s) for the node types you need"),
+        ("3.", "Each sheet only shows columns relevant to that type — no wrong fields possible"),
+        ("4.", "The node type is auto-detected from the sheet name"),
+        ("5.", "Fill in the Routes sheet to connect your nodes"),
+        ("6.", "Upload this file using the Import File button in Network Builder"),
+        ("", ""),
+        ("MINIMUM INPUT:", ""),
+        ("Per node:", "Just the 'name' column (location & coords auto-resolved from name)"),
+        ("Per route:", "Just 'from' + 'to' columns (mode & distance auto-detected)"),
+        ("", ""),
+        ("COLUMN COLORS:", ""),
+        ("RED", "Required — import fails without these"),
+        ("BLUE", "Optional universal fields — defaults applied if blank"),
+        ("GREEN", "Optional type-specific fields — defaults applied if blank"),
+        ("", ""),
+        ("SMART DEFAULTS:", ""),
+        ("Missing location/coords:", "Geocoded from node name (e.g. 'Shanghai Factory' -> Shanghai)"),
+        ("Missing transport mode:", "Auto-detected from distance & geography"),
+        ("Missing distance:", "Calculated via Haversine from coordinates"),
+        ("Missing fields:", "UI defaults applied (inventory=50, capacity=100, etc.)"),
+        ("", ""),
+        ("ROUTE 'from'/'to':", "Must match a node name from any of the node sheets"),
+        ("Transport modes:", "Sea, Air, Road, Rail (or leave blank for auto-detection)"),
+    ]
+    for r, (a, b) in enumerate(instructions, 1):
+        ca = ws_help.cell(row=r, column=1, value=a)
+        cb = ws_help.cell(row=r, column=2, value=b)
+        if r == 1:
+            ca.font = Font(bold=True, size=14, color="2B579A")
+        elif a.endswith(":"):
+            ca.font = Font(bold=True, size=10)
+    ws_help.column_dimensions["A"].width = 35
+    ws_help.column_dimensions["B"].width = 70
+
+    # Stream the file
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return StreamingResponse(
+        buf,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": "attachment; filename=supply_chain_template.xlsx"},
+    )
 
 
 if __name__ == "__main__":

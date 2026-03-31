@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Plus, Trash2, Link as LinkIcon, MapPin, Factory, Warehouse, Truck, ShoppingCart, Layers, Globe as GlobeIcon, Zap, Loader2 } from 'lucide-react';
+import { Plus, Trash2, Link as LinkIcon, MapPin, Factory, Warehouse, Truck, ShoppingCart, Layers, Globe as GlobeIcon, Zap, Loader2, Upload, FileSpreadsheet, CheckCircle, AlertTriangle, XCircle, X } from 'lucide-react';
 import { SupplyNode, NodeType, NodeStatus, Route, TransportMode, IndustryConfig } from '../types';
 import { motion, AnimatePresence } from 'framer-motion';
 import { geocode } from '../utils/geocoding';
@@ -35,6 +35,61 @@ const NetworkBuilder: React.FC<NetworkBuilderProps> = ({ nodes, routes, setNodes
   const [availableHubs, setAvailableHubs] = useState<{ Air: Hub[], Sea: Hub[] }>({ Air: [], Sea: [] });
   const [isCalculatingRoute, setIsCalculatingRoute] = useState(false);
   const [routingError, setRoutingError] = useState<string | null>(null);
+
+  // File Import State
+  const [isImporting, setIsImporting] = useState(false);
+  const [importResult, setImportResult] = useState<any>(null);
+  const [showImportModal, setShowImportModal] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFileImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsImporting(true);
+    setImportResult(null);
+    setShowImportModal(true);
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      const API_BASE = import.meta.env.VITE_API_URL || '';
+      const res = await fetch(`${API_BASE}/api/networks/import`, {
+        method: 'POST',
+        body: formData,
+      });
+      const data = await res.json();
+      setImportResult(data);
+
+      if (data.status === 'success' && data.nodes?.length > 0) {
+        // Map nodes to proper SupplyNode format with enums
+        const mappedNodes: SupplyNode[] = data.nodes.map((n: any) => ({
+          ...n,
+          type: n.type as NodeType,
+          status: (n.status || 'OPTIMAL') as NodeStatus,
+          coordinates: n.coordinates || { x: 400, y: 200, lat: 0, lng: 0 },
+        }));
+        const mappedRoutes: Route[] = data.routes.map((r: any) => ({
+          ...r,
+          mode: r.mode as TransportMode,
+        }));
+        setNodes(mappedNodes);
+        setRoutes(mappedRoutes);
+      }
+    } catch (err: any) {
+      setImportResult({
+        status: 'error',
+        errors: [err.message || 'Failed to upload file'],
+        warnings: [],
+        summary: { nodes_imported: 0, routes_imported: 0, commodities_imported: 0, auto_corrections: 0 },
+      });
+    } finally {
+      setIsImporting(false);
+      // Reset file input so the same file can be re-uploaded
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
 
   useEffect(() => {
     const fetchHubs = async () => {
@@ -450,6 +505,29 @@ const NetworkBuilder: React.FC<NetworkBuilderProps> = ({ nodes, routes, setNodes
           <p className="text-white/40 text-sm mt-1">Design and configure your supply chain topology</p>
         </div>
         <div className="flex gap-2 md:gap-3 self-start sm:self-auto">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".xlsx,.xls,.pdf"
+            className="hidden"
+            onChange={handleFileImport}
+          />
+          <a
+            href={`${import.meta.env.VITE_API_URL || ''}/api/networks/import/template`}
+            download="supply_chain_template.xlsx"
+            className="flex items-center gap-1.5 px-3 py-1.5 md:px-4 md:py-2 text-xs md:text-sm bg-white/5 hover:bg-white/10 text-white/60 hover:text-white rounded-xl border border-white/10 transition-all"
+          >
+            <FileSpreadsheet className="w-3.5 h-3.5 md:w-4 md:h-4" />
+            <span>Template</span>
+          </a>
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={isImporting}
+            className="flex items-center gap-1.5 px-3 py-1.5 md:px-4 md:py-2 text-xs md:text-sm bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 rounded-xl border border-emerald-500/20 transition-all"
+          >
+            {isImporting ? <Loader2 className="w-3.5 h-3.5 md:w-4 md:h-4 animate-spin" /> : <Upload className="w-3.5 h-3.5 md:w-4 md:h-4" />}
+            <span>{isImporting ? 'Importing...' : 'Import File'}</span>
+          </button>
           <button
             onClick={() => setIsAddingRoute(true)}
             className="flex items-center gap-1.5 px-3 py-1.5 md:px-4 md:py-2 text-xs md:text-sm bg-white/5 hover:bg-white/10 text-white rounded-xl border border-white/10 transition-all"
@@ -1543,6 +1621,109 @@ const NetworkBuilder: React.FC<NetworkBuilderProps> = ({ nodes, routes, setNodes
                 <button onClick={() => setIsAddingRoute(false)} className="flex-1 py-3 bg-white/5 text-white rounded-xl border border-white/10">Cancel</button>
                 <button onClick={handleAddRoute} className="flex-1 py-3 bg-white text-black rounded-xl font-bold">Establish Link</button>
               </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Import Result Modal ── */}
+      <AnimatePresence>
+        {showImportModal && importResult && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-[#0a0a0a] border border-white/10 rounded-2xl p-6 md:p-8 max-w-lg w-full max-h-[80vh] overflow-y-auto"
+            >
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <FileSpreadsheet className="w-6 h-6 text-emerald-400" />
+                  <h3 className="text-xl font-bold text-white">Import Results</h3>
+                </div>
+                <button onClick={() => setShowImportModal(false)} className="text-white/40 hover:text-white">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Status Banner */}
+              <div className={`rounded-xl p-4 mb-4 border ${importResult.status === 'success' ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-red-500/10 border-red-500/20'}`}>
+                <div className="flex items-center gap-2">
+                  {importResult.status === 'success' ? (
+                    <CheckCircle className="w-5 h-5 text-emerald-400" />
+                  ) : (
+                    <XCircle className="w-5 h-5 text-red-400" />
+                  )}
+                  <span className={`font-semibold ${importResult.status === 'success' ? 'text-emerald-400' : 'text-red-400'}`}>
+                    {importResult.status === 'success' ? 'Import Successful' : 'Import Failed'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Summary */}
+              {importResult.summary && (
+                <div className="grid grid-cols-3 gap-3 mb-4">
+                  <div className="bg-white/5 rounded-xl p-3 text-center border border-white/5">
+                    <div className="text-2xl font-bold text-white">{importResult.summary.nodes_imported}</div>
+                    <div className="text-[10px] text-white/40 uppercase tracking-wider">Nodes</div>
+                  </div>
+                  <div className="bg-white/5 rounded-xl p-3 text-center border border-white/5">
+                    <div className="text-2xl font-bold text-white">{importResult.summary.routes_imported}</div>
+                    <div className="text-[10px] text-white/40 uppercase tracking-wider">Routes</div>
+                  </div>
+                  <div className="bg-white/5 rounded-xl p-3 text-center border border-white/5">
+                    <div className="text-2xl font-bold text-white">{importResult.summary.auto_corrections}</div>
+                    <div className="text-[10px] text-white/40 uppercase tracking-wider">Auto-fixes</div>
+                  </div>
+                </div>
+              )}
+
+              {/* Warnings */}
+              {importResult.warnings?.length > 0 && (
+                <div className="mb-4">
+                  <div className="flex items-center gap-1.5 mb-2">
+                    <AlertTriangle className="w-4 h-4 text-amber-400" />
+                    <span className="text-xs font-semibold text-amber-400 uppercase tracking-wider">Auto-corrections ({importResult.warnings.length})</span>
+                  </div>
+                  <div className="space-y-1 max-h-32 overflow-y-auto bg-white/5 rounded-lg p-3 border border-white/5">
+                    {importResult.warnings.map((w: string, i: number) => (
+                      <p key={i} className="text-xs text-amber-300/80 font-mono">{w}</p>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Errors */}
+              {importResult.errors?.length > 0 && (
+                <div className="mb-4">
+                  <div className="flex items-center gap-1.5 mb-2">
+                    <XCircle className="w-4 h-4 text-red-400" />
+                    <span className="text-xs font-semibold text-red-400 uppercase tracking-wider">Errors ({importResult.errors.length})</span>
+                  </div>
+                  <div className="space-y-1 max-h-32 overflow-y-auto bg-red-500/5 rounded-lg p-3 border border-red-500/10">
+                    {importResult.errors.map((e: string, i: number) => (
+                      <p key={i} className="text-xs text-red-300/80 font-mono">{e}</p>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Minimum Input Hint */}
+              <div className="bg-white/5 rounded-xl p-4 border border-white/5 mb-6">
+                <p className="text-xs text-white/60 font-semibold mb-2 uppercase tracking-wider">Minimum Input Required</p>
+                <div className="grid grid-cols-2 gap-2 text-xs text-white/40">
+                  <div><span className="text-emerald-400 font-mono">Nodes sheet:</span> name + type</div>
+                  <div><span className="text-emerald-400 font-mono">Routes sheet:</span> from + to</div>
+                </div>
+                <p className="text-[10px] text-white/30 mt-2">All other fields are auto-filled with smart defaults. Coordinates are geocoded from names.</p>
+              </div>
+
+              <button
+                onClick={() => setShowImportModal(false)}
+                className="w-full py-3 bg-white text-black rounded-xl font-bold hover:bg-white/90 transition-all"
+              >
+                {importResult.status === 'success' ? 'Done' : 'Close'}
+              </button>
             </motion.div>
           </div>
         )}
