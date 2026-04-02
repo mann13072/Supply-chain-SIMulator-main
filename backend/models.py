@@ -35,6 +35,8 @@ class UserNetwork(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+    bom_data = Column(JSON, nullable=True)  # BillOfMaterials dict (BOM tree for the network)
+
     owner = relationship("User", back_populates="networks")
 
 
@@ -53,6 +55,8 @@ class SimulationRun(Base):
     routes_snapshot = Column(JSON, nullable=False)
     params_snapshot = Column(JSON, nullable=False)
     industry_config = Column(JSON, nullable=True)
+
+    bom_snapshot = Column(JSON, nullable=True)  # BOM at time of simulation run
 
     # Gzip-compressed JSON of HistorySnapshot[]
     history_data = Column(LargeBinary, nullable=False)

@@ -6,16 +6,18 @@ import AnalyticsView from './components/AnalyticsView';
 import SettingsView from './components/SettingsView';
 import ResilienceHub from './components/ResilienceHub';
 import OptimizationView from './components/OptimizationView';
-import { SupplyNode, NodeType, NodeStatus, Route, TransportMode, SimulationParams, InTransitShipment, HistorySnapshot, IndustryConfig, WorkflowState } from './types';
+import { SupplyNode, NodeType, NodeStatus, Route, TransportMode, SimulationParams, InTransitShipment, HistorySnapshot, IndustryConfig, WorkflowState, BillOfMaterials } from './types';
 import { routingService } from './services/routingService';
 import { PRESET_INDUSTRIES, INDUSTRY_THEMES } from './utils/industries';
 import { getStarterNetwork } from './utils/starterNetworks';
+import { getIndustryBOM, autoMapNodesToBOM } from './utils/industryBOMs';
 import { ThemeProvider } from './contexts/ThemeContext';
 import IndustryWizard from './components/IndustryWizard';
 import IndustryView from './components/IndustryView';
 import DeployMenu from './components/DeployMenu';
 import SimulationHistoryView from './components/SimulationHistoryView';
-import { LayoutDashboard, Network, PlayCircle, BarChart3, Settings, Zap, ShieldAlert, Activity, CheckCircle2, Circle, LogOut, Factory, Clock } from 'lucide-react';
+import BOMView from './components/BOMView';
+import { LayoutDashboard, Network, PlayCircle, BarChart3, Settings, Zap, ShieldAlert, Activity, CheckCircle2, Circle, LogOut, Factory, Clock, Layers } from 'lucide-react';
 import { useAuth } from './contexts/AuthContext';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
@@ -94,6 +96,95 @@ const INITIAL_PARAMS: SimulationParams = {
   tariffRate: 10,
 };
 
+// ── BOM helper: Demand Explosion (top-down push) ────────────────────────────
+function explodeDemand(
+  retailDemand: Map<string, number>,
+  bom: BillOfMaterials,
+  nodes: SupplyNode[]
+): Map<string, number> {
+  const required = new Map<string, number>();
+  for (const [nodeId, demand] of retailDemand) {
+    const productId = nodes.find(n => n.id === nodeId)?.bomProductId;
+    if (productId) required.set(productId, (required.get(productId) || 0) + demand);
+  }
+  const queue = [...required.keys()];
+  const visited = new Set<string>();
+  while (queue.length > 0) {
+    const parentId = queue.shift()!;
+    if (visited.has(parentId)) continue;
+    visited.add(parentId);
+    const parentQty = required.get(parentId)!;
+    for (const entry of bom.entries.filter(e => e.parentProductId === parentId)) {
+      const childQty = parentQty * entry.quantityPer;
+      required.set(entry.childProductId, (required.get(entry.childProductId) || 0) + childQty);
+      queue.push(entry.childProductId);
+    }
+  }
+  return required;
+}
+
+// ── BOM helper: Risk Propagation (bottom-up pull) ───────────────────────────
+function computeBOMRiskScores(
+  nodes: SupplyNode[],
+  bom: BillOfMaterials,
+  explodedDemand: Map<string, number>
+): { productId: string; riskPct: number }[] {
+  const risk = new Map<string, number>();
+
+  // Score leaf products (tier >= 3)
+  for (const product of bom.products.filter(p => p.tier >= 3)) {
+    const suppliers = nodes.filter(n => n.bomProductId === product.id);
+    if (suppliers.length === 0) {
+      risk.set(product.id, 35); // virtual node — blind spot penalty
+      continue;
+    }
+    const offlineFrac = suppliers.filter(n => n.status === NodeStatus.OFFLINE).length / suppliers.length;
+    const criticalFrac = suppliers.filter(n => n.status === NodeStatus.CRITICAL).length / suppliers.length;
+    const totalInv = suppliers.reduce((s, n) => s + n.inventoryLevel, 0);
+    const dailyReq = explodedDemand.get(product.id) || 0;
+    const daysOfSupply = dailyReq > 0 ? totalInv / dailyReq : 999;
+
+    const statusRisk = (offlineFrac * 100) + (criticalFrac * 50);
+    const coverageRisk = daysOfSupply < 3 ? 80 : daysOfSupply < 7 ? 50 : daysOfSupply < 14 ? 25 : 5;
+    risk.set(product.id, Math.min(100, Math.round(statusRisk * 0.6 + coverageRisk * 0.4)));
+  }
+
+  // Also score tier 2 products that have no children scored yet (leaf assemblies)
+  for (const product of bom.products.filter(p => p.tier >= 0 && !risk.has(p.id))) {
+    const hasChildren = bom.entries.some(e => e.parentProductId === product.id);
+    if (!hasChildren) {
+      const supplierNodes = nodes.filter(n => n.bomProductId === product.id);
+      if (supplierNodes.length === 0) { risk.set(product.id, 35); continue; }
+      const offF = supplierNodes.filter(n => n.status === NodeStatus.OFFLINE).length / supplierNodes.length;
+      risk.set(product.id, Math.min(100, Math.round(offF * 100)));
+    }
+  }
+
+  const SUBST_BUFFER: Record<string, number> = { easy: 0.3, moderate: 0.6, hard: 0.85, none: 1.0 };
+
+  // Propagate upward tier by tier
+  for (let tier = 3; tier >= 0; tier--) {
+    for (const product of bom.products.filter(p => p.tier === tier)) {
+      const children = bom.entries.filter(e => e.parentProductId === product.id);
+      if (children.length === 0) continue;
+      let maxChildRisk = 0, wSum = 0, wTotal = 0;
+      for (const child of children) {
+        const cr = risk.get(child.childProductId) || 0;
+        const buf = SUBST_BUFFER[child.substitutionDifficulty] ?? 0.6;
+        const eff = cr * buf;
+        const w = child.critical ? 2.0 : 1.0;
+        wSum += eff * w;
+        wTotal += w;
+        maxChildRisk = Math.max(maxChildRisk, eff);
+      }
+      const composite = wTotal > 0 ? (maxChildRisk * 0.6) + ((wSum / wTotal) * 0.4) : 0;
+      risk.set(product.id, Math.min(100, Math.round(composite)));
+    }
+  }
+
+  return Array.from(risk.entries()).map(([productId, riskPct]) => ({ productId, riskPct }));
+}
+
 // Pure function: computes next simulation state from current state.
 // Returns both next nodes and next shipments — no setState calls inside.
 function computeNextSimulationState(
@@ -102,7 +193,8 @@ function computeNextSimulationState(
   routes: Route[],
   params: SimulationParams,
   nextDay: number,
-  industryConfig: IndustryConfig
+  industryConfig: IndustryConfig,
+  bom?: BillOfMaterials | null
 ): { nextNodes: SupplyNode[]; nextShipments: InTransitShipment[]; newLogs: string[]; snapshot: HistorySnapshot } {
 
   // ── Cost multipliers ───────────────────────────────────────────────────────
@@ -139,8 +231,20 @@ function computeNextSimulationState(
   let tariffCostTotal = 0, carbonTotal = 0;
   let transportCostTotal = 0, productionCostTotal = 0, warehousingCostTotal = 0;
   let revenueTotal = 0, cogsTotal = 0, expeditingCostTotal = 0;
+  const materialBottlenecks: { factoryId: string; materialId: string; materialName: string; daysUntilStockout: number }[] = [];
 
   const CARBON_FACTORS: Record<string, number> = { Sea: 15, Road: 62, Rail: 22, Air: 500 };
+
+  // ── BOM: Demand explosion (compute once per tick) ─────────────────────────
+  const retailDemandMap = new Map<string, number>();
+  if (bom) {
+    nextNodes.forEach(n => {
+      if (n.type === NodeType.RETAIL) {
+        retailDemandMap.set(n.id, n.demandVolume || 20);
+      }
+    });
+  }
+  const explodedDemand = bom ? explodeDemand(retailDemandMap, bom, nextNodes) : new Map<string, number>();
 
   // ── Step 0: Recovery timers (offline + cyber) ───────────────────────────
   nextNodes.forEach(node => {
@@ -207,16 +311,22 @@ function computeNextSimulationState(
     if (s.remainingDays <= 1) {
       const target = nextNodes.find(n => n.id === s.toId);
       if (target) {
-        // Weighted average cost accumulation on arrival
-        const incomingUnitCost = s.unitCost || (target.accumulatedUnitCost || 10);
-        const existingInv = target.inventoryLevel;
-        const existingCost = target.accumulatedUnitCost || incomingUnitCost;
-        const addedQty = Math.min(s.quantity, target.maxCapacity - target.inventoryLevel);
-        if (addedQty > 0 && (existingInv + addedQty) > 0) {
-          target.accumulatedUnitCost = (existingInv * existingCost + addedQty * incomingUnitCost) / (existingInv + addedQty);
+        // BOM-aware: route material shipments to the factory's material bin
+        if (s.materialId && target.materialInventory && target.type === NodeType.FACTORY) {
+          target.materialInventory[s.materialId] = (target.materialInventory[s.materialId] || 0) + s.quantity;
+          newLogs.push(`Day ${nextDay}: Material shipment arrived at ${target.name} (${s.quantity} units of ${s.materialId})`);
+        } else {
+          // Standard: add to generic inventory pool with cost accumulation
+          const incomingUnitCost = s.unitCost || (target.accumulatedUnitCost || 10);
+          const existingInv = target.inventoryLevel;
+          const existingCost = target.accumulatedUnitCost || incomingUnitCost;
+          const addedQty = Math.min(s.quantity, target.maxCapacity - target.inventoryLevel);
+          if (addedQty > 0 && (existingInv + addedQty) > 0) {
+            target.accumulatedUnitCost = (existingInv * existingCost + addedQty * incomingUnitCost) / (existingInv + addedQty);
+          }
+          target.inventoryLevel = Math.min(target.maxCapacity, target.inventoryLevel + s.quantity);
+          newLogs.push(`Day ${nextDay}: Shipment arrived at ${target.name} (${s.quantity} units)`);
         }
-        target.inventoryLevel = Math.min(target.maxCapacity, target.inventoryLevel + s.quantity);
-        newLogs.push(`Day ${nextDay}: Shipment arrived at ${target.name} (${s.quantity} units)`);
       }
     } else {
       nextShipments.push({ ...s, remainingDays: s.remainingDays - 1 });
@@ -352,28 +462,69 @@ function computeNextSimulationState(
       const grossProduction = Math.floor((node.productionCapacity || 100) * yieldRate * effectiveSqueeze);
 
       // Demand-driven production: cap output based on downstream pull signals
-      // Sum outbound order quantities (what downstream nodes ask for) + keep a 20% buffer
       const downstreamDemand = routes.filter(r => r.fromId === node.id).reduce((sum, r) => {
         const dst = nextNodes.find(n => n.id === r.toId);
         if (!dst) return sum;
-        // Retail nodes signal their demandVolume; others signal their orderQuantity
         const signal = dst.type === NodeType.RETAIL ? (dst.demandVolume || 50) : (dst.orderQuantity || 100);
         return sum + signal;
       }, 0);
       const demandCap = downstreamDemand > 0 ? Math.ceil(downstreamDemand * 1.2) : grossProduction;
-      const targetProduction = Math.min(grossProduction, demandCap);
+
+      // BOM-constrained production: limit output by available input materials
+      let materialCap = Infinity;
+      let bottleneckMaterialId: string | null = null;
+      const bomInputs = bom && node.bomProductId && node.materialInventory
+        ? bom.entries.filter(e => e.parentProductId === node.bomProductId)
+        : [];
+      if (bomInputs.length > 0 && node.materialInventory) {
+        for (const input of bomInputs) {
+          const available = node.materialInventory[input.childProductId] || 0;
+          const canMake = input.quantityPer > 0 ? Math.floor(available / input.quantityPer) : Infinity;
+          if (canMake < materialCap) {
+            materialCap = canMake;
+            bottleneckMaterialId = input.childProductId;
+          }
+        }
+      }
+
+      const targetProduction = Math.min(grossProduction, demandCap, materialCap === Infinity ? grossProduction : materialCap);
+
+      // Track material bottleneck
+      if (bottleneckMaterialId != null && materialCap < grossProduction && bom) {
+        const matProduct = bom.products.find(p => p.id === bottleneckMaterialId);
+        const available = node.materialInventory?.[bottleneckMaterialId] || 0;
+        const dailyUsage = targetProduction > 0
+          ? (bomInputs.find(e => e.childProductId === bottleneckMaterialId)?.quantityPer || 1) * targetProduction
+          : 1;
+        materialBottlenecks.push({
+          factoryId: node.id,
+          materialId: bottleneckMaterialId,
+          materialName: matProduct?.name || bottleneckMaterialId,
+          daysUntilStockout: dailyUsage > 0 ? Math.round(available / dailyUsage) : 999,
+        });
+        if (materialCap === 0) {
+          newLogs.push(`Day ${nextDay}: ${node.name} HALTED — out of ${matProduct?.name || bottleneckMaterialId}`);
+        }
+      }
 
       const defectRate = (node.defectRate || 0) / 100;
       const defectsThisTick = defectRate > 0 ? Math.floor(targetProduction * defectRate) : 0;
       const netProduction = targetProduction - defectsThisTick;
       defectUnits += defectsThisTick;
 
-      // Only produce what fits — don't charge for units that overflow capacity
       const spaceAvailable = node.maxCapacity - node.inventoryLevel;
       const actualProduced = Math.min(netProduction, spaceAvailable);
 
+      // BOM: consume input materials after production
+      if (bomInputs.length > 0 && node.materialInventory && actualProduced > 0) {
+        for (const input of bomInputs) {
+          node.materialInventory[input.childProductId] = Math.max(0,
+            (node.materialInventory[input.childProductId] || 0) - actualProduced * input.quantityPer
+          );
+        }
+      }
+
       // Production cost: per-node override ?? global default, adjusted for inflation + subsidy
-      // If factory has inputMaterialIds, apply those commodities' price changes to production cost
       let inputMaterialMult = 1;
       if (node.inputMaterialIds && node.inputMaterialIds.length > 0) {
         inputMaterialMult = node.inputMaterialIds.reduce((acc, matId) => acc * (commodityPriceMults[matId] ?? 1), 1);
@@ -382,7 +533,6 @@ function computeNextSimulationState(
       const dailyProdCost = actualProduced * unitProdCost;
       productionCostTotal += dailyProdCost;
 
-      // Update accumulated unit cost: weighted avg of existing inv + new production
       if (actualProduced > 0) {
         const inputCost = node.accumulatedUnitCost || (node.supplierCostPerUnit || 10);
         const newUnitCost = inputCost + unitProdCost;
@@ -394,7 +544,6 @@ function computeNextSimulationState(
       }
 
       node.inventoryLevel = Math.min(node.maxCapacity, node.inventoryLevel + actualProduced);
-      // Utilization reflects actual output vs capacity (capped by space)
       factoryUtilization.push({
         id: node.id, name: node.name,
         util: Math.round(actualProduced / (node.productionCapacity || 100) * 100),
@@ -455,9 +604,102 @@ function computeNextSimulationState(
     });
   }
 
-  // ── Step 5: Reorder logic ─────────────────────────────────────────────────
+  // ── Step 5a: BOM-aware per-material reorder (factories with materialInventory) ──
+  if (bom) {
+    nextNodes.forEach(node => {
+      if (node.status === NodeStatus.OFFLINE) return;
+      if (node.type !== NodeType.FACTORY || !node.bomProductId || !node.materialInventory) return;
+
+      const bomInputs = bom.entries.filter(e => e.parentProductId === node.bomProductId);
+      if (bomInputs.length === 0) return;
+
+      for (const input of bomInputs) {
+        const onHand = node.materialInventory[input.childProductId] || 0;
+        const dailyUsage = (node.productionCapacity || 100) * input.quantityPer;
+        const bufferDays = 2;
+        const materialReorderPoint = dailyUsage * bufferDays;
+        if (onHand > materialReorderPoint) continue;
+
+        // Find routes from suppliers that provide this specific material
+        const materialRoutes = routes.filter(r => {
+          const src = nextNodes.find(n => n.id === r.fromId);
+          return r.toId === node.id && src?.bomProductId === input.childProductId;
+        });
+        if (materialRoutes.length === 0) continue;
+
+        // Select best route (prefer highest stock)
+        const bestRoute = materialRoutes.reduce<Route | null>((best, r) => {
+          const src = nextNodes.find(n => n.id === r.fromId);
+          if (!src || src.status === NodeStatus.OFFLINE || src.inventoryLevel <= 0) return best;
+          if (!best) return r;
+          const bestSrc = nextNodes.find(n => n.id === best.fromId);
+          if (!bestSrc) return r;
+          return src.inventoryLevel > bestSrc.inventoryLevel ? r : best;
+        }, null);
+        if (!bestRoute) continue;
+
+        const source = nextNodes.find(n => n.id === bestRoute.fromId);
+        if (!source || source.status === NodeStatus.OFFLINE || source.inventoryLevel <= 0) continue;
+
+        // Order enough for leadTime + buffer days of production
+        const leadTimeDays = Math.max(1, bestRoute.baseLeadTime);
+        let orderQty = Math.ceil(dailyUsage * (leadTimeDays + bufferDays));
+        const moq = node.moq || 0;
+        if (moq > 0 && orderQty < moq) orderQty = moq;
+        const vCap = bestRoute.vehicleCapacity || 99999;
+        orderQty = Math.min(orderQty, vCap);
+        const actualQty = Math.min(orderQty, source.inventoryLevel);
+        if (actualQty <= 0) continue;
+
+        source.inventoryLevel -= actualQty;
+
+        // Compute delay
+        let delayDays = 0;
+        if (params.geopoliticalTension) delayDays += 5;
+        if (params.logisticDisruption) delayDays += 2;
+        if (params.weatherEvent) delayDays += 3;
+        if (params.tariffImposition) delayDays += (bestRoute.customsTime || 2);
+        if (Math.random() < params.portCongestionProb) delayDays += 3;
+        if (Math.random() < params.transportDelayProb) delayDays += 1;
+        const ltv = bestRoute.leadTimeVariability || 0;
+        if (ltv > 0) delayDays += Math.round(bestRoute.baseLeadTime * ltv * (Math.random() * 2 - 1));
+        const totalLeadTime = Math.max(1, bestRoute.baseLeadTime + delayDays);
+
+        // Costs
+        const freightMult = (params.freightCostIndex || 100) / 100;
+        const shipTransport = actualQty * (bestRoute.costPerUnitDistance || 0) * bestRoute.distance * freightMult * inflationMult;
+        transportCostTotal += shipTransport;
+        const modeFactor = CARBON_FACTORS[bestRoute.mode] || 62;
+        carbonTotal += (actualQty * 0.01) * bestRoute.distance * modeFactor / 1000;
+
+        const sourceUnitCost = source.accumulatedUnitCost || (source.supplierCostPerUnit || 10);
+        const transportPerUnit = actualQty > 0 ? shipTransport / actualQty : 0;
+        const shipUnitCost = sourceUnitCost + transportPerUnit;
+
+        nextShipments.push({
+          id: Math.random().toString(36).substr(2, 9),
+          fromId: source.id,
+          toId: node.id,
+          quantity: actualQty,
+          remainingDays: totalLeadTime,
+          carbonKg: Math.round((actualQty * 0.01) * bestRoute.distance * modeFactor / 1000 * 100) / 100,
+          transportCost: Math.round(shipTransport * 100) / 100,
+          unitCost: Math.round(shipUnitCost * 100) / 100,
+          materialId: input.childProductId,
+        });
+        newShipmentsTotal++;
+        if (delayDays > 0) newShipmentsDelayed++;
+        const matName = bom.products.find(p => p.id === input.childProductId)?.name || input.childProductId;
+        newLogs.push(`Day ${nextDay}: ${source.name} → ${node.name} (${actualQty} ${matName}, ${totalLeadTime}d)`);
+      }
+    });
+  }
+
+  // ── Step 5b: Standard reorder logic ───────────────────────────────────────
   nextNodes.forEach(node => {
     if (node.status === NodeStatus.OFFLINE) return;
+    // Skip factories that use BOM per-material reordering
+    if (bom && node.type === NodeType.FACTORY && node.bomProductId && node.materialInventory) return;
 
     // Auto-heal
     if (node.status === NodeStatus.CRITICAL && node.inventoryLevel > 0 && node.type !== NodeType.RETAIL) {
@@ -631,6 +873,14 @@ function computeNextSimulationState(
     cogs: r2(cogsTotal),
     workingCapitalCost: r2(dailyWCCost),
     expeditingCost: r2(expeditingCostTotal),
+    // BOM enrichments
+    bomRiskScores: bom ? computeBOMRiskScores(nextNodes, bom, explodedDemand) : undefined,
+    demandExplosion: bom ? Array.from(explodedDemand.entries()).map(([productId, requiredQty]) => {
+      const suppliers = nextNodes.filter(n => n.bomProductId === productId);
+      const availableQty = suppliers.reduce((s, n) => s + n.inventoryLevel, 0);
+      return { productId, requiredQty: r2(requiredQty), availableQty };
+    }) : undefined,
+    materialBottlenecks: materialBottlenecks.length > 0 ? materialBottlenecks : undefined,
   };
 
   return { nextNodes, nextShipments, newLogs, snapshot };
@@ -671,6 +921,7 @@ function AppContent() {
   const [lowStockThreshold, setLowStockThreshold] = useState(20);
   const [viewingRun, setViewingRun] = useState<any | null>(null);
   const [showWizard, setShowWizard] = useState(false);
+  const [bom, setBom] = useState<BillOfMaterials | null>(null);
   const globeRef = useRef<HTMLDivElement>(null);
   const [costVarianceThreshold, setCostVarianceThreshold] = useState(15);
 
@@ -696,6 +947,7 @@ function AppContent() {
   const routesRef = useRef<Route[]>(routes);
   const paramsRef = useRef<SimulationParams>(params);
   const industryConfigRef = useRef<IndustryConfig>(industryConfig);
+  const bomRef = useRef<BillOfMaterials | null>(bom);
 
   useEffect(() => { nodesRef.current = nodes; }, [nodes]);
   useEffect(() => { shipmentsRef.current = shipments; }, [shipments]);
@@ -703,6 +955,7 @@ function AppContent() {
   useEffect(() => { routesRef.current = routes; }, [routes]);
   useEffect(() => { paramsRef.current = params; }, [params]);
   useEffect(() => { industryConfigRef.current = industryConfig; }, [industryConfig]);
+  useEffect(() => { bomRef.current = bom; }, [bom]);
 
   // ── Persist ALL user state to DB (debounced) ──────────────────────
   const networkIdRef = useRef<string | null>(null);
@@ -736,6 +989,7 @@ function AppContent() {
         industryConfig: industryConfigRef.current,
         lowStockThreshold: lowStockRef.current,
         costVarianceThreshold: costVarianceRef.current,
+        bom: bomRef.current,
         simulation: {
           day: dayRef2.current,
           speed: speedRef.current,
@@ -780,7 +1034,8 @@ function AppContent() {
         routesRef.current,
         paramsRef.current,
         nextDay,
-        industryConfigRef.current
+        industryConfigRef.current,
+        bomRef.current
       );
 
       setDay(nextDay);
@@ -811,8 +1066,16 @@ function AppContent() {
   const handleWizardComplete = (config: IndustryConfig) => {
     setIndustryConfig(config);
     const starter = getStarterNetwork(config.id);
-    setNodes(starter.nodes);
     setRoutes(starter.routes);
+    // Auto-load BOM template and map nodes to BOM products
+    const industryBom = getIndustryBOM(config.id);
+    if (industryBom) {
+      setBom(industryBom);
+      setNodes(autoMapNodesToBOM(starter.nodes, industryBom));
+    } else {
+      setBom(null);
+      setNodes(starter.nodes);
+    }
     resetSimulation();
     setShowWizard(false);
     setActiveTab('dashboard');
@@ -844,6 +1107,9 @@ function AppContent() {
             // Restore settings
             if (saved.lowStockThreshold != null) setLowStockThreshold(saved.lowStockThreshold);
             if (saved.costVarianceThreshold != null) setCostVarianceThreshold(saved.costVarianceThreshold);
+
+            // Restore BOM
+            if (saved.bom) setBom(saved.bom);
 
             // Restore simulation progress
             if (saved.simulation) {
@@ -964,6 +1230,8 @@ function AppContent() {
         );
       case 'builder':
         return <NetworkBuilder nodes={nodes} routes={routes} setNodes={setNodes} setRoutes={setRoutes} industryConfig={industryConfig} />;
+      case 'bom':
+        return <BOMView bom={bom} setBom={setBom} nodes={nodes} setNodes={setNodes} history={history} industryId={industryConfig.id} accentColor={currentTheme.accent} />;
       case 'simulation':
         return (
           <SimulationEngine
@@ -1030,6 +1298,7 @@ function AppContent() {
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'industry', label: 'Industry', icon: Factory },
     { id: 'builder', label: 'Builder', icon: Network },
+    { id: 'bom', label: 'BOM', icon: Layers },
     { id: 'simulation', label: 'Simulation', icon: PlayCircle },
     { id: 'resilience', label: 'Resilience', icon: ShieldAlert },
     { id: 'analytics', label: 'Analytics', icon: BarChart3 },

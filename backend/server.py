@@ -586,6 +586,7 @@ class SimRunSaveRequest(BaseModel):
     routes_snapshot: List[Any]
     params_snapshot: Dict[str, Any]
     industry_config: Optional[Dict[str, Any]] = None
+    bom_snapshot: Optional[Dict[str, Any]] = None  # BOM at time of run
     history: Optional[List[Dict[str, Any]]] = None
     history_gz_b64: Optional[str] = None  # gzip-compressed, base64-encoded history
     tags: Optional[List[str]] = None
@@ -681,6 +682,7 @@ def save_simulation_run(
         routes_snapshot=req.routes_snapshot,
         params_snapshot=req.params_snapshot,
         industry_config=req.industry_config,
+        bom_snapshot=req.bom_snapshot,
         history_data=compressed,
         total_days=summary["total_days"],
         total_revenue=summary["total_revenue"],
@@ -756,6 +758,7 @@ def load_simulation_run(
         "routes_snapshot": run.routes_snapshot,
         "params_snapshot": run.params_snapshot,
         "industry_config": run.industry_config,
+        "bom_snapshot": run.bom_snapshot,
         "history": history,
         "tags": run.tags or [],
         "is_shared": run.is_shared,

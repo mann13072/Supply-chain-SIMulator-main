@@ -102,6 +102,11 @@ export interface SupplyNode {
   accumulatedUnitCost?: number;  // weighted-avg cost per unit at this node
   sellingPricePerUnit?: number;  // retail selling price (if RETAIL)
 
+  // BOM linkage
+  bomProductId?: string;        // which BOM product this node produces/supplies
+  tier?: number;                // 0–4, inferred from BOM or manually set
+  materialInventory?: Record<string, number>;  // material-specific inventory (factories only)
+
   // Runtime simulation state (not persisted)
   offlineRecoveryDaysRemaining?: number;
   demandShockDaysRemaining?: number;
@@ -143,6 +148,7 @@ export interface IndustryConfig {
   baseCurrency: string;
   currencySymbol: string;
   exchangeRates: Record<string, number>;
+  defaultBOM?: BillOfMaterials;
 }
 
 export interface WorkflowState {
@@ -269,6 +275,7 @@ export interface InTransitShipment {
   tariffCost?: number;     // F10: tariff cost for this shipment
   transportCost?: number;  // transport cost for this shipment
   unitCost?: number;       // accumulated cost per unit being shipped
+  materialId?: string;     // BOM: which material this shipment carries
 }
 
 export interface HistorySnapshot {
@@ -307,6 +314,11 @@ export interface HistorySnapshot {
   cogs?: number;              // cost of goods sold this day
   workingCapitalCost?: number; // daily financing cost on capital tied up
   expeditingCost?: number;    // extra cost for emergency shipments
+
+  // BOM enrichments (optional for backward compat)
+  bomRiskScores?: { productId: string; riskPct: number }[];
+  demandExplosion?: { productId: string; requiredQty: number; availableQty: number }[];
+  materialBottlenecks?: { factoryId: string; materialId: string; materialName: string; daysUntilStockout: number }[];
 }
 
 export interface SimulationRunSummary {
@@ -335,6 +347,53 @@ export interface SimulationRunDetail extends SimulationRunSummary {
   industry_config?: IndustryConfig;
   history: HistorySnapshot[];
   share_token?: string;
+}
+
+// ── BOM (Bill of Materials) Types ──────────────────────────────────────────
+
+export interface BOMProduct {
+  id: string;
+  name: string;
+  tier: number;              // 0=finished good, 1=major assembly, 2=component, 3=sub-component, 4=raw material
+  category: 'finished-good' | 'assembly' | 'component' | 'sub-component' | 'raw-material';
+  commodityId?: string;      // links to Commodity.id from IndustryConfig (for raw materials)
+  defaultLeadTimeDays?: number;
+}
+
+export interface BOMEntry {
+  parentProductId: string;
+  childProductId: string;
+  quantityPer: number;       // units of child needed per 1 unit of parent
+  unit: string;              // "pcs", "kg", "liters"
+  critical: boolean;
+  substitutionDifficulty: 'easy' | 'moderate' | 'hard' | 'none';
+  source: 'user-defined' | 'template-default' | 'ai-inferred';
+  confidence: number;        // 0–100%
+  rationale?: string;
+}
+
+export interface BillOfMaterials {
+  id: string;
+  finishedProductId: string;
+  name: string;
+  industry: string;
+  products: BOMProduct[];
+  entries: BOMEntry[];
+}
+
+export interface BOMRiskScore {
+  productId: string;
+  riskPct: number;
+  driverProductId?: string;   // which child product is the risk driver
+  driverNodeId?: string;      // which physical node is the root cause
+}
+
+export interface MaterialBottleneck {
+  factoryId: string;
+  factoryName: string;
+  materialId: string;
+  materialName: string;
+  daysUntilStockout: number;
 }
 
 export interface OptimizationResult {
