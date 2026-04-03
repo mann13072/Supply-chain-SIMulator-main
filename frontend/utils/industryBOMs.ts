@@ -433,6 +433,33 @@ export function getIndustryBOM(industryId: string): BillOfMaterials | null {
   return INDUSTRY_BOMS[industryId] ?? null;
 }
 
+const INDUSTRY_KEYWORDS: Record<string, string[]> = {
+  automotive: ['tesla', 'vehicle', 'car', 'motor', 'engine', 'chassis', 'transmission', 'gigafactory', 'lithium', 'cobalt', 'bosch', 'magna', 'continental', 'volkswagen', 'ford', 'toyota', 'bmw', 'battery pack', 'ev ', 'electric vehicle', 'panasonic', 'samsung sdi', 'catl'],
+  tech: ['tsmc', 'chip fab', 'semiconductor', 'wafer', 'apple', 'intel', 'nvidia', 'circuit', 'server', 'smartphone', 'microchip', 'foundry', 'printed circuit'],
+  pharma: ['pharma', 'drug', 'medicine', 'clinical', 'hospital', 'tablet', 'capsule', 'vaccine', 'active ingredient', 'pfizer', 'bayer', 'api plant'],
+  fmcg: ['consumer goods', 'food', 'beverage', 'retail store', 'walmart', 'supermarket', 'procter', 'unilever', 'grocery', 'fmcg'],
+  solar: ['solar', 'photovoltaic', 'inverter', 'solar panel', 'solar module', 'tracker', 'sunpower', 'first solar', 'polysilicon', 'solar farm'],
+};
+
+/**
+ * Infer the most likely industry from a set of node names via keyword scoring.
+ * Returns the industry id (e.g. 'automotive') or null if no match is confident enough.
+ */
+export function inferIndustryFromNodes(nodes: SupplyNode[]): string | null {
+  const scores: Record<string, number> = {};
+  for (const id of Object.keys(INDUSTRY_KEYWORDS)) scores[id] = 0;
+
+  const nodeText = nodes.map(n => n.name.toLowerCase()).join(' ');
+  for (const [industry, keywords] of Object.entries(INDUSTRY_KEYWORDS)) {
+    for (const kw of keywords) {
+      if (nodeText.includes(kw)) scores[industry]++;
+    }
+  }
+
+  const [bestId, bestScore] = Object.entries(scores).sort((a, b) => b[1] - a[1])[0];
+  return bestScore > 0 ? bestId : null;
+}
+
 /**
  * Auto-map supply chain nodes to BOM products and initialize material inventory.
  *
@@ -509,6 +536,14 @@ export function autoMapNodesToBOM(
       node.bomProductId = bestProduct.id;
       node.tier = bestProduct.tier;
       usedProductIds.add(bestProduct.id);
+    } else {
+      // Final fallback: grab any available Tier 3/4 product (handles generic node names)
+      const fallback = bom.products.filter(p => p.tier >= 3 && !usedProductIds.has(p.id))[0];
+      if (fallback) {
+        node.bomProductId = fallback.id;
+        node.tier = fallback.tier;
+        usedProductIds.add(fallback.id);
+      }
     }
   }
 
@@ -542,6 +577,32 @@ export function autoMapNodesToBOM(
     } else {
       // Grab the first available assembly
       const fallback = unmappedAssemblies.find(p => !usedProductIds.has(p.id));
+      if (fallback) {
+        node.bomProductId = fallback.id;
+        node.tier = fallback.tier;
+        usedProductIds.add(fallback.id);
+      }
+    }
+  }
+
+  // ── Pass 3.5: WAREHOUSE / DISTRIBUTION_CENTER → tier-1/2 assemblies ──
+  const unmappedStorageNodes = mapped.filter(
+    n => (n.type === NodeType.WAREHOUSE || n.type === NodeType.DISTRIBUTION_CENTER) && !n.bomProductId
+  );
+  for (const node of unmappedStorageNodes) {
+    const candidates = bom.products.filter(p => (p.tier === 1 || p.tier === 2) && !usedProductIds.has(p.id));
+    let bestScore = 0;
+    let bestProduct: BOMProduct | null = null;
+    for (const p of candidates) {
+      const score = nameScore(node.name, p.name);
+      if (score > bestScore) { bestScore = score; bestProduct = p; }
+    }
+    if (bestProduct && bestScore >= 1) {
+      node.bomProductId = bestProduct.id;
+      node.tier = bestProduct.tier;
+      usedProductIds.add(bestProduct.id);
+    } else {
+      const fallback = candidates[0];
       if (fallback) {
         node.bomProductId = fallback.id;
         node.tier = fallback.tier;

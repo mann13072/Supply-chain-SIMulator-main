@@ -1374,7 +1374,7 @@ function AppContent() {
           </div>
         );
       case 'builder':
-        return <NetworkBuilder nodes={nodes} routes={routes} setNodes={setNodes} setRoutes={setRoutes} industryConfig={industryConfig} />;
+        return <NetworkBuilder nodes={nodes} routes={routes} setNodes={setNodes} setRoutes={setRoutes} industryConfig={industryConfig} bom={bom} setBom={setBom} />;
       case 'bom':
         return <BOMView bom={bom} setBom={setBom} nodes={nodes} setNodes={setNodes} history={history} industryId={industryConfig.id} accentColor={currentTheme.accent} />;
       case 'simulation':

@@ -85,6 +85,12 @@ HEADER_ALIASES = {
     "demand_variability": "demandVariability", "variability": "demandVariability",
     "demand_seasonality": "demandSeasonality", "seasonality": "demandSeasonality",
     "price_elasticity": "priceElasticity", "elasticity": "priceElasticity",
+    # Tier classification headers
+    "supply_chain_tier": "supplyChainTier", "chain_tier": "supplyChainTier",
+    "tier": "supplyChainTier", "sc_tier": "supplyChainTier",
+    "is_focal_company": "isFocalCompany", "focal_company": "isFocalCompany",
+    "focal": "isFocalCompany", "is_focal": "isFocalCompany", "oem": "isFocalCompany",
+    "tier_locked": "tierLocked", "locked_tier": "tierLocked", "lock_tier": "tierLocked",
     # Route headers
     "from_node": "from", "source": "from", "origin": "from", "start": "from",
     "to_node": "to", "destination": "to", "target": "to", "end": "to",
@@ -259,10 +265,10 @@ def coerce_value(val, field_name: str = ""):
     s = str(val).strip()
     if not s or s.lower() in ("", "-", "n/a", "na", "null", "none", "nil"):
         return None
-    # Boolean
-    if s.lower() in ("yes", "true", "1"):
+    # Boolean (exclude "0" and "1" — they are numeric, handled below)
+    if s.lower() in ("yes", "true"):
         return True
-    if s.lower() in ("no", "false", "0"):
+    if s.lower() in ("no", "false"):
         return False
     # Strip currency/percent/unit suffixes
     cleaned = re.sub(r'^[\$\u20ac\u00a3\u00a5]', '', s)  # $, euro, pound, yen
@@ -272,7 +278,10 @@ def coerce_value(val, field_name: str = ""):
     try:
         num = float(cleaned)
         if was_percent:
-            # If field expects 0-1 range and value > 1, divide by 100
+            # Only divide by 100 for fields that use 0-1 range in the simulation.
+            # Other percentage fields (yieldRate, defectRate, supplierReliability,
+            # utilizationRate, fulfillmentAccuracy, etc.) use 0-100 range and
+            # must NOT be divided.
             if field_name in ("obsolescenceRate", "laborAvailability",
                               "supplierDisruptionProb", "disruptionProb",
                               "leadTimeVariability"):

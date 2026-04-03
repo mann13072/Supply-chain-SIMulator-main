@@ -16,7 +16,7 @@ def validate_nodes(nodes: list[dict]) -> tuple[list[dict], list[str], list[str]]
     warnings = []
     errors = []
     cleaned = []
-    seen_names = set()
+    seen_names: dict[str, int] = {}  # name_lower -> count
 
     for i, node in enumerate(nodes, 1):
         row_label = f"Nodes row {i}"
@@ -28,12 +28,14 @@ def validate_nodes(nodes: list[dict]) -> tuple[list[dict], list[str], list[str]]
             continue
         name = str(name).strip()
 
-        # Duplicate check
-        if name.lower() in seen_names:
-            dupe_name = f"{name} (2)"
+        # Duplicate check — assign incrementing suffixes (2), (3), etc.
+        name_key = name.lower()
+        if name_key in seen_names:
+            seen_names[name_key] += 1
+            dupe_name = f"{name} ({seen_names[name_key]})"
             warnings.append(f'{row_label}: duplicate name "{name}" renamed to "{dupe_name}"')
             name = dupe_name
-        seen_names.add(name.lower())
+        seen_names[name_key] = seen_names.get(name_key, 1)
         node["name"] = name
 
         # ── Type (required) ──

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Plus, Trash2, Link as LinkIcon, MapPin, Factory, Warehouse, Truck, ShoppingCart, Layers, Globe as GlobeIcon, Zap, Loader2, Upload, FileSpreadsheet, CheckCircle, AlertTriangle, XCircle, X } from 'lucide-react';
-import { SupplyNode, NodeType, NodeStatus, Route, TransportMode, IndustryConfig } from '../types';
+import { SupplyNode, NodeType, NodeStatus, Route, TransportMode, IndustryConfig, BillOfMaterials } from '../types';
+import { autoMapNodesToBOM, getIndustryBOM, inferIndustryFromNodes } from '../utils/industryBOMs';
 import { motion, AnimatePresence } from 'framer-motion';
 import { geocode } from '../utils/geocoding';
 import { routingService, Hub } from '../services/routingService';
@@ -22,9 +23,11 @@ interface NetworkBuilderProps {
   setNodes: React.Dispatch<React.SetStateAction<SupplyNode[]>>;
   setRoutes: React.Dispatch<React.SetStateAction<Route[]>>;
   industryConfig?: IndustryConfig;
+  bom?: BillOfMaterials | null;
+  setBom?: (bom: BillOfMaterials | null) => void;
 }
 
-const NetworkBuilder: React.FC<NetworkBuilderProps> = ({ nodes, routes, setNodes, setRoutes, industryConfig }) => {
+const NetworkBuilder: React.FC<NetworkBuilderProps> = ({ nodes, routes, setNodes, setRoutes, industryConfig, bom, setBom }) => {
   const [selectedNode, setSelectedNode] = useState<SupplyNode | null>(null);
   const [selectedRoute, setSelectedRoute] = useState<Route | null>(null);
   const [isAddingNode, setIsAddingNode] = useState(false);
@@ -65,7 +68,7 @@ const NetworkBuilder: React.FC<NetworkBuilderProps> = ({ nodes, routes, setNodes
 
       if (data.status === 'success' && data.nodes?.length > 0) {
         // Map nodes to proper SupplyNode format with enums
-        const mappedNodes: SupplyNode[] = data.nodes.map((n: any) => ({
+        let mappedNodes: SupplyNode[] = data.nodes.map((n: any) => ({
           ...n,
           type: n.type as NodeType,
           status: (n.status || 'OPTIMAL') as NodeStatus,
@@ -75,6 +78,16 @@ const NetworkBuilder: React.FC<NetworkBuilderProps> = ({ nodes, routes, setNodes
           ...r,
           mode: r.mode as TransportMode,
         }));
+        // Auto-detect the industry from imported node names and load its BOM.
+        // If no industry matches, clear the BOM so stale data is never shown.
+        if (setBom) {
+          const detectedIndustry = inferIndustryFromNodes(mappedNodes);
+          const detectedBOM = detectedIndustry ? getIndustryBOM(detectedIndustry) : null;
+          if (detectedBOM) {
+            mappedNodes = autoMapNodesToBOM(mappedNodes, detectedBOM);
+          }
+          setBom(detectedBOM);
+        }
         setNodes(mappedNodes);
         setRoutes(mappedRoutes);
       }
@@ -419,7 +432,10 @@ const NetworkBuilder: React.FC<NetworkBuilderProps> = ({ nodes, routes, setNodes
       backorderRate: newNode.backorderRate,
       substitutionBehavior: newNode.substitutionBehavior,
       priceElasticity: newNode.priceElasticity,
-      coordinates: { x, y, lat, lng }
+      coordinates: { x, y, lat, lng },
+      supplyChainTier: newNode.supplyChainTier,
+      isFocalCompany: newNode.isFocalCompany,
+      tierLocked: newNode.tierLocked,
     };
 
     setNodes([...nodes, node]);

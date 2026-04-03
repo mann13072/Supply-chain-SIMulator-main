@@ -1023,7 +1023,8 @@ def download_import_template():
     # ── Common columns for all node types ──
     common_cols = ["name", "location", "lat", "lng",
                    "inventoryLevel", "maxCapacity", "reorderPoint", "orderQuantity",
-                   "safetyStock", "holdingCost", "shelfLife"]
+                   "safetyStock", "holdingCost", "shelfLife",
+                   "supplyChainTier", "isFocalCompany", "tierLocked"]
     min_cols = {"name"}
 
     # ── Per-type specific columns ──
@@ -1139,6 +1140,11 @@ def download_import_template():
         ("", ""),
         ("ROUTE 'from'/'to':", "Must match a node name from any of the node sheets"),
         ("Transport modes:", "Sea, Air, Road, Rail (or leave blank for auto-detection)"),
+        ("", ""),
+        ("SUPPLY CHAIN TIERS:", ""),
+        ("supplyChainTier:", "0=OEM/Focal, 1/2/3+=upstream suppliers, -1/-2/-3=downstream customers (leave blank for auto-detect from routes)"),
+        ("isFocalCompany:", "TRUE for the one OEM/manufacturer node (Tier 0). Only one node should be TRUE."),
+        ("tierLocked:", "TRUE to lock a manually-set tier and prevent auto-recalculation"),
     ]
     for r, (a, b) in enumerate(instructions, 1):
         ca = ws_help.cell(row=r, column=1, value=a)

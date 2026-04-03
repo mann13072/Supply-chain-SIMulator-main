@@ -235,10 +235,11 @@ def transform_nodes(raw_nodes: list[dict]) -> tuple[list[dict], dict[str, str], 
                     lat, lng = coords
                     warnings.append(f'Node "{name}": geocoded from name -> ({lat}, {lng})')
 
-            # Final fallback: auto-layout
+            # Final fallback: auto-layout (keep within valid lat/lng range)
             if lat is None or lng is None:
-                lat = 20 + len(nodes) * 8  # spread nodes vertically
-                lng = -20 + len(nodes) * 25
+                idx = len(nodes)
+                lat = -60 + (idx * 17) % 120   # stay within -60..60
+                lng = -160 + (idx * 37) % 320   # stay within -160..160
                 warnings.append(f'Node "{name}": no coordinates found, assigned auto-layout ({lat}, {lng})')
 
         x, y = _lat_lng_to_pixel(lat, lng)
@@ -262,6 +263,25 @@ def transform_nodes(raw_nodes: list[dict]) -> tuple[list[dict], dict[str, str], 
                 node[key] = raw[key]
             else:
                 node[key] = default_val
+
+        # ── Tier classification fields (pass through if provided) ──
+        tier_val = raw.get("supplyChainTier")
+        if tier_val is not None:
+            try:
+                node["supplyChainTier"] = int(tier_val)
+            except (ValueError, TypeError):
+                pass
+
+        is_focal = raw.get("isFocalCompany")
+        if is_focal is not None:
+            node["isFocalCompany"] = bool(is_focal)
+            if node["isFocalCompany"]:
+                node["supplyChainTier"] = 0
+                node["tierLocked"] = True
+
+        tier_locked = raw.get("tierLocked")
+        if tier_locked is not None:
+            node["tierLocked"] = bool(tier_locked)
 
         nodes.append(node)
 
@@ -303,7 +323,7 @@ def transform_routes(
 
         # ── Auto-detect mode if missing ──
         mode = raw.get("mode")
-        if not mode:
+        if mode is None or mode == "":
             mode = _auto_detect_mode(
                 from_coords[0], from_coords[1],
                 to_coords[0], to_coords[1],
@@ -313,7 +333,7 @@ def transform_routes(
 
         # ── Compute distance if missing ──
         distance = raw.get("distance")
-        if not distance:
+        if distance is None:
             distance = round(_haversine_km(from_coords[0], from_coords[1], to_coords[0], to_coords[1]), 1)
 
         # ── Build route dict ──
@@ -343,10 +363,20 @@ def transform_commodities(raw_commodities: list[dict]) -> list[dict]:
     """Transform raw commodity dicts into Commodity-compatible dicts."""
     default_colors = ["#6366F1", "#F59E0B", "#10B981", "#EF4444", "#8B5CF6", "#EC4899", "#14B8A6", "#F97316"]
     commodities = []
+    seen_ids: dict[str, int] = {}
     for i, raw in enumerate(raw_commodities):
+        cname = raw.get("name") or f"Commodity {i+1}"
+        base_id = cname.lower().replace(" ", "_")
+        # Deduplicate IDs from case-variant names
+        if base_id in seen_ids:
+            seen_ids[base_id] += 1
+            cid = f"{base_id}_{seen_ids[base_id]}"
+        else:
+            seen_ids[base_id] = 1
+            cid = base_id
         commodities.append({
-            "id": raw.get("name", f"commodity_{i}").lower().replace(" ", "_"),
-            "name": raw.get("name", f"Commodity {i+1}"),
+            "id": cid,
+            "name": cname,
             "unit": raw.get("unit", "unit"),
             "basePrice": raw.get("basePrice", 10),
             "color": raw.get("color", default_colors[i % len(default_colors)]),
