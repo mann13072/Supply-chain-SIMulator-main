@@ -56,6 +56,8 @@ const DEFAULT_PARAMS: SimulationParams = {
   seasonalityPattern: 'none',
   seasonalityAmplitude: 0,
   tariffRate: 10,
+  tierVisibilityDecay: 20,
+  tierBullwhipAmplification: true,
 };
 
 const ScenariosView: React.FC<ScenariosViewProps> = ({ nodes, routes, setNodes, setRoutes }) => {

@@ -4,6 +4,7 @@ import { SupplyNode, NodeType, NodeStatus, Route, TransportMode, IndustryConfig 
 import { motion, AnimatePresence } from 'framer-motion';
 import { geocode } from '../utils/geocoding';
 import { routingService, Hub } from '../services/routingService';
+import { getTierLabel, getTierColor } from '../utils/tierClassifier';
 import NetworkMap from './NetworkMap';
 
 function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
@@ -604,7 +605,7 @@ const NetworkBuilder: React.FC<NetworkBuilderProps> = ({ nodes, routes, setNodes
                       </div>
                     </div>
                     <div className="flex flex-col items-end gap-2">
-                      <select 
+                      <select
                         value={selectedNode.status}
                         onChange={(e) => handleUpdateNode(selectedNode.id, { status: e.target.value as NodeStatus })}
                         className="bg-white/5 border border-white/10 rounded-lg px-2 py-0.5 text-[9px] font-bold uppercase transition-all focus:outline-none focus:border-white/30 cursor-pointer"
@@ -614,16 +615,86 @@ const NetworkBuilder: React.FC<NetworkBuilderProps> = ({ nodes, routes, setNodes
                           <option key={status} value={status} className="bg-[#0a0a0a]">{status}</option>
                         ))}
                       </select>
+                      {/* Supply chain tier badge */}
+                      <span
+                        className="text-[9px] font-bold px-2 py-0.5 rounded-full"
+                        style={{
+                          backgroundColor: getTierColor(selectedNode.supplyChainTier) + '22',
+                          color: getTierColor(selectedNode.supplyChainTier),
+                          border: `1px solid ${getTierColor(selectedNode.supplyChainTier)}44`,
+                        }}
+                      >
+                        {selectedNode.isFocalCompany ? 'OEM' : getTierLabel(selectedNode.supplyChainTier)}
+                        {selectedNode.tierLocked ? ' 🔒' : ''}
+                      </span>
                       <button onClick={() => deleteNode(selectedNode.id)} className="p-1.5 text-white/20 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-all">
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     </div>
                   </div>
 
+                  {/* Supply Chain Position */}
+                  <div className="space-y-3 p-3 rounded-xl border border-white/10 bg-white/[0.03]">
+                    <h4 className="text-[10px] text-white/40 uppercase tracking-widest">Supply Chain Position</h4>
+                    <div className="flex items-center gap-3">
+                      <select
+                        value={selectedNode.tierLocked ? String(selectedNode.supplyChainTier ?? '') : ''}
+                        onChange={(e) => {
+                          if (e.target.value === '') {
+                            handleUpdateNode(selectedNode.id, { tierLocked: false, supplyChainTier: undefined });
+                          } else {
+                            handleUpdateNode(selectedNode.id, { tierLocked: true, supplyChainTier: parseInt(e.target.value) });
+                          }
+                        }}
+                        className="flex-1 bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-white/30 transition-all"
+                      >
+                        <option value="" className="bg-[#0a0a0a]">Auto-detect</option>
+                        <option value="1" className="bg-[#0a0a0a]">Tier 1 — Direct Supplier</option>
+                        <option value="2" className="bg-[#0a0a0a]">Tier 2</option>
+                        <option value="3" className="bg-[#0a0a0a]">Tier 3</option>
+                        <option value="4" className="bg-[#0a0a0a]">Tier 4+</option>
+                        <option value="-1" className="bg-[#0a0a0a]">Downstream 1</option>
+                        <option value="-2" className="bg-[#0a0a0a]">Downstream 2</option>
+                      </select>
+                      <label className="flex items-center gap-2 cursor-pointer shrink-0">
+                        <div className="relative">
+                          <input
+                            type="checkbox"
+                            checked={!!selectedNode.isFocalCompany}
+                            onChange={(e) => {
+                              // If marking as focal, clear isFocalCompany from all other nodes first
+                              if (e.target.checked) {
+                                setNodes(prev => prev.map(n =>
+                                  n.id === selectedNode.id
+                                    ? { ...n, isFocalCompany: true, supplyChainTier: 0, tierLocked: true }
+                                    : { ...n, isFocalCompany: false }
+                                ));
+                                setSelectedNode(prev => prev ? { ...prev, isFocalCompany: true, supplyChainTier: 0, tierLocked: true } : null);
+                              } else {
+                                handleUpdateNode(selectedNode.id, { isFocalCompany: false, tierLocked: false, supplyChainTier: undefined });
+                              }
+                            }}
+                            className="sr-only"
+                          />
+                          <div className={`w-3.5 h-3.5 rounded border transition-all ${selectedNode.isFocalCompany ? 'bg-blue-500 border-blue-500' : 'bg-white/5 border-white/20'}`}>
+                            {selectedNode.isFocalCompany && <svg className="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
+                          </div>
+                        </div>
+                        <span className="text-[10px] text-white/50">OEM / Focal</span>
+                      </label>
+                    </div>
+                    {selectedNode.supplyChainTier !== undefined && (
+                      <p className="text-[9px] text-white/30">
+                        {selectedNode.tierLocked ? '🔒 Manually set' : '🔄 Auto-detected'} &mdash; {getTierLabel(selectedNode.supplyChainTier)}
+                        {selectedNode.supplyChainTier > 0 && ` (${selectedNode.supplyChainTier} hop${selectedNode.supplyChainTier > 1 ? 's' : ''} from OEM)`}
+                      </p>
+                    )}
+                  </div>
+
                   <div className="grid grid-cols-2 gap-3">
                     <div className="bg-white/5 rounded-xl p-3 border border-white/5">
                       <p className="text-[9px] text-white/40 uppercase block mb-1">Inventory</p>
-                      <input 
+                      <input
                         type="number"
                         className="text-sm font-bold text-white bg-transparent border-none p-0 w-full focus:ring-0"
                         value={selectedNode.inventoryLevel}
@@ -1291,7 +1362,7 @@ const NetworkBuilder: React.FC<NetworkBuilderProps> = ({ nodes, routes, setNodes
                       <h4 className="text-[10px] text-white/40 uppercase tracking-widest border-b border-white/5 pb-2">Classification</h4>
                       <div>
                         <label className="text-[10px] text-white/40 uppercase tracking-widest mb-1 block">Node Type</label>
-                        <select 
+                        <select
                           value={newNode.type}
                           onChange={(e) => setNewNode({...newNode, type: e.target.value as NodeType})}
                           className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 md:px-4 md:py-3 text-white focus:outline-none focus:border-white/30 transition-all"
@@ -1301,6 +1372,48 @@ const NetworkBuilder: React.FC<NetworkBuilderProps> = ({ nodes, routes, setNodes
                           ))}
                         </select>
                       </div>
+                      {/* Supply Chain Tier */}
+                      <div>
+                        <label className="text-[10px] text-white/40 uppercase tracking-widest mb-1 block">Supply Chain Tier</label>
+                        <select
+                          value={newNode.tierLocked ? String(newNode.supplyChainTier ?? '') : ''}
+                          onChange={(e) => {
+                            if (e.target.value === '') {
+                              setNewNode({ ...newNode, tierLocked: false, supplyChainTier: undefined });
+                            } else {
+                              setNewNode({ ...newNode, tierLocked: true, supplyChainTier: parseInt(e.target.value) });
+                            }
+                          }}
+                          className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 md:px-4 md:py-3 text-white focus:outline-none focus:border-white/30 transition-all"
+                        >
+                          <option value="" className="bg-[#0a0a0a]">Auto-detect (from routes)</option>
+                          <option value="1" className="bg-[#0a0a0a]">Tier 1 — Direct Supplier</option>
+                          <option value="2" className="bg-[#0a0a0a]">Tier 2 — Supplier's Supplier</option>
+                          <option value="3" className="bg-[#0a0a0a]">Tier 3</option>
+                          <option value="4" className="bg-[#0a0a0a]">Tier 4+</option>
+                          <option value="-1" className="bg-[#0a0a0a]">Downstream 1 (DC / Warehouse)</option>
+                          <option value="-2" className="bg-[#0a0a0a]">Downstream 2 (Retail)</option>
+                        </select>
+                        <p className="text-[9px] text-white/30 mt-1">Auto-detect assigns tier by BFS distance from the focal company when routes are connected.</p>
+                      </div>
+                      {/* Focal Company */}
+                      <label className="flex items-start gap-3 cursor-pointer group">
+                        <div className="relative mt-0.5">
+                          <input
+                            type="checkbox"
+                            checked={!!newNode.isFocalCompany}
+                            onChange={(e) => setNewNode({ ...newNode, isFocalCompany: e.target.checked })}
+                            className="sr-only"
+                          />
+                          <div className={`w-4 h-4 rounded border transition-all ${newNode.isFocalCompany ? 'bg-blue-500 border-blue-500' : 'bg-white/5 border-white/20 group-hover:border-white/40'}`}>
+                            {newNode.isFocalCompany && <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
+                          </div>
+                        </div>
+                        <div>
+                          <p className="text-xs text-white/70 font-medium">Focal Company (OEM)</p>
+                          <p className="text-[9px] text-white/30">Marks this as the manufacturer/brand — tiers radiate outward from here.</p>
+                        </div>
+                      </label>
                     </div>
                   </div>
                 )}

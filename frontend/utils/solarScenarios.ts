@@ -539,6 +539,8 @@ const BASE_PARAMS: SimulationParams = {
   seasonalityPattern: 'none',
   seasonalityAmplitude: 0,
   tariffRate: 10,
+  tierVisibilityDecay: 20,
+  tierBullwhipAmplification: true,
 };
 
 export const SOLAR_SCENARIO_PARAMS: Record<string, SimulationParams> = {

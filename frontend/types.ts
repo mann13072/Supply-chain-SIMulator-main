@@ -107,6 +107,11 @@ export interface SupplyNode {
   tier?: number;                // 0–4, inferred from BOM or manually set
   materialInventory?: Record<string, number>;  // material-specific inventory (factories only)
 
+  // Supply Chain Tier Classification (proximity to focal company)
+  supplyChainTier?: number;     // 0=focal, 1/2/3+=upstream supplier tiers, -1/-2/-3=downstream
+  isFocalCompany?: boolean;     // only ONE node should be true — the OEM/manufacturer
+  tierLocked?: boolean;         // true = user manually assigned tier, skip auto-recalc
+
   // Runtime simulation state (not persisted)
   offlineRecoveryDaysRemaining?: number;
   demandShockDaysRemaining?: number;
@@ -222,6 +227,10 @@ export interface SimulationParams {
 
   // Financial (Phase 3-5)
   defaultMarkupPct?: number;  // retail markup over COGS, default 50%
+
+  // Supply Chain Tier-aware simulation controls
+  tierVisibilityDecay: number;          // 0-100, demand signal degradation per tier hop (default 20)
+  tierBullwhipAmplification: boolean;   // if true, bullwhipFactor compounds per supply chain tier
 }
 
 export interface SimulationResult {
@@ -319,6 +328,28 @@ export interface HistorySnapshot {
   bomRiskScores?: { productId: string; riskPct: number }[];
   demandExplosion?: { productId: string; requiredQty: number; availableQty: number }[];
   materialBottlenecks?: { factoryId: string; materialId: string; materialName: string; daysUntilStockout: number }[];
+
+  // Supply Chain Tier metrics (optional for backward compat)
+  tierMetrics?: Record<number, TierMetrics>;
+  tierAlerts?: TierAlert[];
+}
+
+export interface TierMetrics {
+  nodeCount: number;
+  totalInventory: number;
+  totalCost: number;
+  avgLeadTime: number;
+  disruptionCount: number;
+  fillRate: number;
+  riskScore: number;
+}
+
+export interface TierAlert {
+  tier: number;
+  nodeId: string;
+  nodeName: string;
+  estimatedImpactDays: number;
+  type: string;  // 'disruption' | 'stockout' | 'quality'
 }
 
 export interface SimulationRunSummary {

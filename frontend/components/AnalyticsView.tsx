@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { HistorySnapshot, SupplyNode, IndustryConfig, NodeType, NodeStatus } from '../types';
+import { HistorySnapshot, SupplyNode, IndustryConfig, NodeType, NodeStatus, TierMetrics, TierAlert } from '../types';
+import { getTierColor, getTierLabel } from '../utils/tierClassifier';
 import { formatCurrencyCompact, formatCurrency } from '../utils/formatting';
 import {
   CostTrendChart, InventoryChart,
@@ -23,6 +24,7 @@ const TABS = [
   { id: 'risk',       label: 'Risk & Resilience',  color: '#ef4444' },
   { id: 'throughput', label: 'Throughput',          color: '#8b5cf6' },
   { id: 'nodes',      label: 'Node Details',        color: '#94a3b8' },
+  { id: 'tiers',      label: 'Tier Analysis',       color: '#6366f1' },
 ] as const;
 
 type TabId = typeof TABS[number]['id'];
@@ -394,6 +396,174 @@ const AnalyticsView: React.FC<AnalyticsViewProps> = ({ history, nodes, industryC
             )}
           </div>
         );
+
+      case 'tiers': {
+        // Aggregate tierMetrics across all history snapshots (average)
+        const tierAccum: Record<number, { nodeCount: number; totalInventory: number[]; totalCost: number[]; avgLeadTime: number[]; disruptionCount: number; fillRate: number[]; riskScore: number[] }> = {};
+        let totalAlerts: TierAlert[] = [];
+
+        for (const snap of history) {
+          if (snap.tierMetrics) {
+            for (const [tierStr, mRaw] of Object.entries(snap.tierMetrics)) {
+              const m = mRaw as TierMetrics;
+              const t = Number(tierStr);
+              if (!tierAccum[t]) tierAccum[t] = { nodeCount: m.nodeCount, totalInventory: [], totalCost: [], avgLeadTime: [], disruptionCount: 0, fillRate: [], riskScore: [] };
+              tierAccum[t].totalInventory.push(m.totalInventory);
+              tierAccum[t].totalCost.push(m.totalCost);
+              tierAccum[t].avgLeadTime.push(m.avgLeadTime);
+              tierAccum[t].disruptionCount += m.disruptionCount;
+              tierAccum[t].fillRate.push(m.fillRate);
+              tierAccum[t].riskScore.push(m.riskScore);
+            }
+          }
+          if (snap.tierAlerts) totalAlerts = snap.tierAlerts; // use latest
+        }
+
+        const avg = (arr: number[]) => arr.length ? Math.round(arr.reduce((a, b) => a + b, 0) / arr.length) : 0;
+
+        // Sort tiers: upstream first (highest positive), then focal (0), then downstream (negative)
+        const sortedTiers = Object.keys(tierAccum).map(Number).sort((a, b) => b - a);
+
+        // Per-node tier info from current nodes
+        const nodesByTier: Record<number, SupplyNode[]> = {};
+        for (const n of nodes) {
+          if (n.supplyChainTier !== undefined) {
+            if (!nodesByTier[n.supplyChainTier]) nodesByTier[n.supplyChainTier] = [];
+            nodesByTier[n.supplyChainTier].push(n);
+          }
+        }
+
+        const hasTierData = sortedTiers.length > 0;
+        const focalNode = nodes.find(n => n.isFocalCompany);
+
+        return (
+          <div className="space-y-6">
+            {!hasTierData ? (
+              <div className="text-center py-16 text-white/30">
+                <p className="text-sm">No supply chain tier data yet.</p>
+                <p className="text-xs mt-2">Mark a node as the Focal Company (OEM) in the Network Builder, then connect nodes via routes to auto-classify tiers.</p>
+              </div>
+            ) : (
+              <>
+                {/* Focal company header */}
+                {focalNode && (
+                  <div className="flex items-center gap-3 p-4 rounded-2xl border border-blue-500/20 bg-blue-500/5">
+                    <div className="w-2.5 h-2.5 rounded-full bg-blue-500" />
+                    <div>
+                      <p className="text-sm font-semibold text-white">{focalNode.name}</p>
+                      <p className="text-[10px] text-white/40 uppercase tracking-widest">Focal Company / OEM · Tier 0</p>
+                    </div>
+                    <div className="ml-auto text-right">
+                      <p className="text-[10px] text-white/40">Inventory</p>
+                      <p className="text-sm font-bold text-white">{focalNode.inventoryLevel.toLocaleString()}</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Tier metrics table */}
+                <div className="overflow-x-auto rounded-2xl border border-white/5">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-white/5">
+                        <th className="px-5 py-3 text-left text-[10px] text-white/40 uppercase tracking-widest">Tier</th>
+                        <th className="px-5 py-3 text-left text-[10px] text-white/40 uppercase tracking-widest">Nodes</th>
+                        <th className="px-5 py-3 text-left text-[10px] text-white/40 uppercase tracking-widest">Avg Inventory</th>
+                        <th className="px-5 py-3 text-left text-[10px] text-white/40 uppercase tracking-widest">Avg Lead Time</th>
+                        <th className="px-5 py-3 text-left text-[10px] text-white/40 uppercase tracking-widest">Fill Rate</th>
+                        <th className="px-5 py-3 text-left text-[10px] text-white/40 uppercase tracking-widest">Risk Score</th>
+                        <th className="px-5 py-3 text-left text-[10px] text-white/40 uppercase tracking-widest">Disruptions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {sortedTiers.map(tier => {
+                        const m = tierAccum[tier];
+                        const color = getTierColor(tier);
+                        const label = tier === 0 ? 'OEM (Focal)' : getTierLabel(tier);
+                        const riskAvg = avg(m.riskScore);
+                        const riskColor = riskAvg > 60 ? '#ef4444' : riskAvg > 30 ? '#f59e0b' : '#10b981';
+                        return (
+                          <tr key={tier} className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                            <td className="px-5 py-4">
+                              <span className="inline-flex items-center gap-2">
+                                <div className="w-2 h-2 rounded-full" style={{ backgroundColor: color }} />
+                                <span className="font-semibold" style={{ color }}>{label}</span>
+                              </span>
+                            </td>
+                            <td className="px-5 py-4 text-white/60">{m.nodeCount}</td>
+                            <td className="px-5 py-4 text-white">{avg(m.totalInventory).toLocaleString()}</td>
+                            <td className="px-5 py-4 text-white/60">{avg(m.avgLeadTime)} days</td>
+                            <td className="px-5 py-4">
+                              <div className="flex items-center gap-2">
+                                <div className="w-16 h-1.5 bg-white/10 rounded-full overflow-hidden">
+                                  <div className="h-full rounded-full bg-emerald-500" style={{ width: `${avg(m.fillRate)}%` }} />
+                                </div>
+                                <span className="text-white/60 text-xs">{avg(m.fillRate)}%</span>
+                              </div>
+                            </td>
+                            <td className="px-5 py-4">
+                              <span className="font-bold" style={{ color: riskColor }}>{riskAvg}%</span>
+                            </td>
+                            <td className="px-5 py-4 text-white/60">{m.disruptionCount}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Nodes by tier */}
+                <div className="space-y-3">
+                  <h3 className="text-xs font-bold text-white/60 uppercase tracking-widest">Nodes by Tier</h3>
+                  {sortedTiers.map(tier => {
+                    const tierNodes = nodesByTier[tier] || [];
+                    if (tierNodes.length === 0) return null;
+                    const color = getTierColor(tier);
+                    const label = tier === 0 ? 'OEM / Focal' : getTierLabel(tier);
+                    return (
+                      <div key={tier} className="p-3 rounded-xl border" style={{ borderColor: color + '33', backgroundColor: color + '08' }}>
+                        <p className="text-[10px] uppercase tracking-widest font-bold mb-2" style={{ color }}>{label}</p>
+                        <div className="flex flex-wrap gap-2">
+                          {tierNodes.map(n => (
+                            <span
+                              key={n.id}
+                              className="text-xs px-2.5 py-1 rounded-lg border"
+                              style={{ borderColor: color + '44', color: 'rgba(255,255,255,0.7)', backgroundColor: color + '15' }}
+                            >
+                              {n.name}
+                              <span className="ml-1.5 text-[9px] opacity-50">{n.type}</span>
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Active tier alerts */}
+                {totalAlerts.length > 0 && (
+                  <div className="space-y-2">
+                    <h3 className="text-xs font-bold text-white/60 uppercase tracking-widest">Active Disruption Alerts</h3>
+                    {totalAlerts.map((alert, i) => (
+                      <div key={i} className="flex items-start gap-3 p-3 rounded-xl bg-red-500/10 border border-red-500/20">
+                        <div className="w-2 h-2 rounded-full bg-red-400 mt-1 shrink-0 animate-pulse" />
+                        <div className="flex-1">
+                          <p className="text-xs font-semibold text-white">{alert.nodeName}</p>
+                          <p className="text-[10px] text-white/50">
+                            {getTierLabel(alert.tier)} · {alert.type} &mdash;
+                            {alert.estimatedImpactDays > 0
+                              ? ` estimated OEM impact in ~${alert.estimatedImpactDays} days`
+                              : ' impact path unknown'}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        );
+      }
     }
   };
 

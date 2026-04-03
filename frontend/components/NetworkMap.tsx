@@ -3,6 +3,7 @@ import * as d3 from 'd3';
 import * as topojson from 'topojson-client';
 import { SupplyNode, NodeStatus, Route } from '../types';
 import { useTheme } from '../contexts/ThemeContext';
+import { getTierColor, getTierLabel } from '../utils/tierClassifier';
 
 interface NetworkMapProps {
   nodes: SupplyNode[];
@@ -92,20 +93,37 @@ const NetworkMap: React.FC<NetworkMapProps> = ({ nodes, routes, onNodeSelect, se
       const [x, y] = coords;
       const isSelected = selectedNodeId === node.id;
 
+      const tierColor = getTierColor(node.supplyChainTier);
+      const tierLabel = node.isFocalCompany ? 'OEM'
+        : node.supplyChainTier !== undefined ? (node.supplyChainTier > 0 ? `T${node.supplyChainTier}` : node.supplyChainTier < 0 ? `D${Math.abs(node.supplyChainTier)}` : 'OEM')
+        : null;
+
       return (
-        <g 
-          key={node.id} 
+        <g
+          key={node.id}
           className="cursor-pointer transition-all hover:scale-110"
           onClick={() => onNodeSelect(node)}
         >
+          {/* Tier ring — outer ring colored by supply chain tier */}
+          {tierLabel && (
+            <circle
+              cx={x}
+              cy={y}
+              r={isSelected ? 8 : 6.5}
+              fill="none"
+              stroke={tierColor}
+              strokeWidth={1.5}
+              opacity={0.7}
+            />
+          )}
           {isSelected && (
-             <circle
-               cx={x}
-               cy={y}
-               r={8}
-               fill={node.status === NodeStatus.OPTIMAL ? '#10b981' : node.status === NodeStatus.WARNING ? '#f59e0b' : '#ef4444'}
-               className="opacity-20 animate-pulse"
-             />
+            <circle
+              cx={x}
+              cy={y}
+              r={11}
+              fill={node.status === NodeStatus.OPTIMAL ? '#10b981' : node.status === NodeStatus.WARNING ? '#f59e0b' : '#ef4444'}
+              className="opacity-20 animate-pulse"
+            />
           )}
           <circle
             cx={x}
@@ -115,10 +133,25 @@ const NetworkMap: React.FC<NetworkMapProps> = ({ nodes, routes, onNodeSelect, se
             stroke="#fff"
             strokeWidth={isSelected ? 1 : 0.5}
           />
+          {/* Tier badge label — always visible */}
+          {tierLabel && (
+            <text
+              x={x + 7}
+              y={y - 5}
+              textAnchor="start"
+              fill={tierColor}
+              fontSize="5.5"
+              fontWeight="bold"
+              className="pointer-events-none"
+              opacity={0.9}
+            >
+              {tierLabel}
+            </text>
+          )}
           {isSelected && (
             <text
               x={x}
-              y={y - 12}
+              y={y - 14}
               textAnchor="middle"
               fill="white"
               fontSize="10"

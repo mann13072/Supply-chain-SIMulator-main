@@ -11,6 +11,7 @@ import { routingService } from './services/routingService';
 import { PRESET_INDUSTRIES, INDUSTRY_THEMES } from './utils/industries';
 import { getStarterNetwork } from './utils/starterNetworks';
 import { getIndustryBOM, autoMapNodesToBOM } from './utils/industryBOMs';
+import { classifySupplyChainTiers, estimateImpactDelay } from './utils/tierClassifier';
 import { ThemeProvider } from './contexts/ThemeContext';
 import IndustryWizard from './components/IndustryWizard';
 import IndustryView from './components/IndustryView';
@@ -94,6 +95,8 @@ const INITIAL_PARAMS: SimulationParams = {
   seasonalityPattern: 'none',
   seasonalityAmplitude: 0,
   tariffRate: 10,
+  tierVisibilityDecay: 20,
+  tierBullwhipAmplification: true,
 };
 
 // ── BOM helper: Demand Explosion (top-down push) ────────────────────────────
@@ -462,11 +465,20 @@ function computeNextSimulationState(
       const grossProduction = Math.floor((node.productionCapacity || 100) * yieldRate * effectiveSqueeze);
 
       // Demand-driven production: cap output based on downstream pull signals
+      // Tier-aware: demand signal decays by tierVisibilityDecay% per tier hop from retail,
+      // partially offset by collaborationLevel (information sharing).
       const downstreamDemand = routes.filter(r => r.fromId === node.id).reduce((sum, r) => {
         const dst = nextNodes.find(n => n.id === r.toId);
         if (!dst) return sum;
-        const signal = dst.type === NodeType.RETAIL ? (dst.demandVolume || 50) : (dst.orderQuantity || 100);
-        return sum + signal;
+        const rawSignal = dst.type === NodeType.RETAIL ? (dst.demandVolume || 50) : (dst.orderQuantity || 100);
+        // Apply visibility decay based on supply chain tier distance
+        const tierDist = node.supplyChainTier != null ? Math.max(0, node.supplyChainTier) : 0;
+        const decayRate = (params.tierVisibilityDecay ?? 20) / 100;
+        const visibilityFactor = Math.pow(1 - decayRate, tierDist);
+        // Collaboration level reduces information loss (0=no sharing, 100=full transparency)
+        const collabOffset = (1 - visibilityFactor) * ((params.collaborationLevel || 50) / 100);
+        const effectiveVisibility = Math.min(1, visibilityFactor + collabOffset);
+        return sum + rawSignal * effectiveVisibility;
       }, 0);
       const demandCap = downstreamDemand > 0 ? Math.ceil(downstreamDemand * 1.2) : grossProduction;
 
@@ -779,9 +791,13 @@ function computeNextSimulationState(
     }
 
     // Order quantity with bullwhip + MOQ enforcement + vehicle capacity cap
-    let orderQty = Math.ceil(
-      (node.orderQuantity || 100) * (node.type !== NodeType.RETAIL ? params.bullwhipFactor : 1)
-    );
+    // Tier-aware: if tierBullwhipAmplification is on, bullwhip compounds per tier hop
+    // (each upstream tier magnifies the demand signal distortion).
+    const tierDist = node.supplyChainTier != null ? Math.max(0, node.supplyChainTier) : 1;
+    const effectiveBullwhip = (params.tierBullwhipAmplification && node.type !== NodeType.RETAIL)
+      ? Math.pow(params.bullwhipFactor, tierDist)
+      : (node.type !== NodeType.RETAIL ? params.bullwhipFactor : 1);
+    let orderQty = Math.ceil((node.orderQuantity || 100) * effectiveBullwhip);
     // Enforce MOQ
     const moq = node.moq || 0;
     if (moq > 0 && orderQty < moq) orderQty = moq;
@@ -881,9 +897,108 @@ function computeNextSimulationState(
       return { productId, requiredQty: r2(requiredQty), availableQty };
     }) : undefined,
     materialBottlenecks: materialBottlenecks.length > 0 ? materialBottlenecks : undefined,
+    // Supply chain tier metrics
+    tierMetrics: computeTierMetrics(nextNodes, nextShipments, routes),
+    tierAlerts: computeTierAlerts(nextNodes, routes),
   };
 
   return { nextNodes, nextShipments, newLogs, snapshot };
+}
+
+// ── Tier Metrics: per-tier aggregation for analytics ─────────────────────────
+function computeTierMetrics(
+  nodes: SupplyNode[],
+  shipments: InTransitShipment[],
+  routes: Route[],
+): Record<number, import('./types').TierMetrics> | undefined {
+  const tieredNodes = nodes.filter(n => n.supplyChainTier !== undefined);
+  if (tieredNodes.length === 0) return undefined;
+
+  const metrics: Record<number, import('./types').TierMetrics> = {};
+
+  // Group nodes by tier
+  const byTier: Record<number, SupplyNode[]> = {};
+  for (const n of tieredNodes) {
+    const t = n.supplyChainTier!;
+    if (!byTier[t]) byTier[t] = [];
+    byTier[t].push(n);
+  }
+
+  for (const [tierStr, tierNodes] of Object.entries(byTier)) {
+    const tier = Number(tierStr);
+
+    // Average lead time of routes FROM this tier to next tier downstream
+    const outboundRoutes = routes.filter(r => {
+      const src = nodes.find(n => n.id === r.fromId);
+      return src?.supplyChainTier === tier;
+    });
+    const avgLeadTime = outboundRoutes.length > 0
+      ? outboundRoutes.reduce((s, r) => s + r.baseLeadTime, 0) / outboundRoutes.length
+      : 0;
+
+    // Disruption count: nodes not OPTIMAL
+    const disruptionCount = tierNodes.filter(n => n.status !== NodeStatus.OPTIMAL).length;
+
+    // Risk score: 0-100 based on status + days-of-supply
+    const riskScore = Math.round(
+      tierNodes.reduce((sum, n) => {
+        const statusScore = n.status === 'OFFLINE' ? 100
+          : n.status === 'CRITICAL' ? 75
+          : n.status === 'WARNING' ? 30 : 0;
+        const daysOfSupply = n.reorderPoint > 0 ? n.inventoryLevel / Math.max(1, n.reorderPoint) : 1;
+        const coverageScore = Math.max(0, 100 - daysOfSupply * 20);
+        return sum + statusScore * 0.6 + coverageScore * 0.4;
+      }, 0) / tierNodes.length
+    );
+
+    // Cost: holding cost contribution from this tier
+    const totalCost = tierNodes.reduce((s, n) =>
+      s + n.inventoryLevel * (n.accumulatedUnitCost || n.supplierCostPerUnit || 10) * 0.0001, 0);
+
+    // Fill rate from shipments arriving at this tier's nodes
+    const tierNodeIds = new Set(tierNodes.map(n => n.id));
+    const tierShipments = shipments.filter(s => s.toId && tierNodeIds.has(s.toId));
+    const fillRate = tierNodes.length > 0
+      ? tierNodes.filter(n => n.status !== 'CRITICAL' && n.inventoryLevel > 0).length / tierNodes.length * 100
+      : 100;
+
+    metrics[tier] = {
+      nodeCount: tierNodes.length,
+      totalInventory: Math.round(tierNodes.reduce((s, n) => s + n.inventoryLevel, 0)),
+      totalCost: Math.round(totalCost * 100) / 100,
+      avgLeadTime: Math.round(avgLeadTime * 10) / 10,
+      disruptionCount,
+      fillRate: Math.round(fillRate),
+      riskScore,
+    };
+  }
+
+  return metrics;
+}
+
+// ── Tier Alerts: disruptions with estimated impact delay to focal ─────────────
+function computeTierAlerts(
+  nodes: SupplyNode[],
+  routes: Route[],
+): import('./types').TierAlert[] | undefined {
+  const focalNode = nodes.find(n => n.isFocalCompany);
+  if (!focalNode) return undefined;
+
+  const alerts: import('./types').TierAlert[] = [];
+  for (const n of nodes) {
+    if (n.supplyChainTier == null || n.supplyChainTier <= 0) continue;
+    if (n.status === NodeStatus.OFFLINE || n.status === NodeStatus.CRITICAL) {
+      const impactDays = estimateImpactDelay(n.id, focalNode.id, routes);
+      alerts.push({
+        tier: n.supplyChainTier,
+        nodeId: n.id,
+        nodeName: n.name,
+        estimatedImpactDays: impactDays > 0 ? impactDays : 0,
+        type: n.status === NodeStatus.OFFLINE ? 'disruption' : 'stockout',
+      });
+    }
+  }
+  return alerts.length > 0 ? alerts : undefined;
 }
 
 // Auth gate — rendered by App, wraps AppContent when authenticated
@@ -956,6 +1071,18 @@ function AppContent() {
   useEffect(() => { paramsRef.current = params; }, [params]);
   useEffect(() => { industryConfigRef.current = industryConfig; }, [industryConfig]);
   useEffect(() => { bomRef.current = bom; }, [bom]);
+
+  // ── Auto-reclassify supply chain tiers whenever nodes or routes change ──
+  // Runs BFS from the focal company node; skips tierLocked nodes.
+  useEffect(() => {
+    if (nodes.length === 0) return;
+    const reclassified = classifySupplyChainTiers(nodes, routes);
+    // Only update state if something actually changed (avoid infinite loops)
+    const changed = reclassified.some(
+      (n, i) => n.supplyChainTier !== nodes[i]?.supplyChainTier
+    );
+    if (changed) setNodes(reclassified);
+  }, [routes, nodes.map(n => n.isFocalCompany).join(','), nodes.map(n => n.tierLocked).join(',')]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Persist ALL user state to DB (debounced) ──────────────────────
   const networkIdRef = useRef<string | null>(null);
@@ -1069,13 +1196,17 @@ function AppContent() {
     setRoutes(starter.routes);
     // Auto-load BOM template and map nodes to BOM products
     const industryBom = getIndustryBOM(config.id);
+    const baseNodes = industryBom
+      ? autoMapNodesToBOM(starter.nodes, industryBom)
+      : starter.nodes;
+    // Classify supply chain tiers based on routes
+    const tieredNodes = classifySupplyChainTiers(baseNodes, starter.routes);
     if (industryBom) {
       setBom(industryBom);
-      setNodes(autoMapNodesToBOM(starter.nodes, industryBom));
     } else {
       setBom(null);
-      setNodes(starter.nodes);
     }
+    setNodes(tieredNodes);
     resetSimulation();
     setShowWizard(false);
     setActiveTab('dashboard');
@@ -1090,13 +1221,27 @@ function AppContent() {
           const latest = networks[0];
           const data = await routingService.loadNetwork(latest.id);
           if (data) {
-            setNodes(data.nodes || []);
-            setRoutes(data.routes || []);
+            const loadedRoutes: Route[] = data.routes || [];
+            // Backfill new supply chain tier fields on loaded nodes
+            const loadedNodes: SupplyNode[] = (data.nodes || []).map((n: SupplyNode) => ({
+              supplyChainTier: undefined,
+              isFocalCompany: false,
+              tierLocked: false,
+              ...n,
+            }));
+            const tieredNodes = classifySupplyChainTiers(loadedNodes, loadedRoutes);
+            setNodes(tieredNodes);
+            setRoutes(loadedRoutes);
 
             const saved = data.params || {};
 
-            // Restore simulation params
-            if (saved.simulationParams) setParams(prev => ({ ...prev, ...saved.simulationParams }));
+            // Restore simulation params (backfill new tier params if missing)
+            if (saved.simulationParams) setParams(prev => ({
+              ...prev,
+              tierVisibilityDecay: 20,
+              tierBullwhipAmplification: true,
+              ...saved.simulationParams,
+            }));
 
             // Restore industry config
             if (saved.industryConfig) {
