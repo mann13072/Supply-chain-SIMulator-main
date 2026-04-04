@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import * as d3 from 'd3';
 import * as topojson from 'topojson-client';
 import { SupplyNode, NodeStatus, Route } from '../types';
@@ -17,6 +17,89 @@ const NetworkMap: React.FC<NetworkMapProps> = ({ nodes, routes, onNodeSelect, se
   const [worldData, setWorldData] = useState<any>(null);
   const width = 800;
   const height = 400;
+
+  // Zoom & pan state
+  const svgRef = useRef<SVGSVGElement>(null);
+  const [zoom, setZoom] = useState(1);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [isPanning, setIsPanning] = useState(false);
+  const panStart = useRef({ x: 0, y: 0, panX: 0, panY: 0 });
+  const zoomRef = useRef(1);
+  const panRef = useRef({ x: 0, y: 0 });
+  const MIN_ZOOM = 1;
+  const MAX_ZOOM = 8;
+
+  // Keep refs in sync so the wheel handler always has current values
+  useEffect(() => { zoomRef.current = zoom; }, [zoom]);
+  useEffect(() => { panRef.current = pan; }, [pan]);
+
+  // Convert screen coordinates to SVG viewBox coordinates (handles preserveAspectRatio)
+  const screenToSVG = useCallback((svg: SVGSVGElement, clientX: number, clientY: number) => {
+    const point = svg.createSVGPoint();
+    point.x = clientX;
+    point.y = clientY;
+    const ctm = svg.getScreenCTM();
+    if (!ctm) return { x: 0, y: 0 };
+    return point.matrixTransform(ctm.inverse());
+  }, []);
+
+  // Attach wheel listener with { passive: false } so preventDefault actually stops page scroll
+  useEffect(() => {
+    const svg = svgRef.current;
+    if (!svg) return;
+
+    const handleWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const { x: mouseX, y: mouseY } = screenToSVG(svg, e.clientX, e.clientY);
+
+      const curZoom = zoomRef.current;
+      const curPan = panRef.current;
+      const zoomFactor = e.deltaY < 0 ? 1.15 : 1 / 1.15;
+      const newZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, curZoom * zoomFactor));
+      if (newZoom === curZoom) return;
+
+      const scale = newZoom / curZoom;
+      let newPan = {
+        x: mouseX - scale * (mouseX - curPan.x),
+        y: mouseY - scale * (mouseY - curPan.y),
+      };
+
+      if (newZoom <= 1) {
+        newPan = { x: 0, y: 0 };
+      }
+
+      setZoom(newZoom);
+      setPan(newPan);
+    };
+
+    svg.addEventListener('wheel', handleWheel, { passive: false });
+    return () => svg.removeEventListener('wheel', handleWheel);
+  }, [screenToSVG]);
+
+  const handleMouseDown = useCallback((e: React.MouseEvent<SVGSVGElement>) => {
+    if (zoom <= 1) return;
+    setIsPanning(true);
+    panStart.current = { x: e.clientX, y: e.clientY, panX: pan.x, panY: pan.y };
+  }, [zoom, pan]);
+
+  const handleMouseMove = useCallback((e: React.MouseEvent<SVGSVGElement>) => {
+    if (!isPanning) return;
+    const svg = svgRef.current;
+    if (!svg) return;
+    const rect = svg.getBoundingClientRect();
+    const dx = ((e.clientX - panStart.current.x) / rect.width) * width;
+    const dy = ((e.clientY - panStart.current.y) / rect.height) * height;
+    setPan({ x: panStart.current.panX + dx, y: panStart.current.panY + dy });
+  }, [isPanning]);
+
+  const handleMouseUp = useCallback(() => {
+    setIsPanning(false);
+  }, []);
+
+  const resetZoom = useCallback(() => {
+    setZoom(1);
+    setPan({ x: 0, y: 0 });
+  }, []);
 
   useEffect(() => {
     fetch('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json')
@@ -168,24 +251,83 @@ const NetworkMap: React.FC<NetworkMapProps> = ({ nodes, routes, onNodeSelect, se
 
   return (
     <div className="relative w-full h-[250px] sm:h-[350px] md:h-[500px] bg-[#020617] rounded-[2rem] border border-white/5 overflow-hidden group">
-      <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-full">
-        {/* Graticule */}
-        {graticule}
-        
-        {/* World Map Background */}
-        {countries}
-        
-        {/* Connections */}
-        {connections}
+      <svg
+        ref={svgRef}
+        viewBox={`0 0 ${width} ${height}`}
+        className="w-full h-full"
+        style={{ cursor: zoom > 1 ? (isPanning ? 'grabbing' : 'grab') : 'default' }}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseUp}
+      >
+        <g transform={`translate(${pan.x}, ${pan.y}) scale(${zoom})`} style={{ transformOrigin: '0 0' }}>
+          {/* Graticule */}
+          {graticule}
 
-        {/* Nodes */}
-        {nodeElements}
+          {/* World Map Background */}
+          {countries}
+
+          {/* Connections */}
+          {connections}
+
+          {/* Nodes */}
+          {nodeElements}
+        </g>
       </svg>
-      
+
       <div className="absolute top-6 left-6 pointer-events-none">
         <h3 className="text-white font-medium tracking-tight">Geospatial Network Map</h3>
         <p className="text-slate-500 text-xs">2D Digital Twin Projection</p>
       </div>
+
+      {/* Zoom controls */}
+      <div className="absolute bottom-4 right-4 flex flex-col gap-1">
+        <button
+          onClick={() => {
+            setZoom(prev => {
+              const newZoom = Math.min(MAX_ZOOM, prev * 1.3);
+              const scale = newZoom / prev;
+              setPan(p => ({
+                x: width / 2 - scale * (width / 2 - p.x),
+                y: height / 2 - scale * (height / 2 - p.y),
+              }));
+              return newZoom;
+            });
+          }}
+          className="w-7 h-7 rounded bg-white/10 hover:bg-white/20 text-white text-sm font-bold flex items-center justify-center transition-colors"
+          title="Zoom in"
+        >+</button>
+        <button
+          onClick={() => {
+            setZoom(prev => {
+              const newZoom = Math.max(MIN_ZOOM, prev / 1.3);
+              if (newZoom <= 1) { setPan({ x: 0, y: 0 }); return 1; }
+              const scale = newZoom / prev;
+              setPan(p => ({
+                x: width / 2 - scale * (width / 2 - p.x),
+                y: height / 2 - scale * (height / 2 - p.y),
+              }));
+              return newZoom;
+            });
+          }}
+          className="w-7 h-7 rounded bg-white/10 hover:bg-white/20 text-white text-sm font-bold flex items-center justify-center transition-colors"
+          title="Zoom out"
+        >−</button>
+        {zoom > 1 && (
+          <button
+            onClick={resetZoom}
+            className="w-7 h-7 rounded bg-white/10 hover:bg-white/20 text-white text-[9px] font-medium flex items-center justify-center transition-colors mt-0.5"
+            title="Reset zoom"
+          >1:1</button>
+        )}
+      </div>
+
+      {zoom > 1 && (
+        <div className="absolute bottom-4 left-6 text-[10px] text-slate-500 pointer-events-none">
+          {Math.round(zoom * 100)}%
+        </div>
+      )}
     </div>
   );
 };
