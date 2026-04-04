@@ -136,6 +136,7 @@ export interface Route {
   fuelPrice: number;
   customsTime: number;
   disruptionProb: number;
+  regionTags?: string[];
 }
 
 export interface Commodity {
@@ -425,6 +426,79 @@ export interface MaterialBottleneck {
   materialId: string;
   materialName: string;
   daysUntilStockout: number;
+}
+
+// ── Route Intelligence Types ─────────────────────────────────────────────────
+
+export type EventSeverity = 'low' | 'medium' | 'high' | 'critical';
+export type EventSource = 'manual' | 'news-rss';
+
+export interface DisruptionEvent {
+  id: string;
+  title: string;
+  description: string;
+  location: { lat: number; lng: number };
+  blastRadiusKm: number;
+  severity: EventSeverity;
+  affectedTags: string[];
+  source: EventSource;
+  active: boolean;
+  timestamp: string;
+  disruptionProbModifier: number;
+  leadTimeDelayDays: number;
+  costMultiplier: number;
+}
+
+export interface AffectedRoute {
+  routeId: string;
+  route: Route;
+  eventId: string;
+  matchType: 'geographic' | 'tag' | 'both';
+  proximityKm: number;
+  originalDisruptionProb: number;
+  modifiedDisruptionProb: number;
+  originalLeadTime: number;
+  modifiedLeadTime: number;
+}
+
+export interface RouteAlternative {
+  id: string;
+  path: string[];
+  routes: Route[];
+  totalDistance: number;
+  totalLeadTime: number;
+  totalCost: number;
+  riskScore: number;
+  compositeScore: number;
+  isCurrentRoute: boolean;
+}
+
+export interface RouteSuggestion {
+  affectedRoute: AffectedRoute;
+  alternatives: RouteAlternative[];
+  status: 'pending' | 'accepted' | 'rejected';
+  acceptedAlternativeId?: string;
+}
+
+export interface NewsItem {
+  id: string;
+  title: string;
+  description: string;
+  link: string;
+  publishedAt: string;
+  extractedLocation?: { lat: number; lng: number };
+  extractedSeverity: EventSeverity;
+  keywords: string[];
+  convertedToEvent: boolean;
+}
+
+export interface RouteIntelligenceState {
+  events: DisruptionEvent[];
+  newsItems: NewsItem[];
+  affectedRoutes: AffectedRoute[];
+  suggestions: RouteSuggestion[];
+  autoPauseOnCritical: boolean;
+  autoApplyMinor: boolean;
 }
 
 export interface OptimizationResult {

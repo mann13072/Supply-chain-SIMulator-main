@@ -1177,5 +1177,17 @@ def download_import_template():
     )
 
 
+# ─────────────────────────────────────────────
+#  NEWS / ROUTE INTELLIGENCE
+# ─────────────────────────────────────────────
+from news_fetcher import fetch_supply_chain_news
+
+@app.get("/api/news/fetch")
+async def get_supply_chain_news():
+    """Fetches supply chain disruption news from Google News RSS."""
+    items = fetch_supply_chain_news()
+    return {"items": items, "count": len(items)}
+
+
 if __name__ == "__main__":
     uvicorn.run(app, host="127.0.0.1", port=8000)

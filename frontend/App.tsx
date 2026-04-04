@@ -5,7 +5,7 @@ import SimulationEngine from './components/SimulationEngine';
 import AnalyticsView from './components/AnalyticsView';
 import SettingsView from './components/SettingsView';
 import OptimizationView from './components/OptimizationView';
-import { SupplyNode, NodeType, NodeStatus, Route, TransportMode, SimulationParams, InTransitShipment, HistorySnapshot, IndustryConfig, WorkflowState, BillOfMaterials } from './types';
+import { SupplyNode, NodeType, NodeStatus, Route, TransportMode, SimulationParams, InTransitShipment, HistorySnapshot, IndustryConfig, WorkflowState, BillOfMaterials, RouteIntelligenceState } from './types';
 import { routingService } from './services/routingService';
 import { PRESET_INDUSTRIES, INDUSTRY_THEMES } from './utils/industries';
 import { getStarterNetwork } from './utils/starterNetworks';
@@ -17,7 +17,9 @@ import IndustryView from './components/IndustryView';
 import DeployMenu from './components/DeployMenu';
 import SimulationHistoryView from './components/SimulationHistoryView';
 import BOMView from './components/BOMView';
-import { LayoutDashboard, Network, PlayCircle, BarChart3, Settings, Zap, Activity, CheckCircle2, Circle, LogOut, Factory, Clock, Layers } from 'lucide-react';
+import RouteIntelligenceView from './components/RouteIntelligenceView';
+import { applyEventEffectsToRoutes } from './utils/eventRouteMapper';
+import { LayoutDashboard, Network, PlayCircle, BarChart3, Settings, Zap, Activity, CheckCircle2, Circle, LogOut, Factory, Clock, Layers, Radar } from 'lucide-react';
 import { useAuth } from './contexts/AuthContext';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
@@ -1036,6 +1038,11 @@ function AppContent() {
   const [viewingRun, setViewingRun] = useState<any | null>(null);
   const [showWizard, setShowWizard] = useState(false);
   const [bom, setBom] = useState<BillOfMaterials | null>(null);
+  const [routeIntelState, setRouteIntelState] = useState<RouteIntelligenceState>({
+    events: [], newsItems: [], affectedRoutes: [], suggestions: [],
+    autoPauseOnCritical: true, autoApplyMinor: false,
+  });
+  const routeIntelStateRef = useRef<RouteIntelligenceState>(routeIntelState);
   const globeRef = useRef<HTMLDivElement>(null);
   const [costVarianceThreshold, setCostVarianceThreshold] = useState(15);
 
@@ -1070,6 +1077,7 @@ function AppContent() {
   useEffect(() => { paramsRef.current = params; }, [params]);
   useEffect(() => { industryConfigRef.current = industryConfig; }, [industryConfig]);
   useEffect(() => { bomRef.current = bom; }, [bom]);
+  useEffect(() => { routeIntelStateRef.current = routeIntelState; }, [routeIntelState]);
 
   // ── Auto-reclassify supply chain tiers whenever nodes or routes change ──
   // Runs BFS from the focal company node; skips tierLocked nodes.
@@ -1154,15 +1162,39 @@ function AppContent() {
     }
     const interval = setInterval(() => {
       const nextDay = dayRef.current + 1;
+
+      // Apply event effects to routes (working copy, originals not mutated)
+      const intelState = routeIntelStateRef.current;
+      const activeEvents = intelState.events.filter(e => e.active);
+      const workingRoutes = activeEvents.length > 0
+        ? applyEventEffectsToRoutes(routesRef.current, activeEvents, nodesRef.current)
+        : routesRef.current;
+
       const { nextNodes, nextShipments, newLogs, snapshot } = computeNextSimulationState(
         nodesRef.current,
         shipmentsRef.current,
-        routesRef.current,
+        workingRoutes,
         paramsRef.current,
         nextDay,
         industryConfigRef.current,
         bomRef.current
       );
+
+      // Log active event effects periodically (every 10 days)
+      if (activeEvents.length > 0 && nextDay % 10 === 1) {
+        const affectedCount = intelState.affectedRoutes.length;
+        if (affectedCount > 0) {
+          newLogs.push(`Day ${nextDay}: ${activeEvents.length} active event(s) affecting ${affectedCount} route(s).`);
+        }
+      }
+
+      // Critical event auto-pause
+      const hasCritical = activeEvents.some(e => e.severity === 'critical');
+      if (hasCritical && intelState.autoPauseOnCritical) {
+        setIsPlaying(false);
+        setActiveTab('intelligence');
+        newLogs.push(`Day ${nextDay}: CRITICAL EVENT detected — simulation paused.`);
+      }
 
       setDay(nextDay);
       setNodes(nextNodes);
@@ -1412,6 +1444,19 @@ function AppContent() {
             />
           </div>
         );
+      case 'intelligence':
+        return (
+          <RouteIntelligenceView
+            state={routeIntelState}
+            setState={setRouteIntelState}
+            routes={routes}
+            nodes={nodes}
+            setRoutes={setRoutes}
+            onPauseSimulation={() => setIsPlaying(false)}
+            addLog={(msg: string) => setLogs(prev => [msg, ...prev].slice(0, 50))}
+            day={day}
+          />
+        );
       case 'optimization':
         return <OptimizationView nodes={nodes} routes={routes} history={history} params={params} industryConfig={industryConfig} analysisReady={workflowState.analysisReady} />;
       case 'industry':
@@ -1445,6 +1490,7 @@ function AppContent() {
     { id: 'analytics', label: 'Analytics', icon: BarChart3 },
     { id: 'history', label: 'History', icon: Clock },
     { id: 'optimization', label: 'Optimize', icon: Zap },
+    { id: 'intelligence', label: 'Intelligence', icon: Radar },
     { id: 'settings', label: 'Settings', icon: Settings },
   ];
 
