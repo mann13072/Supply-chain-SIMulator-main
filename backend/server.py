@@ -327,6 +327,13 @@ async def analyze_supply_chain(req: AnalysisRequest):
 
     try:
         import google.generativeai as genai
+    except ImportError:
+        raise HTTPException(
+            status_code=503,
+            detail="google-generativeai package is not installed. Run: pip install google-generativeai"
+        )
+
+    try:
         genai.configure(api_key=api_key)
 
         # Compact the payload to reduce token usage
@@ -375,7 +382,7 @@ Return JSON with exactly:
   "quantitativeRiskScore": number
 }}"""
 
-        model = genai.GenerativeModel('gemini-2.0-flash')
+        model = genai.GenerativeModel('gemini-2.5-flash')
         response = model.generate_content(
             prompt,
             generation_config=genai.GenerationConfig(
@@ -386,7 +393,10 @@ Return JSON with exactly:
 
     except Exception as e:
         print(f"Gemini analysis error: {e}")
-        raise HTTPException(status_code=500, detail=f"AI analysis failed: {str(e)}")
+        err_str = str(e)
+        if "429" in err_str or "quota" in err_str.lower():
+            raise HTTPException(status_code=429, detail="Gemini API quota exceeded. Your free-tier daily limit has been reached. Wait for it to reset or enable billing at https://ai.google.dev/gemini-api/docs/rate-limits")
+        raise HTTPException(status_code=500, detail=f"AI analysis failed: {err_str}")
 
 
 # ─────────────────────────────────────────────

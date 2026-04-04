@@ -1,11 +1,14 @@
 import React, { useState } from 'react';
-import { SimulationParams, IndustryConfig } from '../types';
-import { Settings, Zap, Factory, Truck, Globe, DollarSign } from 'lucide-react';
+import { SimulationParams, IndustryConfig, SupplyNode, Route, NodeType } from '../types';
+import { Settings, Zap, Factory, Truck, Globe, DollarSign, ShieldAlert, TrendingUp, AlertTriangle, Clock, Package } from 'lucide-react';
+import { motion } from 'framer-motion';
 
 interface SimulationPanelProps {
   params: SimulationParams;
   setParams: (params: SimulationParams) => void;
   industryConfig: IndustryConfig;
+  nodes: SupplyNode[];
+  routes: Route[];
 }
 
 // Filled slider track — gradient from accent color to dim white
@@ -62,8 +65,29 @@ const SliderCard = ({
   </div>
 );
 
-const SimulationPanel: React.FC<SimulationPanelProps> = ({ params, setParams, industryConfig }) => {
-  const [activeTab, setActiveTab] = useState<'MATERIALS' | 'OPS' | 'LOGISTICS' | 'MARKET' | 'FINANCE'>('MATERIALS');
+const STRESS_SCENARIOS = [
+  {
+    label: 'Port Crisis',
+    description: 'Severe port congestion + logistics breakdown',
+    color: 'amber',
+    params: { portCongestionProb: 0.4, logisticDisruption: true, transportDelayProb: 0.25, freightCostIndex: 180 }
+  },
+  {
+    label: 'Trade War',
+    description: 'Tariffs + geopolitical tension + demand shock',
+    color: 'orange',
+    params: { geopoliticalTension: true, tariffImposition: true, supplierFailureProb: 0.15, demandShockProb: 0.08 }
+  },
+  {
+    label: 'Pandemic',
+    description: 'Labor shortage + disrupted global logistics',
+    color: 'red',
+    params: { laborStrikeProb: 0.2, demandShockProb: 0.3, portCongestionProb: 0.3, naturalDisasterProb: 0.005, logisticDisruption: true }
+  },
+] as const;
+
+const SimulationPanel: React.FC<SimulationPanelProps> = ({ params, setParams, industryConfig, nodes, routes }) => {
+  const [activeTab, setActiveTab] = useState<'MATERIALS' | 'OPS' | 'LOGISTICS' | 'MARKET' | 'FINANCE' | 'RESILIENCE'>('MATERIALS');
 
   const handleChange = (field: keyof SimulationParams, value: any) => {
     setParams({ ...params, [field]: value });
@@ -85,11 +109,12 @@ const SimulationPanel: React.FC<SimulationPanelProps> = ({ params, setParams, in
     (params.qualityRecallProb > 0.002 ? 1 : 0);
 
   const tabs = [
-    { id: 'MATERIALS' as const, label: 'Commodities', icon: Zap },
-    { id: 'OPS'       as const, label: 'Operations',  icon: Factory },
-    { id: 'LOGISTICS' as const, label: 'Logistics',   icon: Truck },
-    { id: 'MARKET'    as const, label: 'Market',      icon: Globe },
-    { id: 'FINANCE'   as const, label: 'Macro',        icon: DollarSign },
+    { id: 'MATERIALS'   as const, label: 'Commodities', icon: Zap },
+    { id: 'OPS'         as const, label: 'Operations',  icon: Factory },
+    { id: 'LOGISTICS'   as const, label: 'Logistics',   icon: Truck },
+    { id: 'MARKET'      as const, label: 'Market',      icon: Globe },
+    { id: 'FINANCE'     as const, label: 'Macro',       icon: DollarSign },
+    { id: 'RESILIENCE'  as const, label: 'Resilience',  icon: ShieldAlert },
   ];
 
   return (
@@ -473,6 +498,180 @@ const SimulationPanel: React.FC<SimulationPanelProps> = ({ params, setParams, in
               color="#f43f5e"
               accent="text-rose-400"
             />
+          </div>
+        )}
+
+        {/* RESILIENCE */}
+        {activeTab === 'RESILIENCE' && (
+          <div className="animate-in fade-in slide-in-from-bottom-2 duration-300 space-y-3">
+            {(() => {
+              // Resilience score calculation
+              let score = 100;
+              score -= (params.supplierFailureProb * 100) * 0.5;
+              score -= (params.naturalDisasterProb * 100) * 1.0;
+              score -= (params.portCongestionProb * 100) * 0.3;
+              score -= (params.laborStrikeProb * 100) * 0.2;
+              score -= (params.cyberRisk * 100) * 0.4;
+              score -= (params.transportDelayProb * 100) * 0.1;
+              score -= params.geopoliticalTension ? 20 : 0;
+              score -= params.tariffImposition ? 5 : 0;
+              score -= params.logisticDisruption ? 10 : 0;
+              score -= params.weatherEvent ? 8 : 0;
+              score -= (100 - params.forecastAccuracy) / 5;
+              const singleSourceNodes = nodes.filter(node =>
+                routes.filter(r => r.toId === node.id).length === 1 && node.type !== NodeType.SUPPLIER
+              ).length;
+              score -= singleSourceNodes * 8;
+              const hasRedundantRoutes = routes.length > nodes.length;
+              if (!hasRedundantRoutes && nodes.length > 0) score -= 5;
+              const resilienceScore = Math.max(0, Math.min(100, Math.round(score)));
+              const scoreColor = resilienceScore > 70 ? '#10b981' : resilienceScore > 40 ? '#f59e0b' : '#ef4444';
+              const scoreLabel = resilienceScore > 70 ? 'RESILIENT' : resilienceScore > 40 ? 'MODERATE RISK' : 'HIGH RISK';
+
+              // Impact predictions
+              const expectedDelayDays = (
+                (params.geopoliticalTension ? 5 : 0) +
+                (params.logisticDisruption ? 2 : 0) +
+                (params.weatherEvent ? 3 : 0) +
+                (params.tariffImposition ? 2 : 0) +
+                (params.portCongestionProb * 100 * 0.03)
+              ).toFixed(1);
+              const stockoutRisk = Math.min(100,
+                (params.supplierFailureProb * 100) +
+                (params.demandShockProb * 100) +
+                (params.naturalDisasterProb * 500)
+              ).toFixed(0);
+              const commodityImpact = Object.values(params.commodityPriceChanges as Record<string, number>)
+                .reduce((sum: number, v: number) => sum + Math.max(0, v) * 0.3, 0);
+              const costImpact = Math.max(0,
+                (params.tariffImposition ? 8 : 0) +
+                ((params.freightCostIndex - 100) * 0.1) +
+                commodityImpact +
+                (params.logisticDisruption ? 5 : 0)
+              ).toFixed(1);
+
+              // Node risk heatmap
+              const nodeRiskList = nodes.map(node => {
+                const inboundRoutes = routes.filter(r => r.toId === node.id).length;
+                const isSingleSource = inboundRoutes === 1 && node.type !== NodeType.SUPPLIER;
+                const lowInventory = node.inventoryLevel < (node.reorderPoint || 20);
+                const riskLevel = isSingleSource && lowInventory ? 'HIGH' : isSingleSource || lowInventory ? 'MED' : 'LOW';
+                return { node, inboundRoutes, riskLevel };
+              }).sort((a, b) => ({ HIGH: 0, MED: 1, LOW: 2 }[a.riskLevel] - { HIGH: 0, MED: 1, LOW: 2 }[b.riskLevel]));
+
+              return (
+                <>
+                  {/* Resilience Score */}
+                  <div className="bg-white/[0.03] rounded-xl border border-white/[0.06] p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <ShieldAlert className="w-4 h-4" style={{ color: scoreColor }} />
+                        <p className="text-xs font-semibold text-white/80">Resilience Score</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-2xl font-black tabular-nums leading-none" style={{ color: scoreColor }}>
+                          {resilienceScore}
+                        </span>
+                        <span className="text-[10px] font-bold" style={{ color: scoreColor }}>{scoreLabel}</span>
+                      </div>
+                    </div>
+                    <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
+                      <motion.div
+                        animate={{ width: `${resilienceScore}%` }}
+                        transition={{ type: 'spring', stiffness: 80 }}
+                        className="h-full rounded-full"
+                        style={{ backgroundColor: scoreColor }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Stress Scenario Presets */}
+                  <div className="bg-white/[0.03] rounded-xl border border-white/[0.06] p-3.5">
+                    <p className="text-[10px] text-white/40 uppercase tracking-widest font-bold mb-2">Stress Scenarios</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {STRESS_SCENARIOS.map(scenario => (
+                        <button
+                          key={scenario.label}
+                          onClick={() => setParams({ ...params, ...scenario.params })}
+                          title={scenario.description}
+                          className={`px-3 py-1.5 rounded-lg text-[10px] font-bold border transition-all ${
+                            scenario.color === 'amber' ? 'border-amber-500/30 text-amber-400 hover:bg-amber-500/10' :
+                            scenario.color === 'orange' ? 'border-orange-500/30 text-orange-400 hover:bg-orange-500/10' :
+                            'border-red-500/30 text-red-400 hover:bg-red-500/10'
+                          }`}
+                        >
+                          {scenario.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Impact Prediction */}
+                  <div className="bg-white/[0.03] rounded-xl border border-white/[0.06] p-3.5">
+                    <p className="text-[10px] text-white/40 uppercase tracking-widest font-bold mb-2 flex items-center gap-1.5">
+                      <TrendingUp className="w-3 h-3" /> Impact Prediction
+                    </p>
+                    <div className="space-y-1.5">
+                      {[
+                        {
+                          icon: Clock, label: 'Expected Delay',
+                          value: `+${expectedDelayDays}d`,
+                          severity: parseFloat(expectedDelayDays) > 5 ? 'red' : parseFloat(expectedDelayDays) > 2 ? 'amber' : 'green'
+                        },
+                        {
+                          icon: Package, label: 'Stockout Risk',
+                          value: `${stockoutRisk}%`,
+                          severity: parseInt(stockoutRisk) > 30 ? 'red' : parseInt(stockoutRisk) > 10 ? 'amber' : 'green'
+                        },
+                        {
+                          icon: DollarSign, label: 'Cost Impact',
+                          value: `+${costImpact}%`,
+                          severity: parseFloat(costImpact) > 10 ? 'red' : parseFloat(costImpact) > 5 ? 'amber' : 'green'
+                        },
+                      ].map(({ icon: Icon, label, value, severity }) => (
+                        <div key={label} className="flex items-center justify-between p-2.5 bg-white/[0.02] rounded-lg border border-white/[0.04]">
+                          <div className="flex items-center gap-2">
+                            <Icon className={`w-3.5 h-3.5 ${severity === 'red' ? 'text-red-400' : severity === 'amber' ? 'text-amber-400' : 'text-emerald-400'}`} />
+                            <span className="text-[11px] text-white/60">{label}</span>
+                          </div>
+                          <span className={`text-sm font-bold font-mono tabular-nums ${
+                            severity === 'red' ? 'text-red-400' : severity === 'amber' ? 'text-amber-400' : 'text-emerald-400'
+                          }`}>
+                            {value}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Node Risk Heatmap */}
+                  {nodeRiskList.length > 0 && (
+                    <div className="bg-white/[0.03] rounded-xl border border-white/[0.06] p-3.5">
+                      <p className="text-[10px] text-white/40 uppercase tracking-widest font-bold mb-2 flex items-center gap-1.5">
+                        <AlertTriangle className="w-3 h-3" /> Node Exposure
+                      </p>
+                      <div className="space-y-1 overflow-y-auto max-h-40 custom-scrollbar">
+                        {nodeRiskList.map(({ node, inboundRoutes, riskLevel }) => (
+                          <div key={node.id} className="flex items-center justify-between py-2 px-2.5 rounded-lg bg-white/[0.02] border border-white/[0.03]">
+                            <div>
+                              <p className="text-[11px] font-medium text-white/80 truncate max-w-[120px]">{node.name}</p>
+                              <p className="text-[9px] text-white/30">{inboundRoutes} inbound</p>
+                            </div>
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
+                              riskLevel === 'HIGH' ? 'bg-red-500/15 text-red-400 border border-red-500/20' :
+                              riskLevel === 'MED'  ? 'bg-amber-500/15 text-amber-400 border border-amber-500/20' :
+                                                    'bg-emerald-500/15 text-emerald-400 border border-emerald-500/20'
+                            }`}>
+                              {riskLevel}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </>
+              );
+            })()}
           </div>
         )}
       </div>

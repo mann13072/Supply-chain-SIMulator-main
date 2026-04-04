@@ -4,7 +4,6 @@ import NetworkBuilder from './components/NetworkBuilder';
 import SimulationEngine from './components/SimulationEngine';
 import AnalyticsView from './components/AnalyticsView';
 import SettingsView from './components/SettingsView';
-import ResilienceHub from './components/ResilienceHub';
 import OptimizationView from './components/OptimizationView';
 import { SupplyNode, NodeType, NodeStatus, Route, TransportMode, SimulationParams, InTransitShipment, HistorySnapshot, IndustryConfig, WorkflowState, BillOfMaterials } from './types';
 import { routingService } from './services/routingService';
@@ -18,7 +17,7 @@ import IndustryView from './components/IndustryView';
 import DeployMenu from './components/DeployMenu';
 import SimulationHistoryView from './components/SimulationHistoryView';
 import BOMView from './components/BOMView';
-import { LayoutDashboard, Network, PlayCircle, BarChart3, Settings, Zap, ShieldAlert, Activity, CheckCircle2, Circle, LogOut, Factory, Clock, Layers } from 'lucide-react';
+import { LayoutDashboard, Network, PlayCircle, BarChart3, Settings, Zap, Activity, CheckCircle2, Circle, LogOut, Factory, Clock, Layers } from 'lucide-react';
 import { useAuth } from './contexts/AuthContext';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
@@ -1304,7 +1303,7 @@ function AppContent() {
   const workflowSteps = [
     { label: 'Industry', done: workflowState.industryConfigured, tab: 'industry' },
     { label: 'Network',  done: workflowState.networkBuilt,       tab: 'builder' },
-    { label: 'Risk',     done: workflowState.riskConfigured,     tab: 'resilience' },
+    { label: 'Risk',     done: workflowState.riskConfigured,     tab: 'simulation' },
     { label: 'Simulate', done: workflowState.simulationRun,      tab: 'simulation' },
     { label: 'Analyze',  done: workflowState.analysisReady,      tab: 'analytics' },
     { label: 'Optimize', done: false,                            tab: 'optimization' },
@@ -1323,7 +1322,7 @@ function AppContent() {
             {/* Workflow Progress Strip */}
             <div className="bg-white/5 rounded-2xl border border-white/5 p-3 md:p-4 flex items-center justify-between gap-2 overflow-x-auto">
               {workflowSteps.map((step, i) => (
-                <React.Fragment key={step.tab}>
+                <React.Fragment key={step.label}>
                   <button onClick={() => setActiveTab(step.tab)} className="flex flex-col items-center gap-1 group">
                     {step.done
                       ? <CheckCircle2 className="w-5 h-5" style={{ color: currentTheme.accent }} />
@@ -1413,8 +1412,6 @@ function AppContent() {
             />
           </div>
         );
-      case 'resilience':
-        return <ResilienceHub nodes={nodes} routes={routes} params={params} setParams={setParams} setIsPlaying={setIsPlaying} setActiveTab={setActiveTab} resetSimulation={resetSimulation} />;
       case 'optimization':
         return <OptimizationView nodes={nodes} routes={routes} history={history} params={params} industryConfig={industryConfig} analysisReady={workflowState.analysisReady} />;
       case 'industry':
@@ -1445,7 +1442,6 @@ function AppContent() {
     { id: 'builder', label: 'Builder', icon: Network },
     { id: 'bom', label: 'BOM', icon: Layers },
     { id: 'simulation', label: 'Simulation', icon: PlayCircle },
-    { id: 'resilience', label: 'Resilience', icon: ShieldAlert },
     { id: 'analytics', label: 'Analytics', icon: BarChart3 },
     { id: 'history', label: 'History', icon: Clock },
     { id: 'optimization', label: 'Optimize', icon: Zap },

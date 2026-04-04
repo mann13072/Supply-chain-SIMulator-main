@@ -63,7 +63,36 @@ const OptimizationView: React.FC<OptimizationViewProps> = ({
 
       if (!response.ok) {
         const err = await response.json().catch(() => ({ detail: 'Server error' }));
-        throw new Error(err.detail || `Server error ${response.status}`);
+        const detail = err.detail || `Server error ${response.status}`;
+        // If AI service is unavailable (missing module or no API key) or quota exceeded, use fallback
+        if (response.status === 503 || response.status === 500 || response.status === 429) {
+          console.warn(`AI analysis unavailable: ${detail}. Using fallback data.`);
+          const isQuota = response.status === 429;
+          setResult({
+            narrative: isQuota
+              ? "Gemini API quota exceeded. Your free-tier daily limit has been reached. Please wait for it to reset or enable billing at ai.google.dev for live AI-powered insights."
+              : "AI analysis is unavailable. This is a fallback assessment based on your network topology. Configure GEMINI_API_KEY and install google-generativeai for live AI-powered insights.",
+            kpiImpact: {
+              landedCostChange: 0,
+              otifChange: 0,
+              carbonFootprintChange: 0,
+              inventoryRisk: nodes.some(n => n.inventory < n.reorderPoint) ? 'High' : 'Low',
+              financialRisk: Math.round(params.supplierFailureProb * 100 + params.demandShockProb * 100),
+              operationalRisk: Math.round(params.portCongestionProb * 100 + params.transportDelayProb * 100)
+            },
+            recommendations: [
+              "Install google-generativeai and set GEMINI_API_KEY for full AI-powered analysis.",
+              "Review nodes with inventory below reorder points for stockout risk.",
+              "Evaluate single-source supplier dependencies for resilience improvements."
+            ],
+            qualitativeRisk: "Unable to perform AI qualitative assessment. Manual review recommended.",
+            quantitativeRiskScore: Math.round(
+              (params.supplierFailureProb + params.demandShockProb + params.portCongestionProb) * 100
+            )
+          });
+          return;
+        }
+        throw new Error(detail);
       }
 
       const data = await response.json();

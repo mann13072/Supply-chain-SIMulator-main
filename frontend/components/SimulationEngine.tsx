@@ -341,7 +341,7 @@ const SimulationEngine: React.FC<SimulationEngineProps> = ({
       </div>
 
       {/* ── Simulation Parameters Panel ──────────────────────────────── */}
-      <SimulationPanel params={params} setParams={setParams} industryConfig={industryConfig} />
+      <SimulationPanel params={params} setParams={setParams} industryConfig={industryConfig} nodes={nodes} routes={routes} />
 
       {/* ── Save Run Modal ──────────────────────────────────────────── */}
       <AnimatePresence>
