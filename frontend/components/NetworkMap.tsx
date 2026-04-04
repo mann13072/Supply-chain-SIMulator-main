@@ -124,10 +124,10 @@ const NetworkMap: React.FC<NetworkMapProps> = ({ nodes, routes, onNodeSelect, se
         d={pathGenerator(worldData) || ''}
         fill="#0f172a"
         stroke="#334155"
-        strokeWidth="0.5"
+        strokeWidth={0.5 / zoom}
       />
     );
-  }, [worldData, pathGenerator]);
+  }, [worldData, pathGenerator, zoom]);
 
   const graticule = useMemo(() => {
     return (
@@ -135,10 +135,10 @@ const NetworkMap: React.FC<NetworkMapProps> = ({ nodes, routes, onNodeSelect, se
         d={pathGenerator(d3.geoGraticule()()) || ''}
         fill="none"
         stroke="#1e293b"
-        strokeWidth="0.2"
+        strokeWidth={0.2 / zoom}
       />
     );
-  }, [pathGenerator]);
+  }, [pathGenerator, zoom]);
 
   const connections = useMemo(() => {
     return routes.map(route => {
@@ -161,15 +161,18 @@ const NetworkMap: React.FC<NetworkMapProps> = ({ nodes, routes, onNodeSelect, se
           d={`M ${x1} ${y1} Q ${midX} ${midY} ${x2} ${y2}`}
           fill="none"
           stroke={theme.accent}
-          strokeWidth="1.5"
-          strokeDasharray="4,4"
+          strokeWidth={1.5 / zoom}
+          strokeDasharray={`${4 / zoom},${4 / zoom}`}
           className="opacity-40"
         />
       );
     });
-  }, [nodes, routes, projection]);
+  }, [nodes, routes, projection, zoom]);
 
   const nodeElements = useMemo(() => {
+    const inverseScale = 1 / zoom;
+    const showLabels = zoom >= 1.8;
+
     return nodes.map(node => {
       const coords = projection([node.coordinates.lng, node.coordinates.lat]);
       if (!coords) return null;
@@ -184,14 +187,15 @@ const NetworkMap: React.FC<NetworkMapProps> = ({ nodes, routes, onNodeSelect, se
       return (
         <g
           key={node.id}
-          className="cursor-pointer transition-all hover:scale-110"
+          transform={`translate(${x}, ${y}) scale(${inverseScale})`}
+          className="cursor-pointer"
           onClick={() => onNodeSelect(node)}
         >
           {/* Tier ring — outer ring colored by supply chain tier */}
           {tierLabel && (
             <circle
-              cx={x}
-              cy={y}
+              cx={0}
+              cy={0}
               r={isSelected ? 8 : 6.5}
               fill="none"
               stroke={tierColor}
@@ -201,26 +205,26 @@ const NetworkMap: React.FC<NetworkMapProps> = ({ nodes, routes, onNodeSelect, se
           )}
           {isSelected && (
             <circle
-              cx={x}
-              cy={y}
+              cx={0}
+              cy={0}
               r={11}
               fill={node.status === NodeStatus.OPTIMAL ? '#10b981' : node.status === NodeStatus.WARNING ? '#f59e0b' : '#ef4444'}
               className="opacity-20 animate-pulse"
             />
           )}
           <circle
-            cx={x}
-            cy={y}
+            cx={0}
+            cy={0}
             r={isSelected ? 5 : 4}
             fill={node.status === NodeStatus.OPTIMAL ? '#10b981' : node.status === NodeStatus.WARNING ? '#f59e0b' : '#ef4444'}
             stroke="#fff"
             strokeWidth={isSelected ? 1 : 0.5}
           />
-          {/* Tier badge label — always visible */}
-          {tierLabel && (
+          {/* Tier badge label — only when zoomed in enough */}
+          {showLabels && tierLabel && (
             <text
-              x={x + 7}
-              y={y - 5}
+              x={7}
+              y={-5}
               textAnchor="start"
               fill={tierColor}
               fontSize="5.5"
@@ -231,10 +235,10 @@ const NetworkMap: React.FC<NetworkMapProps> = ({ nodes, routes, onNodeSelect, se
               {tierLabel}
             </text>
           )}
-          {isSelected && (
+          {showLabels && isSelected && (
             <text
-              x={x}
-              y={y - 14}
+              x={0}
+              y={-14}
               textAnchor="middle"
               fill="white"
               fontSize="10"
@@ -247,7 +251,7 @@ const NetworkMap: React.FC<NetworkMapProps> = ({ nodes, routes, onNodeSelect, se
         </g>
       );
     });
-  }, [nodes, projection, selectedNodeId, onNodeSelect]);
+  }, [nodes, projection, selectedNodeId, onNodeSelect, zoom]);
 
   return (
     <div className="relative w-full h-[250px] sm:h-[350px] md:h-[500px] bg-[#020617] rounded-[2rem] border border-white/5 overflow-hidden group">
