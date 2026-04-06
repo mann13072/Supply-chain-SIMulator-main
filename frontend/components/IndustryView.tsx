@@ -1,23 +1,26 @@
 import React, { useState } from 'react';
 import { Factory, Plus, Trash2, Check, Pencil, X, Sparkles, DollarSign, ArrowRightLeft, Package } from 'lucide-react';
-import { IndustryConfig, Commodity } from '../types';
+import { IndustryConfig, Commodity, BillOfMaterials } from '../types';
 import { PRESET_INDUSTRIES, CURRENCIES, INDUSTRY_THEMES } from '../utils/industries';
 import { getStarterNetwork } from '../utils/starterNetworks';
 import { SupplyNode, Route } from '../types';
 import { useTheme } from '../contexts/ThemeContext';
+import { getIndustryBOM, autoMapNodesToBOM } from '../utils/industryBOMs';
 
 interface IndustryViewProps {
   industryConfig: IndustryConfig;
   setIndustryConfig: (config: IndustryConfig) => void;
+  nodes: SupplyNode[];
   setNodes: (nodes: SupplyNode[]) => void;
   setRoutes: (routes: Route[]) => void;
+  setBom: (bom: BillOfMaterials | null) => void;
   resetSimulation: () => void;
   onOpenWizard: () => void;
 }
 
 const IndustryView: React.FC<IndustryViewProps> = ({
   industryConfig, setIndustryConfig,
-  setNodes, setRoutes, resetSimulation,
+  nodes, setNodes, setRoutes, setBom, resetSimulation,
   onOpenWizard,
 }) => {
   const theme = useTheme();
@@ -29,13 +32,23 @@ const IndustryView: React.FC<IndustryViewProps> = ({
   // ── Industry preset selection ──────────────────────────────────────
   const selectPreset = (preset: IndustryConfig) => {
     setIndustryConfig({ ...preset });
+    const industryBom = getIndustryBOM(preset.id);
+    setBom(industryBom);
+    if (industryBom && nodes.length > 0) {
+      setNodes(autoMapNodesToBOM(nodes, industryBom));
+    }
   };
 
   const switchIndustryWithNetwork = (preset: IndustryConfig) => {
     setIndustryConfig({ ...preset });
     const starter = getStarterNetwork(preset.id);
+    const industryBom = getIndustryBOM(preset.id);
+    setBom(industryBom);
     if (starter.nodes.length > 0) {
-      setNodes(starter.nodes);
+      const mappedNodes = industryBom
+        ? autoMapNodesToBOM(starter.nodes, industryBom)
+        : starter.nodes;
+      setNodes(mappedNodes);
       setRoutes(starter.routes);
       resetSimulation();
     }

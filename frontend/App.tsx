@@ -1477,7 +1477,7 @@ function AppContent() {
       case 'industry':
         return <IndustryView
           industryConfig={industryConfig} setIndustryConfig={setIndustryConfig}
-          setNodes={setNodes} setRoutes={setRoutes}
+          nodes={nodes} setNodes={setNodes} setRoutes={setRoutes} setBom={setBom}
           resetSimulation={resetSimulation}
           onOpenWizard={() => setShowWizard(true)}
         />;
