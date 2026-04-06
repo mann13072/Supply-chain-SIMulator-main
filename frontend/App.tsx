@@ -1060,6 +1060,8 @@ function AppContent() {
 
   // Snapshot of node state before simulation — used by resetSimulation to restore original values
   const preSimNodesRef = useRef<SupplyNode[] | null>(null);
+  // Tracks the set of node IDs to detect when a new network is imported
+  const nodeIdFingerprintRef = useRef<string>('');
 
   // Refs so the interval callback always reads the latest state without stale closures
   const nodesRef = useRef<SupplyNode[]>(nodes);
@@ -1071,6 +1073,15 @@ function AppContent() {
   const bomRef = useRef<BillOfMaterials | null>(bom);
 
   useEffect(() => { nodesRef.current = nodes; }, [nodes]);
+  // When the set of node IDs changes (e.g. Excel import), invalidate the pre-sim snapshot
+  // so resetSimulation restores the new nodes instead of the old ones.
+  useEffect(() => {
+    const fingerprint = nodes.map(n => n.id).sort().join(',');
+    if (nodeIdFingerprintRef.current !== '' && nodeIdFingerprintRef.current !== fingerprint) {
+      preSimNodesRef.current = null;
+    }
+    nodeIdFingerprintRef.current = fingerprint;
+  }, [nodes]);
   useEffect(() => { shipmentsRef.current = shipments; }, [shipments]);
   useEffect(() => { dayRef.current = day; }, [day]);
   useEffect(() => { routesRef.current = routes; }, [routes]);

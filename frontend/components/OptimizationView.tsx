@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Zap, TrendingUp, ArrowRight, CheckCircle2, AlertCircle, Loader2, Lock } from 'lucide-react';
 import { SupplyNode, Route, HistorySnapshot, SimulationParams, IndustryConfig } from '../types';
 import { motion } from 'framer-motion';
@@ -33,6 +33,39 @@ const OptimizationView: React.FC<OptimizationViewProps> = ({
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [result, setResult] = useState<AIResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [progress, setProgress] = useState(0);
+  const [progressStep, setProgressStep] = useState('');
+  const progressIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const PROGRESS_STEPS = [
+    { pct: 10, label: 'Loading simulation data...' },
+    { pct: 25, label: 'Analyzing network topology...' },
+    { pct: 45, label: 'Evaluating disruption patterns...' },
+    { pct: 65, label: 'Computing risk scores...' },
+    { pct: 82, label: 'Generating recommendations...' },
+    { pct: 92, label: 'Finalizing analysis...' },
+  ];
+
+  useEffect(() => {
+    if (isAnalyzing) {
+      setProgress(0);
+      setProgressStep(PROGRESS_STEPS[0].label);
+      let stepIndex = 0;
+      progressIntervalRef.current = setInterval(() => {
+        stepIndex++;
+        if (stepIndex < PROGRESS_STEPS.length) {
+          setProgress(PROGRESS_STEPS[stepIndex].pct);
+          setProgressStep(PROGRESS_STEPS[stepIndex].label);
+        } else {
+          clearInterval(progressIntervalRef.current!);
+        }
+      }, 900);
+    } else {
+      if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
+      if (result) setProgress(100);
+    }
+    return () => { if (progressIntervalRef.current) clearInterval(progressIntervalRef.current); };
+  }, [isAnalyzing]);
 
   const runAnalysis = async () => {
     setIsAnalyzing(true);
@@ -171,12 +204,24 @@ const OptimizationView: React.FC<OptimizationViewProps> = ({
       {/* Loading */}
       {isAnalyzing && (
         <div className="h-96 flex flex-col items-center justify-center text-center p-12 bg-white/5 rounded-[3rem] border border-white/5">
-          <div className="relative">
-            <div className="w-24 h-24 rounded-full border-4 border-white/10 border-t-white animate-spin mb-8" />
+          <div className="relative mb-8">
+            <div className="w-24 h-24 rounded-full border-4 border-white/10 border-t-white animate-spin" />
             <Zap className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-8 text-white animate-pulse" />
           </div>
           <h3 className="text-xl font-bold text-white mb-2">Analyzing {history.length} Days of Data</h3>
-          <p className="text-white/40 max-w-md">AI is processing your {industryConfig.name} network topology, commodity prices, and disruption history...</p>
+          <p className="text-white/40 max-w-md mb-8">AI is processing your {industryConfig.name} network topology, commodity prices, and disruption history...</p>
+          <div className="w-full max-w-sm">
+            <div className="flex justify-between items-center mb-2">
+              <span className="text-xs text-white/40">{progressStep}</span>
+              <span className="text-xs text-white/40 font-mono">{progress}%</span>
+            </div>
+            <div className="h-1.5 w-full bg-white/10 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-white rounded-full transition-all duration-700 ease-out"
+                style={{ width: `${progress}%` }}
+              />
+            </div>
+          </div>
         </div>
       )}
 
