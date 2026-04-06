@@ -1241,6 +1241,7 @@ function AppContent() {
     resetSimulation();
     setShowWizard(false);
     setActiveTab('dashboard');
+    if (user?.id) localStorage.setItem(`sc_wizard_done_${user.id}`, '1');
   };
 
   useEffect(() => {
@@ -1303,13 +1304,16 @@ function AppContent() {
 
             networkIdRef.current = latest.id;
             initialLoadDone.current = true;
+            // Backfill flag so users with saved networks never see wizard again
+            if (user?.id) localStorage.setItem(`sc_wizard_done_${user.id}`, '1');
             return;
           }
         }
       } catch {}
 
-      // 2. Show industry wizard for new users
-      setShowWizard(true);
+      // 2. Show industry wizard only for users who haven't completed it
+      const wizardDone = user?.id && localStorage.getItem(`sc_wizard_done_${user.id}`);
+      if (!wizardDone) setShowWizard(true);
       initialLoadDone.current = true;
     };
     loadState();
