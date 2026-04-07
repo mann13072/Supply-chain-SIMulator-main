@@ -6,35 +6,35 @@ import { BOMProduct, BOMEntry, BillOfMaterials, SupplyNode, NodeType } from '../
 
 const automotiveProducts: BOMProduct[] = [
   // Tier 0
-  { id: 'auto-finished-vehicle', name: 'Finished Vehicle', tier: 0, category: 'finished-good', defaultLeadTimeDays: 1 },
+  { id: 'auto-finished-vehicle', name: 'Finished Vehicle', tier: 0, category: 'finished-good', basePrice: 28000, defaultLeadTimeDays: 1 },
   // Tier 1
-  { id: 'auto-powertrain', name: 'Powertrain Assembly', tier: 1, category: 'assembly', defaultLeadTimeDays: 5 },
-  { id: 'auto-chassis-body', name: 'Chassis & Body', tier: 1, category: 'assembly', defaultLeadTimeDays: 5 },
-  { id: 'auto-interior-trim', name: 'Interior & Trim', tier: 1, category: 'assembly', defaultLeadTimeDays: 4 },
+  { id: 'auto-powertrain', name: 'Powertrain Assembly', tier: 1, category: 'assembly', basePrice: 6500, defaultLeadTimeDays: 5 },
+  { id: 'auto-chassis-body', name: 'Chassis & Body', tier: 1, category: 'assembly', basePrice: 4200, defaultLeadTimeDays: 5 },
+  { id: 'auto-interior-trim', name: 'Interior & Trim', tier: 1, category: 'assembly', basePrice: 2800, defaultLeadTimeDays: 4 },
   // Tier 2
-  { id: 'auto-engine-block', name: 'Engine Block', tier: 2, category: 'component', defaultLeadTimeDays: 10 },
-  { id: 'auto-transmission', name: 'Transmission', tier: 2, category: 'component', defaultLeadTimeDays: 10 },
-  { id: 'auto-electronics-module', name: 'Electronics Module', tier: 2, category: 'component', defaultLeadTimeDays: 12 },
-  { id: 'auto-steel-frame', name: 'Steel Frame', tier: 2, category: 'component', defaultLeadTimeDays: 10 },
-  { id: 'auto-rubber-components', name: 'Rubber Components', tier: 2, category: 'component', defaultLeadTimeDays: 8 },
-  { id: 'auto-plastics', name: 'Plastics', tier: 2, category: 'component', defaultLeadTimeDays: 7 },
+  { id: 'auto-engine-block', name: 'Engine Block', tier: 2, category: 'component', basePrice: 2500, defaultLeadTimeDays: 10 },
+  { id: 'auto-transmission', name: 'Transmission', tier: 2, category: 'component', basePrice: 2200, defaultLeadTimeDays: 10 },
+  { id: 'auto-electronics-module', name: 'Electronics Module', tier: 2, category: 'component', basePrice: 350, defaultLeadTimeDays: 12 },
+  { id: 'auto-steel-frame', name: 'Steel Frame', tier: 2, category: 'component', basePrice: 1200, defaultLeadTimeDays: 10 },
+  { id: 'auto-rubber-components', name: 'Rubber Components', tier: 2, category: 'component', basePrice: 180, defaultLeadTimeDays: 8 },
+  { id: 'auto-plastics', name: 'Plastics', tier: 2, category: 'component', basePrice: 120, defaultLeadTimeDays: 7 },
   // Tier 3
-  { id: 'auto-cast-iron', name: 'Cast Iron', tier: 3, category: 'sub-component', defaultLeadTimeDays: 18 },
-  { id: 'auto-aluminum-alloy', name: 'Aluminum Alloy', tier: 3, category: 'sub-component', defaultLeadTimeDays: 16 },
-  { id: 'auto-steel-gears', name: 'Steel Gears', tier: 3, category: 'sub-component', defaultLeadTimeDays: 14 },
-  { id: 'auto-semiconductor-chips', name: 'Semiconductor Chips', tier: 3, category: 'sub-component', defaultLeadTimeDays: 21 },
-  { id: 'auto-copper-wiring', name: 'Copper Wiring', tier: 3, category: 'sub-component', defaultLeadTimeDays: 14 },
-  { id: 'auto-hot-rolled-steel', name: 'Hot-Rolled Steel', tier: 3, category: 'sub-component', defaultLeadTimeDays: 18 },
+  { id: 'auto-cast-iron', name: 'Cast Iron', tier: 3, category: 'sub-component', basePrice: 45, defaultLeadTimeDays: 18 },
+  { id: 'auto-aluminum-alloy', name: 'Aluminum Alloy', tier: 3, category: 'sub-component', basePrice: 65, defaultLeadTimeDays: 16 },
+  { id: 'auto-steel-gears', name: 'Steel Gears', tier: 3, category: 'sub-component', basePrice: 85, defaultLeadTimeDays: 14 },
+  { id: 'auto-semiconductor-chips', name: 'Semiconductor Chips', tier: 3, category: 'sub-component', basePrice: 28, defaultLeadTimeDays: 21 },
+  { id: 'auto-copper-wiring', name: 'Copper Wiring', tier: 3, category: 'sub-component', basePrice: 15, defaultLeadTimeDays: 14 },
+  { id: 'auto-hot-rolled-steel', name: 'Hot-Rolled Steel', tier: 3, category: 'sub-component', basePrice: 38, defaultLeadTimeDays: 18 },
   { id: 'auto-natural-rubber', name: 'Natural Rubber', tier: 3, category: 'sub-component', commodityId: 'rubber', defaultLeadTimeDays: 16 },
-  { id: 'auto-polymer-pellets', name: 'Polymer Pellets', tier: 3, category: 'sub-component', defaultLeadTimeDays: 14 },
-  // Tier 4
+  { id: 'auto-polymer-pellets', name: 'Polymer Pellets', tier: 3, category: 'sub-component', basePrice: 22, defaultLeadTimeDays: 14 },
+  // Tier 4 — commodity-linked products derive basePrice from Commodity.basePrice
   { id: 'auto-iron-ore', name: 'Iron Ore', tier: 4, category: 'raw-material', commodityId: 'steel', defaultLeadTimeDays: 35 },
   { id: 'auto-bauxite', name: 'Bauxite', tier: 4, category: 'raw-material', commodityId: 'aluminum', defaultLeadTimeDays: 35 },
   { id: 'auto-steel-coil', name: 'Steel Coil', tier: 4, category: 'raw-material', commodityId: 'steel', defaultLeadTimeDays: 30 },
   { id: 'auto-silicon-wafer', name: 'Silicon Wafer', tier: 4, category: 'raw-material', commodityId: 'semiconductors', defaultLeadTimeDays: 45 },
-  { id: 'auto-copper-ore', name: 'Copper Ore', tier: 4, category: 'raw-material', defaultLeadTimeDays: 35 },
-  { id: 'auto-latex', name: 'Latex', tier: 4, category: 'raw-material', defaultLeadTimeDays: 30 },
-  { id: 'auto-petroleum-distillate', name: 'Petroleum Distillate', tier: 4, category: 'raw-material', defaultLeadTimeDays: 30 },
+  { id: 'auto-copper-ore', name: 'Copper Ore', tier: 4, category: 'raw-material', basePrice: 95, defaultLeadTimeDays: 35 },
+  { id: 'auto-latex', name: 'Latex', tier: 4, category: 'raw-material', basePrice: 18, defaultLeadTimeDays: 30 },
+  { id: 'auto-petroleum-distillate', name: 'Petroleum Distillate', tier: 4, category: 'raw-material', basePrice: 12, defaultLeadTimeDays: 30 },
 ];
 
 const automotiveEntries: BOMEntry[] = [
@@ -98,33 +98,33 @@ const automotiveBOM: BillOfMaterials = {
 
 const techProducts: BOMProduct[] = [
   // Tier 0
-  { id: 'tech-smartphone', name: 'Smartphone', tier: 0, category: 'finished-good', defaultLeadTimeDays: 1 },
+  { id: 'tech-smartphone', name: 'Smartphone', tier: 0, category: 'finished-good', basePrice: 850, defaultLeadTimeDays: 1 },
   // Tier 1
-  { id: 'tech-pcb-assembly', name: 'PCB Assembly', tier: 1, category: 'assembly', defaultLeadTimeDays: 5 },
-  { id: 'tech-display-assembly', name: 'Display Assembly', tier: 1, category: 'assembly', defaultLeadTimeDays: 5 },
-  { id: 'tech-battery', name: 'Battery', tier: 1, category: 'assembly', defaultLeadTimeDays: 5 },
-  { id: 'tech-casing', name: 'Casing', tier: 1, category: 'assembly', defaultLeadTimeDays: 3 },
+  { id: 'tech-pcb-assembly', name: 'PCB Assembly', tier: 1, category: 'assembly', basePrice: 180, defaultLeadTimeDays: 5 },
+  { id: 'tech-display-assembly', name: 'Display Assembly', tier: 1, category: 'assembly', basePrice: 110, defaultLeadTimeDays: 5 },
+  { id: 'tech-battery', name: 'Battery', tier: 1, category: 'assembly', basePrice: 45, defaultLeadTimeDays: 5 },
+  { id: 'tech-casing', name: 'Casing', tier: 1, category: 'assembly', basePrice: 25, defaultLeadTimeDays: 3 },
   // Tier 2
-  { id: 'tech-processor', name: 'Processor', tier: 2, category: 'component', defaultLeadTimeDays: 14 },
-  { id: 'tech-memory-chip', name: 'Memory Chip', tier: 2, category: 'component', defaultLeadTimeDays: 12 },
-  { id: 'tech-oled-panel', name: 'OLED Panel', tier: 2, category: 'component', defaultLeadTimeDays: 14 },
-  { id: 'tech-touch-digitizer', name: 'Touch Digitizer', tier: 2, category: 'component', defaultLeadTimeDays: 10 },
-  { id: 'tech-li-ion-cell', name: 'Li-Ion Cell', tier: 2, category: 'component', defaultLeadTimeDays: 10 },
-  { id: 'tech-aluminum-shell', name: 'Aluminum Shell', tier: 2, category: 'component', defaultLeadTimeDays: 7 },
+  { id: 'tech-processor', name: 'Processor', tier: 2, category: 'component', basePrice: 110, defaultLeadTimeDays: 14 },
+  { id: 'tech-memory-chip', name: 'Memory Chip', tier: 2, category: 'component', basePrice: 35, defaultLeadTimeDays: 12 },
+  { id: 'tech-oled-panel', name: 'OLED Panel', tier: 2, category: 'component', basePrice: 65, defaultLeadTimeDays: 14 },
+  { id: 'tech-touch-digitizer', name: 'Touch Digitizer', tier: 2, category: 'component', basePrice: 18, defaultLeadTimeDays: 10 },
+  { id: 'tech-li-ion-cell', name: 'Li-Ion Cell', tier: 2, category: 'component', basePrice: 28, defaultLeadTimeDays: 10 },
+  { id: 'tech-aluminum-shell', name: 'Aluminum Shell', tier: 2, category: 'component', basePrice: 12, defaultLeadTimeDays: 7 },
   // Tier 3
-  { id: 'tech-silicon-die', name: 'Silicon Die', tier: 3, category: 'sub-component', defaultLeadTimeDays: 21 },
-  { id: 'tech-nand-flash', name: 'NAND Flash', tier: 3, category: 'sub-component', defaultLeadTimeDays: 18 },
-  { id: 'tech-organic-compounds', name: 'Organic Compounds', tier: 3, category: 'sub-component', defaultLeadTimeDays: 16 },
-  { id: 'tech-ito-film', name: 'ITO Film', tier: 3, category: 'sub-component', defaultLeadTimeDays: 14 },
-  { id: 'tech-cathode-material', name: 'Cathode Material', tier: 3, category: 'sub-component', defaultLeadTimeDays: 18 },
-  { id: 'tech-anode-material', name: 'Anode Material', tier: 3, category: 'sub-component', defaultLeadTimeDays: 16 },
-  { id: 'tech-aluminum-sheet', name: 'Aluminum Sheet', tier: 3, category: 'sub-component', defaultLeadTimeDays: 14 },
-  // Tier 4
+  { id: 'tech-silicon-die', name: 'Silicon Die', tier: 3, category: 'sub-component', basePrice: 55, defaultLeadTimeDays: 21 },
+  { id: 'tech-nand-flash', name: 'NAND Flash', tier: 3, category: 'sub-component', basePrice: 22, defaultLeadTimeDays: 18 },
+  { id: 'tech-organic-compounds', name: 'Organic Compounds', tier: 3, category: 'sub-component', basePrice: 320, defaultLeadTimeDays: 16 },
+  { id: 'tech-ito-film', name: 'ITO Film', tier: 3, category: 'sub-component', basePrice: 8, defaultLeadTimeDays: 14 },
+  { id: 'tech-cathode-material', name: 'Cathode Material', tier: 3, category: 'sub-component', basePrice: 42, defaultLeadTimeDays: 18 },
+  { id: 'tech-anode-material', name: 'Anode Material', tier: 3, category: 'sub-component', basePrice: 15, defaultLeadTimeDays: 16 },
+  { id: 'tech-aluminum-sheet', name: 'Aluminum Sheet', tier: 3, category: 'sub-component', basePrice: 8, defaultLeadTimeDays: 14 },
+  // Tier 4 — commodity-linked products derive basePrice from Commodity.basePrice
   { id: 'tech-silicon-wafer', name: 'Silicon Wafer', tier: 4, category: 'raw-material', commodityId: 'semiconductors', defaultLeadTimeDays: 45 },
   { id: 'tech-rare-earth', name: 'Rare Earth Elements', tier: 4, category: 'raw-material', commodityId: 'rare_earth', defaultLeadTimeDays: 40 },
-  { id: 'tech-indium', name: 'Indium', tier: 4, category: 'raw-material', defaultLeadTimeDays: 35 },
+  { id: 'tech-indium', name: 'Indium', tier: 4, category: 'raw-material', basePrice: 450, defaultLeadTimeDays: 35 },
   { id: 'tech-lithium-carbonate', name: 'Lithium Carbonate', tier: 4, category: 'raw-material', commodityId: 'lithium', defaultLeadTimeDays: 40 },
-  { id: 'tech-graphite', name: 'Graphite', tier: 4, category: 'raw-material', defaultLeadTimeDays: 30 },
+  { id: 'tech-graphite', name: 'Graphite', tier: 4, category: 'raw-material', basePrice: 12, defaultLeadTimeDays: 30 },
   { id: 'tech-bauxite', name: 'Bauxite', tier: 4, category: 'raw-material', commodityId: 'aluminum', defaultLeadTimeDays: 35 },
 ];
 
@@ -188,30 +188,30 @@ const techBOM: BillOfMaterials = {
 
 const pharmaProducts: BOMProduct[] = [
   // Tier 0
-  { id: 'pharma-drug-product', name: 'Drug Product (Tablet)', tier: 0, category: 'finished-good', defaultLeadTimeDays: 1 },
+  { id: 'pharma-drug-product', name: 'Drug Product (Tablet)', tier: 0, category: 'finished-good', basePrice: 85, defaultLeadTimeDays: 1 },
   // Tier 1
-  { id: 'pharma-formulated-drug', name: 'Formulated Drug', tier: 1, category: 'assembly', defaultLeadTimeDays: 7 },
+  { id: 'pharma-formulated-drug', name: 'Formulated Drug', tier: 1, category: 'assembly', basePrice: 48, defaultLeadTimeDays: 7 },
   { id: 'pharma-primary-packaging', name: 'Primary Packaging', tier: 1, category: 'assembly', commodityId: 'packaging', defaultLeadTimeDays: 4 },
-  { id: 'pharma-secondary-packaging', name: 'Secondary Packaging', tier: 1, category: 'assembly', defaultLeadTimeDays: 3 },
+  { id: 'pharma-secondary-packaging', name: 'Secondary Packaging', tier: 1, category: 'assembly', basePrice: 3, defaultLeadTimeDays: 3 },
   // Tier 2
   { id: 'pharma-api', name: 'Active Pharmaceutical Ingredient', tier: 2, category: 'component', commodityId: 'apis', defaultLeadTimeDays: 14 },
   { id: 'pharma-excipient-blend', name: 'Excipient Blend', tier: 2, category: 'component', commodityId: 'excipients', defaultLeadTimeDays: 10 },
-  { id: 'pharma-blister-pack', name: 'Blister Pack', tier: 2, category: 'component', defaultLeadTimeDays: 8 },
-  { id: 'pharma-carton-box', name: 'Carton Box', tier: 2, category: 'component', defaultLeadTimeDays: 7 },
+  { id: 'pharma-blister-pack', name: 'Blister Pack', tier: 2, category: 'component', basePrice: 2, defaultLeadTimeDays: 8 },
+  { id: 'pharma-carton-box', name: 'Carton Box', tier: 2, category: 'component', basePrice: 1, defaultLeadTimeDays: 7 },
   // Tier 3
-  { id: 'pharma-chemical-intermediate', name: 'Chemical Intermediate', tier: 3, category: 'sub-component', defaultLeadTimeDays: 21 },
-  { id: 'pharma-mcc', name: 'Microcrystalline Cellulose', tier: 3, category: 'sub-component', defaultLeadTimeDays: 16 },
-  { id: 'pharma-starch', name: 'Starch', tier: 3, category: 'sub-component', defaultLeadTimeDays: 14 },
-  { id: 'pharma-pvc-film', name: 'PVC Film', tier: 3, category: 'sub-component', defaultLeadTimeDays: 14 },
-  { id: 'pharma-aluminum-foil', name: 'Aluminum Foil', tier: 3, category: 'sub-component', defaultLeadTimeDays: 14 },
-  { id: 'pharma-cardboard', name: 'Cardboard', tier: 3, category: 'sub-component', defaultLeadTimeDays: 14 },
+  { id: 'pharma-chemical-intermediate', name: 'Chemical Intermediate', tier: 3, category: 'sub-component', basePrice: 180, defaultLeadTimeDays: 21 },
+  { id: 'pharma-mcc', name: 'Microcrystalline Cellulose', tier: 3, category: 'sub-component', basePrice: 8, defaultLeadTimeDays: 16 },
+  { id: 'pharma-starch', name: 'Starch', tier: 3, category: 'sub-component', basePrice: 4, defaultLeadTimeDays: 14 },
+  { id: 'pharma-pvc-film', name: 'PVC Film', tier: 3, category: 'sub-component', basePrice: 6, defaultLeadTimeDays: 14 },
+  { id: 'pharma-aluminum-foil', name: 'Aluminum Foil', tier: 3, category: 'sub-component', basePrice: 12, defaultLeadTimeDays: 14 },
+  { id: 'pharma-cardboard', name: 'Cardboard', tier: 3, category: 'sub-component', basePrice: 2, defaultLeadTimeDays: 14 },
   // Tier 4
-  { id: 'pharma-raw-chemical', name: 'Raw Chemical', tier: 4, category: 'raw-material', defaultLeadTimeDays: 35 },
-  { id: 'pharma-wood-pulp', name: 'Wood Pulp', tier: 4, category: 'raw-material', defaultLeadTimeDays: 30 },
-  { id: 'pharma-corn', name: 'Corn', tier: 4, category: 'raw-material', defaultLeadTimeDays: 30 },
-  { id: 'pharma-pvc-resin', name: 'PVC Resin', tier: 4, category: 'raw-material', defaultLeadTimeDays: 30 },
-  { id: 'pharma-aluminum-ingot', name: 'Aluminum Ingot', tier: 4, category: 'raw-material', defaultLeadTimeDays: 35 },
-  { id: 'pharma-recycled-paper', name: 'Recycled Paper', tier: 4, category: 'raw-material', defaultLeadTimeDays: 30 },
+  { id: 'pharma-raw-chemical', name: 'Raw Chemical', tier: 4, category: 'raw-material', basePrice: 65, defaultLeadTimeDays: 35 },
+  { id: 'pharma-wood-pulp', name: 'Wood Pulp', tier: 4, category: 'raw-material', basePrice: 5, defaultLeadTimeDays: 30 },
+  { id: 'pharma-corn', name: 'Corn', tier: 4, category: 'raw-material', basePrice: 2, defaultLeadTimeDays: 30 },
+  { id: 'pharma-pvc-resin', name: 'PVC Resin', tier: 4, category: 'raw-material', basePrice: 4, defaultLeadTimeDays: 30 },
+  { id: 'pharma-aluminum-ingot', name: 'Aluminum Ingot', tier: 4, category: 'raw-material', basePrice: 22, defaultLeadTimeDays: 35 },
+  { id: 'pharma-recycled-paper', name: 'Recycled Paper', tier: 4, category: 'raw-material', basePrice: 1, defaultLeadTimeDays: 30 },
 ];
 
 const pharmaEntries: BOMEntry[] = [
@@ -265,28 +265,28 @@ const pharmaBOM: BillOfMaterials = {
 
 const fmcgProducts: BOMProduct[] = [
   // Tier 0
-  { id: 'fmcg-packaged-food', name: 'Packaged Food Product', tier: 0, category: 'finished-good', defaultLeadTimeDays: 1 },
+  { id: 'fmcg-packaged-food', name: 'Packaged Food Product', tier: 0, category: 'finished-good', basePrice: 5, defaultLeadTimeDays: 1 },
   // Tier 1
-  { id: 'fmcg-food-product', name: 'Food Product', tier: 1, category: 'assembly', defaultLeadTimeDays: 3 },
+  { id: 'fmcg-food-product', name: 'Food Product', tier: 1, category: 'assembly', basePrice: 3, defaultLeadTimeDays: 3 },
   { id: 'fmcg-packaging', name: 'Packaging', tier: 1, category: 'assembly', commodityId: 'packaging_m', defaultLeadTimeDays: 4 },
   // Tier 2
   { id: 'fmcg-flour', name: 'Flour', tier: 2, category: 'component', commodityId: 'wheat', defaultLeadTimeDays: 8 },
-  { id: 'fmcg-sugar', name: 'Sugar', tier: 2, category: 'component', defaultLeadTimeDays: 8 },
-  { id: 'fmcg-vegetable-oil', name: 'Vegetable Oil', tier: 2, category: 'component', defaultLeadTimeDays: 10 },
-  { id: 'fmcg-flexible-wrapper', name: 'Flexible Wrapper', tier: 2, category: 'component', defaultLeadTimeDays: 7 },
-  { id: 'fmcg-outer-carton', name: 'Outer Carton', tier: 2, category: 'component', defaultLeadTimeDays: 7 },
+  { id: 'fmcg-sugar', name: 'Sugar', tier: 2, category: 'component', basePrice: 1, defaultLeadTimeDays: 8 },
+  { id: 'fmcg-vegetable-oil', name: 'Vegetable Oil', tier: 2, category: 'component', basePrice: 2, defaultLeadTimeDays: 10 },
+  { id: 'fmcg-flexible-wrapper', name: 'Flexible Wrapper', tier: 2, category: 'component', basePrice: 0.5, defaultLeadTimeDays: 7 },
+  { id: 'fmcg-outer-carton', name: 'Outer Carton', tier: 2, category: 'component', basePrice: 0.8, defaultLeadTimeDays: 7 },
   // Tier 3
-  { id: 'fmcg-milled-wheat', name: 'Milled Wheat', tier: 3, category: 'sub-component', defaultLeadTimeDays: 14 },
-  { id: 'fmcg-refined-sugar', name: 'Refined Sugar', tier: 3, category: 'sub-component', defaultLeadTimeDays: 14 },
-  { id: 'fmcg-refined-oil', name: 'Refined Oil', tier: 3, category: 'sub-component', defaultLeadTimeDays: 16 },
-  { id: 'fmcg-laminated-film', name: 'Laminated Film', tier: 3, category: 'sub-component', defaultLeadTimeDays: 14 },
-  { id: 'fmcg-corrugated-board', name: 'Corrugated Board', tier: 3, category: 'sub-component', defaultLeadTimeDays: 14 },
+  { id: 'fmcg-milled-wheat', name: 'Milled Wheat', tier: 3, category: 'sub-component', basePrice: 0.6, defaultLeadTimeDays: 14 },
+  { id: 'fmcg-refined-sugar', name: 'Refined Sugar', tier: 3, category: 'sub-component', basePrice: 0.8, defaultLeadTimeDays: 14 },
+  { id: 'fmcg-refined-oil', name: 'Refined Oil', tier: 3, category: 'sub-component', basePrice: 1.5, defaultLeadTimeDays: 16 },
+  { id: 'fmcg-laminated-film', name: 'Laminated Film', tier: 3, category: 'sub-component', basePrice: 0.3, defaultLeadTimeDays: 14 },
+  { id: 'fmcg-corrugated-board', name: 'Corrugated Board', tier: 3, category: 'sub-component', basePrice: 0.4, defaultLeadTimeDays: 14 },
   // Tier 4
-  { id: 'fmcg-raw-wheat', name: 'Raw Wheat', tier: 4, category: 'raw-material', defaultLeadTimeDays: 30 },
-  { id: 'fmcg-sugarcane', name: 'Sugarcane', tier: 4, category: 'raw-material', defaultLeadTimeDays: 30 },
+  { id: 'fmcg-raw-wheat', name: 'Raw Wheat', tier: 4, category: 'raw-material', basePrice: 0.3, defaultLeadTimeDays: 30 },
+  { id: 'fmcg-sugarcane', name: 'Sugarcane', tier: 4, category: 'raw-material', basePrice: 0.4, defaultLeadTimeDays: 30 },
   { id: 'fmcg-palm-fruit', name: 'Palm Fruit', tier: 4, category: 'raw-material', commodityId: 'palm_oil', defaultLeadTimeDays: 35 },
-  { id: 'fmcg-plastic-resin', name: 'Plastic Resin', tier: 4, category: 'raw-material', defaultLeadTimeDays: 30 },
-  { id: 'fmcg-kraft-paper', name: 'Kraft Paper', tier: 4, category: 'raw-material', defaultLeadTimeDays: 30 },
+  { id: 'fmcg-plastic-resin', name: 'Plastic Resin', tier: 4, category: 'raw-material', basePrice: 1.2, defaultLeadTimeDays: 30 },
+  { id: 'fmcg-kraft-paper', name: 'Kraft Paper', tier: 4, category: 'raw-material', basePrice: 0.6, defaultLeadTimeDays: 30 },
 ];
 
 const fmcgEntries: BOMEntry[] = [
@@ -337,33 +337,33 @@ const fmcgBOM: BillOfMaterials = {
 
 const solarProducts: BOMProduct[] = [
   // Tier 0
-  { id: 'solar-panel', name: 'Solar Panel', tier: 0, category: 'finished-good', defaultLeadTimeDays: 1 },
+  { id: 'solar-panel', name: 'Solar Panel', tier: 0, category: 'finished-good', basePrice: 250, defaultLeadTimeDays: 1 },
   // Tier 1
-  { id: 'solar-cell-assembly', name: 'Cell Assembly', tier: 1, category: 'assembly', defaultLeadTimeDays: 5 },
-  { id: 'solar-panel-frame', name: 'Panel Frame', tier: 1, category: 'assembly', defaultLeadTimeDays: 4 },
+  { id: 'solar-cell-assembly', name: 'Cell Assembly', tier: 1, category: 'assembly', basePrice: 2.5, defaultLeadTimeDays: 5 },
+  { id: 'solar-panel-frame', name: 'Panel Frame', tier: 1, category: 'assembly', basePrice: 18, defaultLeadTimeDays: 4 },
   { id: 'solar-glass-cover', name: 'Glass Cover', tier: 1, category: 'assembly', commodityId: 'glass', defaultLeadTimeDays: 5 },
-  { id: 'solar-backsheet-encapsulant', name: 'Backsheet & Encapsulant', tier: 1, category: 'assembly', defaultLeadTimeDays: 4 },
+  { id: 'solar-backsheet-encapsulant', name: 'Backsheet & Encapsulant', tier: 1, category: 'assembly', basePrice: 12, defaultLeadTimeDays: 4 },
   // Tier 2
-  { id: 'solar-cell', name: 'Solar Cell', tier: 2, category: 'component', defaultLeadTimeDays: 14 },
+  { id: 'solar-cell', name: 'Solar Cell', tier: 2, category: 'component', basePrice: 1.8, defaultLeadTimeDays: 14 },
   { id: 'solar-silver-paste', name: 'Silver Paste', tier: 2, category: 'component', commodityId: 'silver', defaultLeadTimeDays: 10 },
   { id: 'solar-aluminum-frame', name: 'Aluminum Frame', tier: 2, category: 'component', commodityId: 'aluminum', defaultLeadTimeDays: 10 },
-  { id: 'solar-tempered-glass', name: 'Tempered Glass', tier: 2, category: 'component', defaultLeadTimeDays: 10 },
-  { id: 'solar-eva-encapsulant', name: 'EVA Encapsulant', tier: 2, category: 'component', defaultLeadTimeDays: 8 },
-  { id: 'solar-backsheet-film', name: 'Backsheet Film', tier: 2, category: 'component', defaultLeadTimeDays: 8 },
+  { id: 'solar-tempered-glass', name: 'Tempered Glass', tier: 2, category: 'component', basePrice: 15, defaultLeadTimeDays: 10 },
+  { id: 'solar-eva-encapsulant', name: 'EVA Encapsulant', tier: 2, category: 'component', basePrice: 6, defaultLeadTimeDays: 8 },
+  { id: 'solar-backsheet-film', name: 'Backsheet Film', tier: 2, category: 'component', basePrice: 5, defaultLeadTimeDays: 8 },
   // Tier 3
   { id: 'solar-silicon-wafer', name: 'Silicon Wafer', tier: 3, category: 'sub-component', commodityId: 'polysilicon', defaultLeadTimeDays: 21 },
-  { id: 'solar-silver-powder', name: 'Silver Powder', tier: 3, category: 'sub-component', defaultLeadTimeDays: 18 },
-  { id: 'solar-aluminum-extrusion', name: 'Aluminum Extrusion', tier: 3, category: 'sub-component', defaultLeadTimeDays: 16 },
-  { id: 'solar-float-glass', name: 'Float Glass', tier: 3, category: 'sub-component', defaultLeadTimeDays: 14 },
-  { id: 'solar-eva-resin', name: 'EVA Resin', tier: 3, category: 'sub-component', defaultLeadTimeDays: 16 },
-  { id: 'solar-pet-film', name: 'PET Film', tier: 3, category: 'sub-component', defaultLeadTimeDays: 14 },
+  { id: 'solar-silver-powder', name: 'Silver Powder', tier: 3, category: 'sub-component', basePrice: 850, defaultLeadTimeDays: 18 },
+  { id: 'solar-aluminum-extrusion', name: 'Aluminum Extrusion', tier: 3, category: 'sub-component', basePrice: 5, defaultLeadTimeDays: 16 },
+  { id: 'solar-float-glass', name: 'Float Glass', tier: 3, category: 'sub-component', basePrice: 12, defaultLeadTimeDays: 14 },
+  { id: 'solar-eva-resin', name: 'EVA Resin', tier: 3, category: 'sub-component', basePrice: 4, defaultLeadTimeDays: 16 },
+  { id: 'solar-pet-film', name: 'PET Film', tier: 3, category: 'sub-component', basePrice: 8, defaultLeadTimeDays: 14 },
   // Tier 4
-  { id: 'solar-polysilicon-chunk', name: 'Polysilicon Chunk', tier: 4, category: 'raw-material', defaultLeadTimeDays: 45 },
-  { id: 'solar-silver-ore', name: 'Silver Ore', tier: 4, category: 'raw-material', defaultLeadTimeDays: 40 },
-  { id: 'solar-bauxite', name: 'Bauxite', tier: 4, category: 'raw-material', defaultLeadTimeDays: 35 },
-  { id: 'solar-silica-sand', name: 'Silica Sand', tier: 4, category: 'raw-material', defaultLeadTimeDays: 30 },
-  { id: 'solar-ethylene', name: 'Ethylene', tier: 4, category: 'raw-material', defaultLeadTimeDays: 30 },
-  { id: 'solar-pet-resin', name: 'PET Resin', tier: 4, category: 'raw-material', defaultLeadTimeDays: 30 },
+  { id: 'solar-polysilicon-chunk', name: 'Polysilicon Chunk', tier: 4, category: 'raw-material', basePrice: 25, defaultLeadTimeDays: 45 },
+  { id: 'solar-silver-ore', name: 'Silver Ore', tier: 4, category: 'raw-material', basePrice: 650, defaultLeadTimeDays: 40 },
+  { id: 'solar-bauxite', name: 'Bauxite', tier: 4, category: 'raw-material', basePrice: 35, defaultLeadTimeDays: 35 },
+  { id: 'solar-silica-sand', name: 'Silica Sand', tier: 4, category: 'raw-material', basePrice: 45, defaultLeadTimeDays: 30 },
+  { id: 'solar-ethylene', name: 'Ethylene', tier: 4, category: 'raw-material', basePrice: 1.2, defaultLeadTimeDays: 30 },
+  { id: 'solar-pet-resin', name: 'PET Resin', tier: 4, category: 'raw-material', basePrice: 1.5, defaultLeadTimeDays: 30 },
 ];
 
 const solarEntries: BOMEntry[] = [
@@ -535,6 +535,7 @@ export function autoMapNodesToBOM(
     if (bestProduct && bestScore >= 1) {
       node.bomProductId = bestProduct.id;
       node.tier = bestProduct.tier;
+      if (bestProduct.commodityId) node.materialId = bestProduct.commodityId;
       usedProductIds.add(bestProduct.id);
     } else {
       // Final fallback: grab any available Tier 3/4 product (handles generic node names)
@@ -542,6 +543,7 @@ export function autoMapNodesToBOM(
       if (fallback) {
         node.bomProductId = fallback.id;
         node.tier = fallback.tier;
+        if (fallback.commodityId) node.materialId = fallback.commodityId;
         usedProductIds.add(fallback.id);
       }
     }

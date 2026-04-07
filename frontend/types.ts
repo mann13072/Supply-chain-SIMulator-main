@@ -389,6 +389,7 @@ export interface BOMProduct {
   tier: number;              // 0=finished good, 1=major assembly, 2=component, 3=sub-component, 4=raw material
   category: 'finished-good' | 'assembly' | 'component' | 'sub-component' | 'raw-material';
   commodityId?: string;      // links to Commodity.id from IndustryConfig (for raw materials)
+  basePrice?: number;        // reference cost per unit (for non-commodity products; commodity-linked ones derive from Commodity.basePrice)
   defaultLeadTimeDays?: number;
 }
 

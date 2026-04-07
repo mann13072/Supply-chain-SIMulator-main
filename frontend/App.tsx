@@ -1422,7 +1422,7 @@ function AppContent() {
       case 'builder':
         return <NetworkBuilder nodes={nodes} routes={routes} setNodes={setNodes} setRoutes={setRoutes} industryConfig={industryConfig} bom={bom} setBom={setBom} />;
       case 'bom':
-        return <BOMView bom={bom} setBom={setBom} nodes={nodes} setNodes={setNodes} history={history} industryId={industryConfig.id} accentColor={currentTheme.accent} />;
+        return <BOMView bom={bom} setBom={setBom} nodes={nodes} setNodes={setNodes} history={history} industryId={industryConfig.id} accentColor={currentTheme.accent} industryConfig={industryConfig} />;
       case 'simulation':
         return (
           <SimulationEngine

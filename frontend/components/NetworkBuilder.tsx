@@ -878,7 +878,7 @@ const NetworkBuilder: React.FC<NetworkBuilderProps> = ({ nodes, routes, setNodes
                         </div>
                         <div className="bg-white/5 rounded-xl p-3 border border-white/5">
                           <p className="text-[9px] text-white/40 uppercase block mb-1">Recovery (d)</p>
-                          <input 
+                          <input
                             type="number"
                             className="text-sm font-bold text-white bg-transparent border-none p-0 w-full focus:ring-0"
                             value={selectedNode.supplierRecoveryTime}
@@ -886,6 +886,58 @@ const NetworkBuilder: React.FC<NetworkBuilderProps> = ({ nodes, routes, setNodes
                           />
                         </div>
                       </div>
+
+                      {bom ? (
+                        <div>
+                          <h4 className="text-[10px] text-white/40 uppercase tracking-widest border-b border-white/5 pb-2 mt-4">BOM Mapping</h4>
+                          <div className="mt-3">
+                            <p className="text-[9px] text-white/40 uppercase block mb-1">Maps to BOM Product</p>
+                            <select
+                              value={selectedNode.bomProductId || ''}
+                              onChange={(e) => {
+                                const productId = e.target.value || undefined;
+                                const product = productId ? bom.products.find(p => p.id === productId) : undefined;
+                                const derivedMaterialId = product?.commodityId || undefined;
+                                const commodityPrice = derivedMaterialId ? industryConfig?.commodities.find(c => c.id === derivedMaterialId)?.basePrice : undefined;
+                                const refPrice = commodityPrice ?? product?.basePrice;
+                                handleUpdateNode(selectedNode.id, { bomProductId: productId, materialId: derivedMaterialId, ...(refPrice != null ? { supplierCostPerUnit: refPrice } : {}) });
+                              }}
+                              className="w-full bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-white/30 transition-all cursor-pointer"
+                            >
+                              <option value="" className="bg-[#0a0a0a]">— None —</option>
+                              {bom.products.map(p => (
+                                <option key={p.id} value={p.id} className="bg-[#0a0a0a]">T{p.tier} — {p.name}</option>
+                              ))}
+                            </select>
+                            {selectedNode.bomProductId && (() => {
+                              const prod = bom.products.find(p => p.id === selectedNode.bomProductId);
+                              const commodity = prod?.commodityId ? industryConfig?.commodities.find(c => c.id === prod.commodityId) : undefined;
+                              return commodity
+                                ? <p className="text-[9px] text-cyan-400/50 mt-1.5">Commodity: {commodity.name} — base {industryConfig?.currencySymbol}{commodity.basePrice}/{commodity.unit}</p>
+                                : prod?.basePrice != null
+                                  ? <p className="text-[9px] text-cyan-400/50 mt-1.5">Reference price: {industryConfig?.currencySymbol || '$'}{prod.basePrice}/unit</p>
+                                  : null;
+                            })()}
+                          </div>
+                        </div>
+                      ) : (industryConfig?.commodities || []).length > 0 && (
+                        <div>
+                          <h4 className="text-[10px] text-white/40 uppercase tracking-widest border-b border-white/5 pb-2 mt-4">Commodity</h4>
+                          <div className="mt-3">
+                            <p className="text-[9px] text-white/40 uppercase block mb-1">Supplies Commodity</p>
+                            <select
+                              value={selectedNode.materialId || ''}
+                              onChange={(e) => handleUpdateNode(selectedNode.id, { materialId: e.target.value || undefined })}
+                              className="w-full bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-white/30 transition-all cursor-pointer"
+                            >
+                              <option value="" className="bg-[#0a0a0a]">— None (generic) —</option>
+                              {(industryConfig?.commodities || []).map(c => (
+                                <option key={c.id} value={c.id} className="bg-[#0a0a0a]">{c.name} ({industryConfig?.currencySymbol}{c.basePrice}/{c.unit})</option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -1469,19 +1521,42 @@ const NetworkBuilder: React.FC<NetworkBuilderProps> = ({ nodes, routes, setNodes
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
                     <div className="space-y-4">
                       <h4 className="text-[10px] text-white/40 uppercase tracking-widest border-b border-white/5 pb-2">Raw Material</h4>
-                      <div>
-                        <label className="text-[10px] text-white/40 uppercase tracking-widest mb-1 block">Supplies Commodity</label>
-                        <select
-                          value={newNode.materialId || ''}
-                          onChange={(e) => setNewNode({...newNode, materialId: e.target.value || undefined})}
-                          className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 md:px-4 md:py-3 text-white appearance-none cursor-pointer"
-                        >
-                          <option value="" className="bg-[#111]">— None (generic) —</option>
-                          {(industryConfig?.commodities || []).map(c => (
-                            <option key={c.id} value={c.id} className="bg-[#111]">{c.name} ({industryConfig?.currencySymbol}{c.basePrice}/{c.unit})</option>
-                          ))}
-                        </select>
-                      </div>
+                      {bom ? (
+                        <div>
+                          <label className="text-[10px] text-white/40 uppercase tracking-widest mb-1 block">Maps to BOM Product</label>
+                          <select
+                            value={newNode.bomProductId || ''}
+                            onChange={(e) => {
+                              const productId = e.target.value || undefined;
+                              const product = productId ? bom.products.find(p => p.id === productId) : undefined;
+                              const derivedMaterialId = product?.commodityId || undefined;
+                              const commodityPrice = derivedMaterialId ? industryConfig?.commodities.find(c => c.id === derivedMaterialId)?.basePrice : undefined;
+                              const refPrice = commodityPrice ?? product?.basePrice;
+                              setNewNode({...newNode, bomProductId: productId, materialId: derivedMaterialId, ...(refPrice != null ? { supplierCostPerUnit: refPrice } : {})});
+                            }}
+                            className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 md:px-4 md:py-3 text-white appearance-none cursor-pointer"
+                          >
+                            <option value="" className="bg-[#111]">— None —</option>
+                            {bom.products.map(p => (
+                              <option key={p.id} value={p.id} className="bg-[#111]">T{p.tier} — {p.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                      ) : (
+                        <div>
+                          <label className="text-[10px] text-white/40 uppercase tracking-widest mb-1 block">Supplies Commodity</label>
+                          <select
+                            value={newNode.materialId || ''}
+                            onChange={(e) => setNewNode({...newNode, materialId: e.target.value || undefined})}
+                            className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 md:px-4 md:py-3 text-white appearance-none cursor-pointer"
+                          >
+                            <option value="" className="bg-[#111]">— None (generic) —</option>
+                            {(industryConfig?.commodities || []).map(c => (
+                              <option key={c.id} value={c.id} className="bg-[#111]">{c.name} ({industryConfig?.currencySymbol}{c.basePrice}/{c.unit})</option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
                       <h4 className="text-[10px] text-white/40 uppercase tracking-widest border-b border-white/5 pb-2 mt-2">Lead Times</h4>
                       <div className="grid grid-cols-2 gap-4">
                         <div>
@@ -1508,7 +1583,7 @@ const NetworkBuilder: React.FC<NetworkBuilderProps> = ({ nodes, routes, setNodes
                       </div>
                       {newNode.materialId && (
                         <p className="text-[10px] text-cyan-400/60 mt-1">
-                          Linked to <span className="font-bold">{industryConfig?.commodities.find(c => c.id === newNode.materialId)?.name}</span> — commodity price changes will affect this supplier's cost
+                          {bom ? 'Commodity auto-linked: ' : 'Linked to '}<span className="font-bold">{industryConfig?.commodities.find(c => c.id === newNode.materialId)?.name}</span> — price changes will affect this supplier's cost
                         </p>
                       )}
                     </div>

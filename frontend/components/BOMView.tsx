@@ -2,10 +2,10 @@ import React, { useState, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Layers, ChevronRight, ChevronDown, AlertTriangle, CheckCircle2,
-  Shield, Info, Package, Zap,
+  Shield, Info, Package, Zap, Plus, X, Link2,
 } from 'lucide-react';
 import {
-  BillOfMaterials, BOMProduct, BOMEntry, SupplyNode, HistorySnapshot,
+  BillOfMaterials, BOMProduct, BOMEntry, SupplyNode, HistorySnapshot, IndustryConfig,
 } from '../types';
 import { getIndustryBOM, autoMapNodesToBOM } from '../utils/industryBOMs';
 import {
@@ -24,6 +24,7 @@ interface BOMViewProps {
   history: HistorySnapshot[];
   industryId: string;
   accentColor: string;
+  industryConfig?: IndustryConfig;
 }
 
 interface TreeNode {
@@ -227,7 +228,9 @@ const DetailPanel: React.FC<{
   bom: BillOfMaterials;
   riskMap: Map<string, number>;
   accentColor: string;
-}> = ({ node, bom, riskMap, accentColor }) => {
+  nodes: SupplyNode[];
+  onMapNode: (productId: string, nodeId: string | null) => void;
+}> = ({ node, bom, riskMap, accentColor, nodes, onMapNode }) => {
   const { product, entry, mappedNode, riskPct } = node;
 
   // Risk attribution: walk up from this product to root
@@ -304,22 +307,56 @@ const DetailPanel: React.FC<{
 
       {/* Mapped node */}
       {mappedNode ? (
-        <div className="bg-emerald-500/10 rounded-xl p-3 text-xs border border-emerald-500/20">
+        <div className="bg-emerald-500/10 rounded-xl p-3 text-xs border border-emerald-500/20 space-y-2">
           <div className="flex items-center gap-1.5 text-emerald-400 mb-1">
             <CheckCircle2 className="w-3.5 h-3.5" />
             <span className="font-bold">Mapped to Physical Node</span>
           </div>
           <p className="text-white/70">{mappedNode.name} — {mappedNode.type}</p>
-          <p className="text-white/40 mt-1">
+          <p className="text-white/40">
             Inventory: {mappedNode.inventoryLevel}/{mappedNode.maxCapacity}
           </p>
+          <div className="flex items-center gap-2 pt-1">
+            <select
+              value={mappedNode.id}
+              onChange={(e) => onMapNode(product.id, e.target.value || null)}
+              className="flex-1 bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-white text-xs appearance-none cursor-pointer"
+            >
+              {nodes.map(n => (
+                <option key={n.id} value={n.id} className="bg-[#111]">{n.name} ({n.type})</option>
+              ))}
+            </select>
+            <button
+              onClick={() => onMapNode(product.id, null)}
+              className="text-white/30 hover:text-red-400 transition-colors text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-lg hover:bg-red-500/10"
+            >
+              Unmap
+            </button>
+          </div>
         </div>
       ) : (
-        <div className="bg-white/[0.03] rounded-xl p-3 text-xs border border-dashed border-white/10">
+        <div className="bg-white/[0.03] rounded-xl p-3 text-xs border border-dashed border-white/10 space-y-3">
           <div className="flex items-center gap-1.5 text-white/30">
             <AlertTriangle className="w-3.5 h-3.5" />
             <span className="font-bold">Virtual — No Physical Node Mapped</span>
           </div>
+          {nodes.length > 0 && (
+            <div>
+              <label className="text-[10px] text-white/30 uppercase tracking-wider mb-1 block">
+                Assign a node
+              </label>
+              <select
+                value=""
+                onChange={(e) => { if (e.target.value) onMapNode(product.id, e.target.value); }}
+                className="w-full bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-white text-xs appearance-none cursor-pointer"
+              >
+                <option value="" className="bg-[#111]">— Select a node —</option>
+                {nodes.map(n => (
+                  <option key={n.id} value={n.id} className="bg-[#111]">{n.name} ({n.type})</option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
       )}
 
@@ -356,11 +393,41 @@ const DetailPanel: React.FC<{
 /*  Main component                                                     */
 /* ------------------------------------------------------------------ */
 
+const TIER_CATEGORIES: Record<number, BOMProduct['category']> = {
+  0: 'finished-good',
+  1: 'assembly',
+  2: 'component',
+  3: 'sub-component',
+  4: 'raw-material',
+};
+
 const BOMView: React.FC<BOMViewProps> = ({
-  bom, setBom, nodes, setNodes, history, industryId, accentColor,
+  bom, setBom, nodes, setNodes, history, industryId, accentColor, industryConfig,
 }) => {
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  // Modal visibility
+  const [showCreateBOM, setShowCreateBOM] = useState(false);
+  const [showAddProduct, setShowAddProduct] = useState(false);
+  const [showAddEntry, setShowAddEntry] = useState(false);
+
+  // Create BOM form
+  const [newBOMName, setNewBOMName] = useState('');
+  const [newFinishedName, setNewFinishedName] = useState('');
+
+  // Add Product form
+  const [newProd, setNewProd] = useState<{
+    name: string; tier: number; category: BOMProduct['category'];
+    basePrice: string; commodityId: string; leadTime: string;
+  }>({ name: '', tier: 1, category: 'assembly', basePrice: '', commodityId: '', leadTime: '' });
+
+  // Add Entry form
+  const [newEntry, setNewEntry] = useState<{
+    parentProductId: string; childProductId: string;
+    quantityPer: string; unit: string; critical: boolean;
+    substitutionDifficulty: BOMEntry['substitutionDifficulty'];
+  }>({ parentProductId: '', childProductId: '', quantityPer: '1', unit: 'pcs', critical: false, substitutionDifficulty: 'moderate' });
 
   /* ---------- derived data ---------- */
 
@@ -456,6 +523,19 @@ const BOMView: React.FC<BOMViewProps> = ({
     }
   }, [industryId, nodes, setBom, setNodes]);
 
+  const mapNode = useCallback((productId: string, nodeId: string | null) => {
+    setNodes(nodes.map(n => {
+      // Clear any node that currently owns this productId
+      if (n.bomProductId === productId && n.id !== nodeId) {
+        const { bomProductId, ...rest } = n;
+        return rest as SupplyNode;
+      }
+      // Assign the new node
+      if (n.id === nodeId) return { ...n, bomProductId: productId };
+      return n;
+    }));
+  }, [nodes, setNodes]);
+
   const clearBom = useCallback(() => {
     setBom(null);
     // Strip BOM fields from nodes
@@ -466,6 +546,65 @@ const BOMView: React.FC<BOMViewProps> = ({
     setSelectedId(null);
     setExpanded(new Set());
   }, [nodes, setBom, setNodes]);
+
+  const createCustomBOM = useCallback(() => {
+    if (!newFinishedName.trim()) return;
+    const tsId = `custom-${Date.now()}`;
+    const finishedProduct: BOMProduct = {
+      id: `${tsId}-root`,
+      name: newFinishedName.trim(),
+      tier: 0,
+      category: 'finished-good',
+    };
+    const newBOM: BillOfMaterials = {
+      id: tsId,
+      finishedProductId: finishedProduct.id,
+      name: newBOMName.trim() || `${newFinishedName.trim()} BOM`,
+      industry: 'custom',
+      products: [finishedProduct],
+      entries: [],
+    };
+    setBom(newBOM);
+    setShowCreateBOM(false);
+    setNewBOMName('');
+    setNewFinishedName('');
+    setExpanded(new Set([finishedProduct.id]));
+  }, [newBOMName, newFinishedName, setBom]);
+
+  const addProduct = useCallback(() => {
+    if (!bom || !newProd.name.trim()) return;
+    const id = `custom-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    const product: BOMProduct = {
+      id,
+      name: newProd.name.trim(),
+      tier: newProd.tier,
+      category: newProd.category,
+      ...(newProd.commodityId ? { commodityId: newProd.commodityId } : {}),
+      ...(newProd.basePrice !== '' ? { basePrice: parseFloat(newProd.basePrice) } : {}),
+      ...(newProd.leadTime !== '' ? { defaultLeadTimeDays: parseInt(newProd.leadTime) } : {}),
+    };
+    setBom({ ...bom, products: [...bom.products, product] });
+    setShowAddProduct(false);
+    setNewProd({ name: '', tier: 1, category: 'assembly', basePrice: '', commodityId: '', leadTime: '' });
+  }, [bom, newProd, setBom]);
+
+  const addEntry = useCallback(() => {
+    if (!bom || !newEntry.parentProductId || !newEntry.childProductId) return;
+    if (newEntry.parentProductId === newEntry.childProductId) return;
+    const entry: BOMEntry = {
+      parentProductId: newEntry.parentProductId,
+      childProductId: newEntry.childProductId,
+      quantityPer: parseFloat(newEntry.quantityPer) || 1,
+      unit: newEntry.unit || 'pcs',
+      critical: newEntry.critical,
+      substitutionDifficulty: newEntry.substitutionDifficulty,
+      source: 'user-defined',
+      confidence: 90,
+    };
+    setBom({ ...bom, entries: [...bom.entries, entry] });
+    setShowAddEntry(false);
+    setNewEntry({ parentProductId: '', childProductId: '', quantityPer: '1', unit: 'pcs', critical: false, substitutionDifficulty: 'moderate' });
+  }, [bom, newEntry, setBom]);
 
   /* ---------- find selected tree node ---------- */
 
@@ -481,6 +620,25 @@ const BOMView: React.FC<BOMViewProps> = ({
     };
     return search(tree);
   }, [tree, selectedId]);
+
+  /* ---------- orphaned products (added but not linked into tree) ---------- */
+
+  const orphanProducts = useMemo(() => {
+    if (!bom) return [];
+    // BFS from root to collect all reachable product IDs
+    const reachable = new Set<string>([bom.finishedProductId]);
+    const queue = [bom.finishedProductId];
+    while (queue.length > 0) {
+      const parentId = queue.shift()!;
+      for (const e of bom.entries) {
+        if (e.parentProductId === parentId && !reachable.has(e.childProductId)) {
+          reachable.add(e.childProductId);
+          queue.push(e.childProductId);
+        }
+      }
+    }
+    return bom.products.filter(p => !reachable.has(p.id));
+  }, [bom]);
 
   /* ================================================================ */
   /*  Render                                                           */
@@ -510,18 +668,27 @@ const BOMView: React.FC<BOMViewProps> = ({
           </div>
 
           {!bom ? (
-            <button
-              onClick={loadTemplate}
-              className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all self-start sm:self-auto min-h-[40px]"
-              style={{
-                backgroundColor: accentColor,
-                color: '#000',
-                boxShadow: `0 0 24px ${accentColor}33`,
-              }}
-            >
-              <Package className="w-4 h-4" />
-              Load Industry Template
-            </button>
+            <div className="flex flex-wrap gap-2 self-start sm:self-auto">
+              <button
+                onClick={loadTemplate}
+                className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all min-h-[40px]"
+                style={{
+                  backgroundColor: accentColor,
+                  color: '#000',
+                  boxShadow: `0 0 24px ${accentColor}33`,
+                }}
+              >
+                <Package className="w-4 h-4" />
+                Load Industry Template
+              </button>
+              <button
+                onClick={() => setShowCreateBOM(true)}
+                className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all min-h-[40px] bg-white/[0.06] text-white hover:bg-white/10 border border-white/10"
+              >
+                <Plus className="w-4 h-4" />
+                Custom BOM
+              </button>
+            </div>
           ) : (
             <div className="flex flex-wrap items-center gap-3">
               {/* Confidence pill */}
@@ -552,6 +719,20 @@ const BOMView: React.FC<BOMViewProps> = ({
                     </span>
                   ))}
 
+              <button
+                onClick={() => setShowAddProduct(true)}
+                className="flex items-center gap-1.5 text-[11px] font-bold px-3 py-1.5 rounded-lg bg-white/[0.06] text-white/70 hover:bg-white/10 hover:text-white transition-colors border border-white/10"
+              >
+                <Plus className="w-3 h-3" />
+                Add Product
+              </button>
+              <button
+                onClick={() => setShowAddEntry(true)}
+                className="flex items-center gap-1.5 text-[11px] font-bold px-3 py-1.5 rounded-lg bg-white/[0.06] text-white/70 hover:bg-white/10 hover:text-white transition-colors border border-white/10"
+              >
+                <Link2 className="w-3 h-3" />
+                Link Products
+              </button>
               <button
                 onClick={clearBom}
                 className="text-[10px] text-white/30 hover:text-white/60 transition-colors uppercase tracking-wider font-bold px-2 py-1"
@@ -603,6 +784,8 @@ const BOMView: React.FC<BOMViewProps> = ({
                   bom={bom}
                   riskMap={riskMap}
                   accentColor={accentColor}
+                  nodes={nodes}
+                  onMapNode={mapNode}
                 />
               </div>
             )}
@@ -611,7 +794,47 @@ const BOMView: React.FC<BOMViewProps> = ({
       )}
 
       {/* ============================================================ */}
-      {/*  Section 3: Bottleneck Alerts                                */}
+      {/*  Section 3: Unlinked Products                                */}
+      {/* ============================================================ */}
+      {bom && orphanProducts.length > 0 && (
+        <div className="bg-amber-500/5 rounded-2xl border border-amber-500/20 p-4 md:p-5">
+          <div className="flex items-center gap-2 mb-3">
+            <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+            <p className="text-[10px] text-amber-400/80 uppercase tracking-[0.2em] font-bold">
+              Unlinked Products ({orphanProducts.length})
+            </p>
+            <span className="text-[10px] text-white/30 ml-auto">Not connected to the BOM tree — use "Link Products" to add them</span>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {orphanProducts.map(p => (
+              <div
+                key={p.id}
+                className="flex items-center gap-2 bg-white/[0.04] border border-white/10 rounded-xl px-3 py-2 cursor-pointer hover:bg-white/[0.07] transition-colors group"
+                onClick={() => {
+                  setNewEntry(en => ({ ...en, childProductId: p.id }));
+                  setShowAddEntry(true);
+                }}
+                title="Click to link this product"
+              >
+                <span
+                  className="text-[9px] font-bold px-1.5 py-0.5 rounded-md shrink-0"
+                  style={{ backgroundColor: `${TIER_COLORS[p.tier] ?? '#64748b'}22`, color: TIER_COLORS[p.tier] ?? '#64748b' }}
+                >
+                  T{p.tier}
+                </span>
+                <span className="text-xs text-white/70">{p.name}</span>
+                {p.basePrice != null && (
+                  <span className="text-[10px] text-white/30">${p.basePrice}</span>
+                )}
+                <Link2 className="w-3 h-3 text-white/20 group-hover:text-amber-400 transition-colors" />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================ */}
+      {/*  Section 4: Bottleneck Alerts                                */}
       {/* ============================================================ */}
       {bom && (bottlenecks.length > 0 || demandBottlenecks.length > 0) && (
         <div className="space-y-4">
@@ -751,6 +974,270 @@ const BOMView: React.FC<BOMViewProps> = ({
           </p>
         </div>
       )}
+
+      {/* ============================================================ */}
+      {/*  Modal: Create Custom BOM                                    */}
+      {/* ============================================================ */}
+      <AnimatePresence>
+        {showCreateBOM && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+            onClick={() => setShowCreateBOM(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-[#111] border border-white/10 rounded-2xl p-6 w-full max-w-md space-y-5"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between">
+                <h3 className="text-white font-bold text-base">Create Custom BOM</h3>
+                <button onClick={() => setShowCreateBOM(false)} className="text-white/30 hover:text-white transition-colors"><X className="w-4 h-4" /></button>
+              </div>
+              <div className="space-y-3">
+                <div>
+                  <label className="text-[10px] text-white/40 uppercase tracking-widest mb-1 block">Finished Product Name *</label>
+                  <input
+                    type="text" placeholder="e.g. Custom Product"
+                    value={newFinishedName} onChange={e => setNewFinishedName(e.target.value)}
+                    className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:border-white/30"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] text-white/40 uppercase tracking-widest mb-1 block">BOM Name</label>
+                  <input
+                    type="text" placeholder="e.g. My Custom BOM"
+                    value={newBOMName} onChange={e => setNewBOMName(e.target.value)}
+                    className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:border-white/30"
+                  />
+                  <p className="text-[10px] text-white/30 mt-1">Defaults to "[Product] BOM" if left blank</p>
+                </div>
+              </div>
+              <div className="flex gap-2 pt-1">
+                <button
+                  onClick={createCustomBOM}
+                  disabled={!newFinishedName.trim()}
+                  className="flex-1 py-2.5 rounded-xl text-sm font-bold transition-all disabled:opacity-40"
+                  style={{ backgroundColor: accentColor, color: '#000' }}
+                >
+                  Create BOM
+                </button>
+                <button onClick={() => setShowCreateBOM(false)} className="px-4 py-2.5 rounded-xl text-sm text-white/50 bg-white/5 hover:bg-white/10 transition-colors">Cancel</button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ============================================================ */}
+      {/*  Modal: Add Product                                          */}
+      {/* ============================================================ */}
+      <AnimatePresence>
+        {showAddProduct && bom && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+            onClick={() => setShowAddProduct(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-[#111] border border-white/10 rounded-2xl p-6 w-full max-w-md space-y-5 max-h-[90vh] overflow-y-auto"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between">
+                <h3 className="text-white font-bold text-base">Add BOM Product</h3>
+                <button onClick={() => setShowAddProduct(false)} className="text-white/30 hover:text-white transition-colors"><X className="w-4 h-4" /></button>
+              </div>
+              <div className="space-y-3">
+                <div>
+                  <label className="text-[10px] text-white/40 uppercase tracking-widest mb-1 block">Product Name *</label>
+                  <input
+                    type="text" placeholder="e.g. Engine Mount"
+                    value={newProd.name} onChange={e => setNewProd(p => ({ ...p, name: e.target.value }))}
+                    className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:border-white/30"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[10px] text-white/40 uppercase tracking-widest mb-1 block">Tier</label>
+                    <select
+                      value={newProd.tier}
+                      onChange={e => {
+                        const t = parseInt(e.target.value);
+                        setNewProd(p => ({ ...p, tier: t, category: TIER_CATEGORIES[t] ?? 'component' }));
+                      }}
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm appearance-none cursor-pointer"
+                    >
+                      {[0, 1, 2, 3, 4].map(t => (
+                        <option key={t} value={t} className="bg-[#111]">Tier {t} — {TIER_CATEGORIES[t]?.replace(/-/g, ' ')}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-white/40 uppercase tracking-widest mb-1 block">Lead Time (days)</label>
+                    <input
+                      type="number" placeholder="—"
+                      value={newProd.leadTime} onChange={e => setNewProd(p => ({ ...p, leadTime: e.target.value }))}
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:border-white/30"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[10px] text-white/40 uppercase tracking-widest mb-1 block">Base Price ($)</label>
+                    <input
+                      type="number" placeholder="e.g. 250"
+                      value={newProd.basePrice} onChange={e => setNewProd(p => ({ ...p, basePrice: e.target.value, commodityId: '' }))}
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:border-white/30"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-white/40 uppercase tracking-widest mb-1 block">Link to Commodity</label>
+                    <select
+                      value={newProd.commodityId}
+                      onChange={e => {
+                        const cid = e.target.value;
+                        const commodity = industryConfig?.commodities.find(c => c.id === cid);
+                        setNewProd(p => ({ ...p, commodityId: cid, basePrice: commodity ? String(commodity.basePrice) : p.basePrice }));
+                      }}
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm appearance-none cursor-pointer"
+                    >
+                      <option value="" className="bg-[#111]">— None —</option>
+                      {(industryConfig?.commodities ?? []).map(c => (
+                        <option key={c.id} value={c.id} className="bg-[#111]">{c.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                {(newProd.basePrice || newProd.commodityId) && (
+                  <p className="text-[10px] text-cyan-400/60">
+                    {newProd.commodityId
+                      ? `Price follows ${industryConfig?.commodities.find(c => c.id === newProd.commodityId)?.name} commodity — fluctuates with market`
+                      : `Fixed reference price $${newProd.basePrice}/unit — auto-fills supplier cost on node mapping`}
+                  </p>
+                )}
+              </div>
+              <div className="flex gap-2 pt-1">
+                <button
+                  onClick={addProduct}
+                  disabled={!newProd.name.trim()}
+                  className="flex-1 py-2.5 rounded-xl text-sm font-bold transition-all disabled:opacity-40"
+                  style={{ backgroundColor: accentColor, color: '#000' }}
+                >
+                  Add Product
+                </button>
+                <button onClick={() => setShowAddProduct(false)} className="px-4 py-2.5 rounded-xl text-sm text-white/50 bg-white/5 hover:bg-white/10 transition-colors">Cancel</button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ============================================================ */}
+      {/*  Modal: Link Products (Add BOM Entry)                        */}
+      {/* ============================================================ */}
+      <AnimatePresence>
+        {showAddEntry && bom && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+            onClick={() => setShowAddEntry(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-[#111] border border-white/10 rounded-2xl p-6 w-full max-w-md space-y-5 max-h-[90vh] overflow-y-auto"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between">
+                <h3 className="text-white font-bold text-base">Link Products</h3>
+                <button onClick={() => setShowAddEntry(false)} className="text-white/30 hover:text-white transition-colors"><X className="w-4 h-4" /></button>
+              </div>
+              <p className="text-xs text-white/40">Define how much of a child product is needed to produce one unit of the parent.</p>
+              <div className="space-y-3">
+                <div>
+                  <label className="text-[10px] text-white/40 uppercase tracking-widest mb-1 block">Parent Product *</label>
+                  <select
+                    value={newEntry.parentProductId}
+                    onChange={e => setNewEntry(en => ({ ...en, parentProductId: e.target.value }))}
+                    className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm appearance-none cursor-pointer"
+                  >
+                    <option value="" className="bg-[#111]">— Select parent —</option>
+                    {bom.products.map(p => (
+                      <option key={p.id} value={p.id} className="bg-[#111]">T{p.tier} — {p.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[10px] text-white/40 uppercase tracking-widest mb-1 block">Child Product (Input) *</label>
+                  <select
+                    value={newEntry.childProductId}
+                    onChange={e => setNewEntry(en => ({ ...en, childProductId: e.target.value }))}
+                    className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm appearance-none cursor-pointer"
+                  >
+                    <option value="" className="bg-[#111]">— Select child —</option>
+                    {bom.products.filter(p => p.id !== newEntry.parentProductId).map(p => (
+                      <option key={p.id} value={p.id} className="bg-[#111]">T{p.tier} — {p.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[10px] text-white/40 uppercase tracking-widest mb-1 block">Qty per Parent Unit</label>
+                    <input
+                      type="number" step="any" min="0"
+                      value={newEntry.quantityPer} onChange={e => setNewEntry(en => ({ ...en, quantityPer: e.target.value }))}
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:border-white/30"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-white/40 uppercase tracking-widest mb-1 block">Unit</label>
+                    <input
+                      type="text" placeholder="pcs / kg / liters"
+                      value={newEntry.unit} onChange={e => setNewEntry(en => ({ ...en, unit: e.target.value }))}
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:border-white/30"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[10px] text-white/40 uppercase tracking-widest mb-1 block">Substitution Difficulty</label>
+                    <select
+                      value={newEntry.substitutionDifficulty}
+                      onChange={e => setNewEntry(en => ({ ...en, substitutionDifficulty: e.target.value as BOMEntry['substitutionDifficulty'] }))}
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm appearance-none cursor-pointer"
+                    >
+                      {['easy', 'moderate', 'hard', 'none'].map(v => (
+                        <option key={v} value={v} className="bg-[#111]">{v.charAt(0).toUpperCase() + v.slice(1)}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="flex items-end pb-2.5">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox" checked={newEntry.critical}
+                        onChange={e => setNewEntry(en => ({ ...en, critical: e.target.checked }))}
+                        className="w-4 h-4 rounded accent-red-400"
+                      />
+                      <span className="text-xs text-white/60">Critical path</span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+              <div className="flex gap-2 pt-1">
+                <button
+                  onClick={addEntry}
+                  disabled={!newEntry.parentProductId || !newEntry.childProductId}
+                  className="flex-1 py-2.5 rounded-xl text-sm font-bold transition-all disabled:opacity-40"
+                  style={{ backgroundColor: accentColor, color: '#000' }}
+                >
+                  Link Products
+                </button>
+                <button onClick={() => setShowAddEntry(false)} className="px-4 py-2.5 rounded-xl text-sm text-white/50 bg-white/5 hover:bg-white/10 transition-colors">Cancel</button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
