@@ -650,75 +650,53 @@ const BOMView: React.FC<BOMViewProps> = ({
       {/* ============================================================ */}
       {/*  Section 1: Top Bar                                          */}
       {/* ============================================================ */}
-      <div className="bg-white/5 rounded-2xl border border-white/5 p-5 md:p-6">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div
-              className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
-              style={{ backgroundColor: `${accentColor}22` }}
-            >
-              <Layers className="w-5 h-5" style={{ color: accentColor }} />
-            </div>
-            <div>
-              <h2 className="text-lg font-bold text-white tracking-tight">Bill of Materials</h2>
-              <p className="text-white/40 text-xs">
-                {bom ? bom.name : 'No BOM configured'}
-              </p>
-            </div>
+      <div className="bg-white/5 rounded-2xl border border-white/5 p-5 md:p-6 space-y-4">
+        {/* Row 1: identity + actions */}
+        <div className="flex items-center gap-3">
+          <div
+            className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
+            style={{ backgroundColor: `${accentColor}22` }}
+          >
+            <Layers className="w-4.5 h-4.5" style={{ color: accentColor }} />
           </div>
 
+          <div className="min-w-0 flex-1">
+            <h2 className="text-sm font-bold text-white tracking-tight leading-none">Bill of Materials</h2>
+            <p className="text-white/40 text-xs mt-0.5 truncate">
+              {bom ? bom.name : 'No BOM configured'}
+            </p>
+          </div>
+
+          {/* Confidence score — shown inline when BOM loaded */}
+          {bom && confidenceSummary && (
+            <div className="flex items-center gap-1.5 shrink-0">
+              <Shield className="w-3 h-3 text-white/30" />
+              <span className="text-sm font-bold text-white">{confidenceSummary.overall.toFixed(0)}%</span>
+              <span className="text-[10px] text-white/30">confidence</span>
+            </div>
+          )}
+
+          {/* Actions */}
           {!bom ? (
-            <div className="flex flex-wrap gap-2 self-start sm:self-auto">
+            <div className="flex gap-2 shrink-0">
               <button
                 onClick={loadTemplate}
-                className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all min-h-[40px]"
-                style={{
-                  backgroundColor: accentColor,
-                  color: '#000',
-                  boxShadow: `0 0 24px ${accentColor}33`,
-                }}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all"
+                style={{ backgroundColor: accentColor, color: '#000', boxShadow: `0 0 20px ${accentColor}33` }}
               >
-                <Package className="w-4 h-4" />
-                Load Industry Template
+                <Package className="w-3.5 h-3.5" />
+                Load Template
               </button>
               <button
                 onClick={() => setShowCreateBOM(true)}
-                className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all min-h-[40px] bg-white/[0.06] text-white hover:bg-white/10 border border-white/10"
+                className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-white/[0.06] text-white hover:bg-white/10 border border-white/10 transition-colors"
               >
-                <Plus className="w-4 h-4" />
+                <Plus className="w-3.5 h-3.5" />
                 Custom BOM
               </button>
             </div>
           ) : (
-            <div className="flex flex-wrap items-center gap-3">
-              {/* Confidence pill */}
-              {confidenceSummary && (
-                <div className="flex items-center gap-2 bg-white/[0.04] rounded-xl px-3 py-1.5">
-                  <Shield className="w-3.5 h-3.5 text-white/40" />
-                  <span className="text-xs font-bold text-white">
-                    {confidenceSummary.overall.toFixed(0)}%
-                  </span>
-                  <span className="text-[10px] text-white/30">confidence</span>
-                </div>
-              )}
-
-              {/* Tier coverage badges */}
-              {confidenceSummary &&
-                (Object.entries(confidenceSummary.tiers) as [string, { total: number; mapped: number }][])
-                  .sort(([a], [b]) => Number(a) - Number(b))
-                  .map(([tier, { total, mapped }]) => (
-                    <span
-                      key={tier}
-                      className="text-[10px] font-bold px-2 py-1 rounded-lg"
-                      style={{
-                        backgroundColor: `${TIER_COLORS[Number(tier)] ?? '#64748b'}18`,
-                        color: TIER_COLORS[Number(tier)] ?? '#64748b',
-                      }}
-                    >
-                      Tier {tier}: {mapped}/{total} mapped
-                    </span>
-                  ))}
-
+            <div className="flex items-center gap-2 shrink-0">
               <button
                 onClick={() => setShowAddProduct(true)}
                 className="flex items-center gap-1.5 text-[11px] font-bold px-3 py-1.5 rounded-lg bg-white/[0.06] text-white/70 hover:bg-white/10 hover:text-white transition-colors border border-white/10"
@@ -731,17 +709,45 @@ const BOMView: React.FC<BOMViewProps> = ({
                 className="flex items-center gap-1.5 text-[11px] font-bold px-3 py-1.5 rounded-lg bg-white/[0.06] text-white/70 hover:bg-white/10 hover:text-white transition-colors border border-white/10"
               >
                 <Link2 className="w-3 h-3" />
-                Link Products
+                Link
               </button>
               <button
                 onClick={clearBom}
-                className="text-[10px] text-white/30 hover:text-white/60 transition-colors uppercase tracking-wider font-bold px-2 py-1"
+                className="text-[10px] text-white/25 hover:text-white/50 transition-colors font-medium px-2 py-1.5"
               >
-                Clear BOM
+                Clear
               </button>
             </div>
           )}
         </div>
+
+        {/* Row 2: tier coverage strip — only when BOM loaded */}
+        {bom && confidenceSummary && Object.keys(confidenceSummary.tiers).length > 0 && (
+          <div className="flex items-center gap-2 pt-1 border-t border-white/[0.05]">
+            <span className="text-[10px] text-white/25 font-medium uppercase tracking-widest shrink-0">Coverage</span>
+            <div className="flex flex-wrap gap-1.5">
+              {(Object.entries(confidenceSummary.tiers) as [string, { total: number; mapped: number }][])
+                .sort(([a], [b]) => Number(a) - Number(b))
+                .map(([tier, { total, mapped }]) => {
+                  const color = TIER_COLORS[Number(tier)] ?? '#64748b';
+                  const allMapped = mapped === total;
+                  return (
+                    <span
+                      key={tier}
+                      className="text-[10px] font-semibold px-2 py-0.5 rounded-md"
+                      style={{
+                        backgroundColor: allMapped ? `${color}20` : `${color}10`,
+                        color: allMapped ? color : `${color}99`,
+                        border: `1px solid ${color}${allMapped ? '30' : '18'}`,
+                      }}
+                    >
+                      T{tier} · {mapped}/{total}
+                    </span>
+                  );
+                })}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ============================================================ */}

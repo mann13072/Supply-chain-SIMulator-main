@@ -42,8 +42,8 @@ const SliderCard = ({
   step: number; onChange: (v: number) => void; displayValue: string;
   color?: string; accent?: string;
 }) => (
-  <div className="bg-white/[0.03] rounded-xl border border-white/[0.06] p-3.5 hover:border-white/10 transition-colors">
-    <div className="flex justify-between items-center mb-3">
+  <div className="bg-white/[0.03] rounded-xl border border-white/[0.06] p-2.5 sm:p-3 hover:border-white/10 transition-colors">
+    <div className="flex justify-between items-center mb-2">
       <div>
         <p className="text-xs font-semibold text-white/80 leading-tight">{label}</p>
         {sublabel && <p className="text-[10px] text-white/25 mt-0.5">{sublabel}</p>}
@@ -158,7 +158,7 @@ const SimulationPanel: React.FC<SimulationPanelProps> = ({ params, setParams, in
       </div>
 
       {/* Content */}
-      <div className="p-3 sm:p-4 space-y-2.5">
+      <div className="p-2.5 sm:p-3.5 space-y-2">
 
         {/* COMMODITIES */}
         {activeTab === 'MATERIALS' && (
@@ -169,23 +169,25 @@ const SimulationPanel: React.FC<SimulationPanelProps> = ({ params, setParams, in
                 <p className="text-white/20 text-xs mt-1">Add commodities in Settings.</p>
               </div>
             ) : (
-              industryConfig.commodities.map(commodity => {
-                const val = params.commodityPriceChanges[commodity.id] ?? 0;
-                const accent = val > 0 ? '#f87171' : val < 0 ? '#34d399' : '#ffffff';
-                return (
-                  <SliderCard
-                    key={commodity.id}
-                    label={commodity.name}
-                    sublabel={`Base: ${industryConfig.currencySymbol}${commodity.basePrice} / ${commodity.unit}`}
-                    value={val}
-                    min={-50} max={150} step={5}
-                    onChange={(v) => handleCommodityChange(commodity.id, v)}
-                    displayValue={`${val > 0 ? '+' : ''}${val}%`}
-                    color={commodity.color}
-                    accent={val > 0 ? 'text-red-400' : val < 0 ? 'text-emerald-400' : 'text-white/50'}
-                  />
-                );
-              })
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                {industryConfig.commodities.map(commodity => {
+                  const val = params.commodityPriceChanges[commodity.id] ?? 0;
+                  const accent = val > 0 ? '#f87171' : val < 0 ? '#34d399' : '#ffffff';
+                  return (
+                    <SliderCard
+                      key={commodity.id}
+                      label={commodity.name}
+                      sublabel={`Base: ${industryConfig.currencySymbol}${commodity.basePrice} / ${commodity.unit}`}
+                      value={val}
+                      min={-50} max={150} step={5}
+                      onChange={(v) => handleCommodityChange(commodity.id, v)}
+                      displayValue={`${val > 0 ? '+' : ''}${val}%`}
+                      color={commodity.color}
+                      accent={val > 0 ? 'text-red-400' : val < 0 ? 'text-emerald-400' : 'text-white/50'}
+                    />
+                  );
+                })}
+              </div>
             )}
           </div>
         )}
@@ -193,82 +195,86 @@ const SimulationPanel: React.FC<SimulationPanelProps> = ({ params, setParams, in
         {/* OPERATIONS */}
         {activeTab === 'OPS' && (
           <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
-            <SliderCard
-              label="Production Yield Loss"
-              sublabel="Factory output degradation per day"
-              value={params.yieldRateDegradation}
-              min={0} max={20} step={1}
-              onChange={(v) => handleChange('yieldRateDegradation', v)}
-              displayValue={`-${params.yieldRateDegradation}%`}
-              color="#f87171"
-              accent={params.yieldRateDegradation > 0 ? 'text-red-400' : 'text-white/50'}
-            />
-            <SliderCard
-              label="Energy Cost Spike"
-              sublabel="Reduces factory throughput via cost squeeze"
-              value={params.energyCostChange}
-              min={0} max={200} step={10}
-              onChange={(v) => handleChange('energyCostChange', v)}
-              displayValue={`+${params.energyCostChange}%`}
-              color="#fbbf24"
-              accent={params.energyCostChange > 0 ? 'text-amber-400' : 'text-white/50'}
-            />
-            <SliderCard
-              label="Pandemic Factor"
-              sublabel="Probability of factory shutdowns + demand surge"
-              value={params.pandemicFactor}
-              min={0} max={1} step={0.05}
-              onChange={(v) => handleChange('pandemicFactor', v)}
-              displayValue={params.pandemicFactor > 0 ? `${Math.round(params.pandemicFactor * 100)}%` : 'Off'}
-              color="#c084fc"
-              accent={params.pandemicFactor > 0 ? 'text-purple-400' : 'text-white/50'}
-            />
-            <SliderCard
-              label="Quality Recall Probability"
-              sublabel="Chance of 25% inventory quarantine per node/day"
-              value={params.qualityRecallProb}
-              min={0} max={0.05} step={0.001}
-              onChange={(v) => handleChange('qualityRecallProb', v)}
-              displayValue={params.qualityRecallProb > 0 ? `${(params.qualityRecallProb * 100).toFixed(1)}%` : 'Off'}
-              color="#f97316"
-              accent={params.qualityRecallProb > 0 ? 'text-orange-400' : 'text-white/50'}
-            />
-            <SliderCard
-              label="Recovery Time"
-              sublabel="Days to recover from disasters / supplier failures"
-              value={params.recoveryTime}
-              min={1} max={60} step={1}
-              onChange={(v) => handleChange('recoveryTime', v)}
-              displayValue={`${params.recoveryTime}d`}
-              color="#60a5fa"
-              accent="text-blue-400"
-            />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+              <SliderCard
+                label="Production Yield Loss"
+                sublabel="Factory output degradation per day"
+                value={params.yieldRateDegradation}
+                min={0} max={20} step={1}
+                onChange={(v) => handleChange('yieldRateDegradation', v)}
+                displayValue={`-${params.yieldRateDegradation}%`}
+                color="#f87171"
+                accent={params.yieldRateDegradation > 0 ? 'text-red-400' : 'text-white/50'}
+              />
+              <SliderCard
+                label="Energy Cost Spike"
+                sublabel="Reduces factory throughput via cost squeeze"
+                value={params.energyCostChange}
+                min={0} max={200} step={10}
+                onChange={(v) => handleChange('energyCostChange', v)}
+                displayValue={`+${params.energyCostChange}%`}
+                color="#fbbf24"
+                accent={params.energyCostChange > 0 ? 'text-amber-400' : 'text-white/50'}
+              />
+              <SliderCard
+                label="Pandemic Factor"
+                sublabel="Probability of factory shutdowns + demand surge"
+                value={params.pandemicFactor}
+                min={0} max={1} step={0.05}
+                onChange={(v) => handleChange('pandemicFactor', v)}
+                displayValue={params.pandemicFactor > 0 ? `${Math.round(params.pandemicFactor * 100)}%` : 'Off'}
+                color="#c084fc"
+                accent={params.pandemicFactor > 0 ? 'text-purple-400' : 'text-white/50'}
+              />
+              <SliderCard
+                label="Quality Recall Probability"
+                sublabel="Chance of 25% inventory quarantine per node/day"
+                value={params.qualityRecallProb}
+                min={0} max={0.05} step={0.001}
+                onChange={(v) => handleChange('qualityRecallProb', v)}
+                displayValue={params.qualityRecallProb > 0 ? `${(params.qualityRecallProb * 100).toFixed(1)}%` : 'Off'}
+                color="#f97316"
+                accent={params.qualityRecallProb > 0 ? 'text-orange-400' : 'text-white/50'}
+              />
+              <SliderCard
+                label="Recovery Time"
+                sublabel="Days to recover from disasters / supplier failures"
+                value={params.recoveryTime}
+                min={1} max={60} step={1}
+                onChange={(v) => handleChange('recoveryTime', v)}
+                displayValue={`${params.recoveryTime}d`}
+                color="#60a5fa"
+                accent="text-blue-400"
+              />
+            </div>
           </div>
         )}
 
         {/* LOGISTICS */}
         {activeTab === 'LOGISTICS' && (
-          <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
-            <SliderCard
-              label="Freight Cost Index"
-              sublabel="100 = baseline, 400 = crisis level"
-              value={params.freightCostIndex}
-              min={50} max={400} step={10}
-              onChange={(v) => handleChange('freightCostIndex', v)}
-              displayValue={params.freightCostIndex.toString()}
-              color={params.freightCostIndex > 150 ? '#f87171' : '#ffffff'}
-              accent={params.freightCostIndex > 150 ? 'text-red-400' : params.freightCostIndex > 100 ? 'text-amber-400' : 'text-white/50'}
-            />
-            <SliderCard
-              label="Forecast Accuracy"
-              sublabel="Above 70%: proactive reorders before stockout"
-              value={params.forecastAccuracy}
-              min={0} max={100} step={5}
-              onChange={(v) => handleChange('forecastAccuracy', v)}
-              displayValue={`${params.forecastAccuracy}%`}
-              color={params.forecastAccuracy >= 70 ? '#34d399' : '#fbbf24'}
-              accent={params.forecastAccuracy >= 70 ? 'text-emerald-400' : 'text-amber-400'}
-            />
+          <div className="animate-in fade-in slide-in-from-bottom-2 duration-300 space-y-2">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+              <SliderCard
+                label="Freight Cost Index"
+                sublabel="100 = baseline, 400 = crisis level"
+                value={params.freightCostIndex}
+                min={50} max={400} step={10}
+                onChange={(v) => handleChange('freightCostIndex', v)}
+                displayValue={params.freightCostIndex.toString()}
+                color={params.freightCostIndex > 150 ? '#f87171' : '#ffffff'}
+                accent={params.freightCostIndex > 150 ? 'text-red-400' : params.freightCostIndex > 100 ? 'text-amber-400' : 'text-white/50'}
+              />
+              <SliderCard
+                label="Forecast Accuracy"
+                sublabel="Above 70%: proactive reorders before stockout"
+                value={params.forecastAccuracy}
+                min={0} max={100} step={5}
+                onChange={(v) => handleChange('forecastAccuracy', v)}
+                displayValue={`${params.forecastAccuracy}%`}
+                color={params.forecastAccuracy >= 70 ? '#34d399' : '#fbbf24'}
+                accent={params.forecastAccuracy >= 70 ? 'text-emerald-400' : 'text-amber-400'}
+              />
+            </div>
             <div className="bg-white/[0.03] rounded-xl border border-white/[0.06] px-3.5 py-3 hover:border-white/10 transition-colors">
               <div className="flex items-center justify-between">
                 <div>
@@ -292,7 +298,7 @@ const SimulationPanel: React.FC<SimulationPanelProps> = ({ params, setParams, in
 
         {/* MARKET */}
         {activeTab === 'MARKET' && (
-          <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+          <div className="animate-in fade-in slide-in-from-bottom-2 duration-300 space-y-2">
             <SliderCard
               label="Global Demand Surge"
               sublabel="Amplifies consumption at all retail nodes"
@@ -388,116 +394,120 @@ const SimulationPanel: React.FC<SimulationPanelProps> = ({ params, setParams, in
 
         {/* MACRO & POLICY — external forces nobody in the company controls */}
         {activeTab === 'FINANCE' && (
-          <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
-            <div className="bg-white/[0.02] rounded-xl border border-white/[0.04] px-3 py-2 mb-2">
+          <div className="animate-in fade-in slide-in-from-bottom-2 duration-300 space-y-2">
+            <div className="bg-white/[0.02] rounded-xl border border-white/[0.04] px-3 py-2">
               <p className="text-[10px] text-white/30">External macro forces. Per-node costs (production, warehousing, markup) are set in the <span className="text-white/50 font-semibold">Network → node editor</span>.</p>
             </div>
-            <SliderCard
-              label="Inflation Rate"
-              sublabel="Annual cost growth — production, transport, warehousing"
-              value={params.inflationRate}
-              min={0} max={15} step={0.5}
-              onChange={(v) => handleChange('inflationRate', v)}
-              displayValue={`${params.inflationRate}%`}
-              color="#fb923c"
-              accent={params.inflationRate > 3 ? 'text-orange-400' : 'text-white/50'}
-            />
-            <SliderCard
-              label="Interest Rate Change"
-              sublabel="Central bank shift — added to working capital cost"
-              value={params.interestRateChange}
-              min={-5} max={10} step={0.5}
-              onChange={(v) => handleChange('interestRateChange', v)}
-              displayValue={`${params.interestRateChange > 0 ? '+' : ''}${params.interestRateChange}%`}
-              color={params.interestRateChange > 0 ? '#f87171' : params.interestRateChange < 0 ? '#34d399' : '#ffffff'}
-              accent={params.interestRateChange > 0 ? 'text-red-400' : params.interestRateChange < 0 ? 'text-emerald-400' : 'text-white/50'}
-            />
-            <SliderCard
-              label="Working Capital Cost (WACC)"
-              sublabel="Company's annual cost of tied-up capital"
-              value={params.workingCapitalCost}
-              min={1} max={20} step={0.5}
-              onChange={(v) => handleChange('workingCapitalCost', v)}
-              displayValue={`${params.workingCapitalCost}%`}
-              color="#f472b6"
-              accent="text-pink-400"
-            />
-            <SliderCard
-              label="Currency Exchange Rate"
-              sublabel="FX multiplier on supplier procurement costs"
-              value={params.currencyExchangeRate}
-              min={0.5} max={2.0} step={0.05}
-              onChange={(v) => handleChange('currencyExchangeRate', v)}
-              displayValue={`${params.currencyExchangeRate.toFixed(2)}×`}
-              color={params.currencyExchangeRate > 1.1 ? '#f87171' : params.currencyExchangeRate < 0.9 ? '#34d399' : '#ffffff'}
-              accent={params.currencyExchangeRate > 1.1 ? 'text-red-400' : params.currencyExchangeRate < 0.9 ? 'text-emerald-400' : 'text-white/50'}
-            />
-            <SliderCard
-              label="Subsidy Level"
-              sublabel="Government subsidy reducing factory production cost"
-              value={params.subsidyLevel}
-              min={0} max={50} step={1}
-              onChange={(v) => handleChange('subsidyLevel', v)}
-              displayValue={params.subsidyLevel > 0 ? `−${params.subsidyLevel}%` : 'Off'}
-              color="#34d399"
-              accent={params.subsidyLevel > 0 ? 'text-emerald-400' : 'text-white/50'}
-            />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+              <SliderCard
+                label="Inflation Rate"
+                sublabel="Annual cost growth — production, transport, warehousing"
+                value={params.inflationRate}
+                min={0} max={15} step={0.5}
+                onChange={(v) => handleChange('inflationRate', v)}
+                displayValue={`${params.inflationRate}%`}
+                color="#fb923c"
+                accent={params.inflationRate > 3 ? 'text-orange-400' : 'text-white/50'}
+              />
+              <SliderCard
+                label="Interest Rate Change"
+                sublabel="Central bank shift — added to working capital cost"
+                value={params.interestRateChange}
+                min={-5} max={10} step={0.5}
+                onChange={(v) => handleChange('interestRateChange', v)}
+                displayValue={`${params.interestRateChange > 0 ? '+' : ''}${params.interestRateChange}%`}
+                color={params.interestRateChange > 0 ? '#f87171' : params.interestRateChange < 0 ? '#34d399' : '#ffffff'}
+                accent={params.interestRateChange > 0 ? 'text-red-400' : params.interestRateChange < 0 ? 'text-emerald-400' : 'text-white/50'}
+              />
+              <SliderCard
+                label="Working Capital Cost (WACC)"
+                sublabel="Company's annual cost of tied-up capital"
+                value={params.workingCapitalCost}
+                min={1} max={20} step={0.5}
+                onChange={(v) => handleChange('workingCapitalCost', v)}
+                displayValue={`${params.workingCapitalCost}%`}
+                color="#f472b6"
+                accent="text-pink-400"
+              />
+              <SliderCard
+                label="Currency Exchange Rate"
+                sublabel="FX multiplier on supplier procurement costs"
+                value={params.currencyExchangeRate}
+                min={0.5} max={2.0} step={0.05}
+                onChange={(v) => handleChange('currencyExchangeRate', v)}
+                displayValue={`${params.currencyExchangeRate.toFixed(2)}×`}
+                color={params.currencyExchangeRate > 1.1 ? '#f87171' : params.currencyExchangeRate < 0.9 ? '#34d399' : '#ffffff'}
+                accent={params.currencyExchangeRate > 1.1 ? 'text-red-400' : params.currencyExchangeRate < 0.9 ? 'text-emerald-400' : 'text-white/50'}
+              />
+              <SliderCard
+                label="Subsidy Level"
+                sublabel="Government subsidy reducing factory production cost"
+                value={params.subsidyLevel}
+                min={0} max={50} step={1}
+                onChange={(v) => handleChange('subsidyLevel', v)}
+                displayValue={params.subsidyLevel > 0 ? `−${params.subsidyLevel}%` : 'Off'}
+                color="#34d399"
+                accent={params.subsidyLevel > 0 ? 'text-emerald-400' : 'text-white/50'}
+              />
+            </div>
 
             {/* Company-wide defaults (fallback for nodes without override) */}
-            <div className="mt-2 pt-2 border-t border-white/5">
-              <p className="text-[10px] text-white/20 uppercase tracking-widest mb-2 font-bold">Company Defaults</p>
+            <div className="pt-1 border-t border-white/5">
+              <p className="text-[10px] text-white/20 uppercase tracking-widest mb-1.5 font-bold">Company Defaults</p>
               <p className="text-[10px] text-white/25 mb-2">Fallback values when a node has no override set</p>
             </div>
-            <SliderCard
-              label="Default Production Cost"
-              sublabel="Per-unit conversion cost (labor + overhead)"
-              value={params.unitProductionCost}
-              min={5} max={200} step={5}
-              onChange={(v) => handleChange('unitProductionCost', v)}
-              displayValue={`$${params.unitProductionCost}`}
-              color="#60a5fa"
-              accent="text-blue-400"
-            />
-            <SliderCard
-              label="Default Carrying Cost"
-              sublabel="Annual % fallback for inventory holding"
-              value={params.inventoryCarryingCost}
-              min={1} max={30} step={1}
-              onChange={(v) => handleChange('inventoryCarryingCost', v)}
-              displayValue={`${params.inventoryCarryingCost}%`}
-              color="#818cf8"
-              accent="text-indigo-400"
-            />
-            <SliderCard
-              label="Default Warehousing Cost"
-              sublabel="Per-unit fallback for WH/DC nodes"
-              value={params.warehousingCost}
-              min={1} max={50} step={1}
-              onChange={(v) => handleChange('warehousingCost', v)}
-              displayValue={`$${params.warehousingCost}`}
-              color="#a78bfa"
-              accent="text-violet-400"
-            />
-            <SliderCard
-              label="Default Retail Markup"
-              sublabel="% markup fallback for retail nodes"
-              value={params.defaultMarkupPct ?? 50}
-              min={10} max={200} step={5}
-              onChange={(v) => handleChange('defaultMarkupPct', v)}
-              displayValue={`${params.defaultMarkupPct ?? 50}%`}
-              color="#22d3ee"
-              accent="text-cyan-400"
-            />
-            <SliderCard
-              label="Expediting Premium"
-              sublabel="Per-unit cost for emergency (CRITICAL) orders"
-              value={params.expeditingCost}
-              min={50} max={500} step={10}
-              onChange={(v) => handleChange('expeditingCost', v)}
-              displayValue={`$${params.expeditingCost}`}
-              color="#f43f5e"
-              accent="text-rose-400"
-            />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+              <SliderCard
+                label="Default Production Cost"
+                sublabel="Per-unit conversion cost (labor + overhead)"
+                value={params.unitProductionCost}
+                min={5} max={200} step={5}
+                onChange={(v) => handleChange('unitProductionCost', v)}
+                displayValue={`$${params.unitProductionCost}`}
+                color="#60a5fa"
+                accent="text-blue-400"
+              />
+              <SliderCard
+                label="Default Carrying Cost"
+                sublabel="Annual % fallback for inventory holding"
+                value={params.inventoryCarryingCost}
+                min={1} max={30} step={1}
+                onChange={(v) => handleChange('inventoryCarryingCost', v)}
+                displayValue={`${params.inventoryCarryingCost}%`}
+                color="#818cf8"
+                accent="text-indigo-400"
+              />
+              <SliderCard
+                label="Default Warehousing Cost"
+                sublabel="Per-unit fallback for WH/DC nodes"
+                value={params.warehousingCost}
+                min={1} max={50} step={1}
+                onChange={(v) => handleChange('warehousingCost', v)}
+                displayValue={`$${params.warehousingCost}`}
+                color="#a78bfa"
+                accent="text-violet-400"
+              />
+              <SliderCard
+                label="Default Retail Markup"
+                sublabel="% markup fallback for retail nodes"
+                value={params.defaultMarkupPct ?? 50}
+                min={10} max={200} step={5}
+                onChange={(v) => handleChange('defaultMarkupPct', v)}
+                displayValue={`${params.defaultMarkupPct ?? 50}%`}
+                color="#22d3ee"
+                accent="text-cyan-400"
+              />
+              <SliderCard
+                label="Expediting Premium"
+                sublabel="Per-unit cost for emergency (CRITICAL) orders"
+                value={params.expeditingCost}
+                min={50} max={500} step={10}
+                onChange={(v) => handleChange('expeditingCost', v)}
+                displayValue={`$${params.expeditingCost}`}
+                color="#f43f5e"
+                accent="text-rose-400"
+              />
+            </div>
           </div>
         )}
 

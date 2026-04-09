@@ -19,7 +19,7 @@ import SimulationHistoryView from './components/SimulationHistoryView';
 import BOMView from './components/BOMView';
 import RouteIntelligenceView from './components/RouteIntelligenceView';
 import { applyEventEffectsToRoutes } from './utils/eventRouteMapper';
-import { LayoutDashboard, Network, PlayCircle, BarChart3, Settings, Zap, Activity, CheckCircle2, Circle, LogOut, Factory, Clock, Layers, Radar } from 'lucide-react';
+import { LayoutDashboard, Network, PlayCircle, BarChart3, Settings, Zap, Activity, CheckCircle2, Circle, LogOut, Factory, Clock, Layers, Radar, Search } from 'lucide-react';
 import { useAuth } from './contexts/AuthContext';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
@@ -1032,6 +1032,9 @@ function AppContent() {
   const [routes, setRoutes] = useState<Route[]>(INITIAL_ROUTES);
   const [params, setParams] = useState<SimulationParams>(INITIAL_PARAMS);
   const [selectedNode, setSelectedNode] = useState<SupplyNode | null>(null);
+  const [telemetrySearch, setTelemetrySearch] = useState('');
+  const [telemetryTab, setTelemetryTab] = useState<'nodes' | 'log'>('nodes');
+  const [telemetryFilter, setTelemetryFilter] = useState<'ALL' | 'CRITICAL' | 'WARNING' | 'OFFLINE'>('ALL');
   const [history, setHistory] = useState<HistorySnapshot[]>([]);
   const [industryConfig, setIndustryConfig] = useState<IndustryConfig>(PRESET_INDUSTRIES[0]);
   const [lowStockThreshold, setLowStockThreshold] = useState(20);
@@ -1346,6 +1349,13 @@ function AppContent() {
   const activeShipments = shipments.length;
   const riskLevel = nodes.some(n => n.status === NodeStatus.CRITICAL) ? 'HIGH' :
                    nodes.some(n => n.status === NodeStatus.WARNING) ? 'MED' : 'LOW';
+  const nodesAtRisk = nodes.filter(n => n.status === NodeStatus.CRITICAL || n.status === NodeStatus.WARNING).length;
+  const prevSnapshot = history.length >= 2 ? history[history.length - 2] : null;
+  const prevNetworkHealth = prevSnapshot && prevSnapshot.nodes.length > 0
+    ? Math.round((prevSnapshot.nodes.filter((n: any) => n.status === NodeStatus.OPTIMAL).length / prevSnapshot.nodes.length) * 100)
+    : null;
+  const networkHealthDelta = prevNetworkHealth !== null ? networkHealth - prevNetworkHealth : null;
+  const shipmentsDelta = prevSnapshot !== null ? activeShipments - prevSnapshot.shipmentsInFlight : null;
 
   const workflowSteps = [
     { label: 'Industry', done: workflowState.industryConfigured, tab: 'industry' },
@@ -1367,53 +1377,278 @@ function AppContent() {
         return (
           <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
             {/* Workflow Progress Strip */}
-            <div className="bg-white/5 rounded-2xl border border-white/5 p-3 md:p-4 flex items-center justify-between gap-2 overflow-x-auto">
-              {workflowSteps.map((step, i) => (
-                <React.Fragment key={step.label}>
-                  <button onClick={() => setActiveTab(step.tab)} className="flex flex-col items-center gap-1 group">
-                    {step.done
-                      ? <CheckCircle2 className="w-5 h-5" style={{ color: currentTheme.accent }} />
-                      : <Circle className="w-5 h-5 text-white/20 group-hover:text-white/40 transition-colors" />}
-                    <span className="text-[9px] uppercase tracking-widest font-bold" style={step.done ? { color: currentTheme.accent } : { color: 'rgba(255,255,255,0.3)' }}>{step.label}</span>
-                  </button>
-                  {i < workflowSteps.length - 1 && (
-                    <div className="flex-1 h-px" style={{ backgroundColor: step.done ? currentTheme.accentMuted : 'rgba(255,255,255,0.1)' }} />
-                  )}
-                </React.Fragment>
-              ))}
-            </div>
-            <div className="grid grid-cols-12 gap-4 md:gap-8">
-              <div className="col-span-12 lg:col-span-8 flex flex-col gap-4 md:gap-8">
-                <div className="grid grid-cols-3 gap-3 md:gap-6">
-                  <div className="bg-white/5 rounded-2xl md:rounded-3xl border border-white/5 p-4 md:p-8">
-                    <p className="text-[9px] md:text-[10px] text-white/40 uppercase tracking-[0.2em] font-bold mb-1 md:mb-2">Network Health</p>
-                    <h3 className="text-2xl md:text-4xl font-bold text-white tracking-tighter">{networkHealth}%</h3>
+            {(() => {
+              const doneCount = workflowSteps.filter(s => s.done).length;
+              const pct = Math.round((doneCount / workflowSteps.length) * 100);
+              return (
+                <div className="rounded-2xl border border-white/10 overflow-hidden" style={{ background: 'rgba(255,255,255,0.03)' }}>
+                  {/* Step buttons row */}
+                  <div className="flex items-stretch divide-x divide-white/5">
+                    {workflowSteps.map((step, i) => {
+                      const isActive = activeTab === step.tab;
+                      const isDone = step.done;
+                      return (
+                        <button
+                          key={step.label}
+                          onClick={() => setActiveTab(step.tab)}
+                          className="flex-1 flex items-center gap-2 px-3 py-3 md:px-4 md:py-3.5 transition-colors group min-w-0"
+                          style={{
+                            background: isActive
+                              ? `${currentTheme.accent}18`
+                              : isDone
+                              ? `${currentTheme.accent}08`
+                              : 'transparent',
+                          }}
+                        >
+                          {/* Step number / check */}
+                          <span
+                            className="shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold transition-colors"
+                            style={
+                              isActive
+                                ? { background: currentTheme.accent, color: '#fff' }
+                                : isDone
+                                ? { background: `${currentTheme.accent}30`, color: currentTheme.accent }
+                                : { background: 'rgba(255,255,255,0.07)', color: 'rgba(255,255,255,0.3)' }
+                            }
+                          >
+                            {isDone ? '✓' : i + 1}
+                          </span>
+                          {/* Label */}
+                          <span
+                            className="text-[10px] md:text-[11px] font-semibold uppercase tracking-widest truncate transition-colors"
+                            style={
+                              isActive
+                                ? { color: currentTheme.accent }
+                                : isDone
+                                ? { color: `${currentTheme.accent}99` }
+                                : { color: 'rgba(255,255,255,0.25)' }
+                            }
+                          >
+                            {step.label}
+                          </span>
+                        </button>
+                      );
+                    })}
                   </div>
-                  <div className="bg-white/5 rounded-2xl md:rounded-3xl border border-white/5 p-4 md:p-8">
-                    <p className="text-[9px] md:text-[10px] text-white/40 uppercase tracking-[0.2em] font-bold mb-1 md:mb-2">Active Shipments</p>
-                    <h3 className="text-2xl md:text-4xl font-bold text-white tracking-tighter">{activeShipments}</h3>
-                  </div>
-                  <div className="bg-white/5 rounded-2xl md:rounded-3xl border border-white/5 p-4 md:p-8">
-                    <p className="text-[9px] md:text-[10px] text-white/40 uppercase tracking-[0.2em] font-bold mb-1 md:mb-2">Risk Level</p>
-                    <h3 className={`text-2xl md:text-4xl font-bold tracking-tighter ${riskLevel === 'HIGH' ? 'text-red-500' : 'text-white'}`}>{riskLevel}</h3>
+                  {/* Thin progress bar at the bottom */}
+                  <div className="h-[2px] bg-white/5">
+                    <div
+                      className="h-full transition-all duration-700"
+                      style={{ width: `${pct}%`, background: currentTheme.accent }}
+                    />
                   </div>
                 </div>
+              );
+            })()}
+            <div className="grid grid-cols-12 gap-4 md:gap-8">
+              <div className="col-span-12 lg:col-span-8 flex flex-col gap-4 md:gap-8">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
+                  {/* Network Health */}
+                  <div className="bg-white/5 rounded-2xl border border-white/5 p-4 md:p-6">
+                    <p className="text-[9px] md:text-[10px] text-white/40 uppercase tracking-[0.2em] font-bold mb-1">Network Health</p>
+                    <h3 className="text-2xl md:text-3xl font-bold text-white tracking-tighter">{networkHealth}%</h3>
+                    {networkHealthDelta !== null && (
+                      <p className={`text-[10px] font-semibold mt-1 ${networkHealthDelta > 0 ? 'text-emerald-400' : networkHealthDelta < 0 ? 'text-red-400' : 'text-white/30'}`}>
+                        {networkHealthDelta > 0 ? '↑' : networkHealthDelta < 0 ? '↓' : '—'} {Math.abs(networkHealthDelta)}pp vs prev
+                      </p>
+                    )}
+                  </div>
+                  {/* Active Shipments */}
+                  <div className="bg-white/5 rounded-2xl border border-white/5 p-4 md:p-6">
+                    <p className="text-[9px] md:text-[10px] text-white/40 uppercase tracking-[0.2em] font-bold mb-1">Active Shipments</p>
+                    <h3 className="text-2xl md:text-3xl font-bold text-white tracking-tighter">{activeShipments}</h3>
+                    {shipmentsDelta !== null && (
+                      <p className={`text-[10px] font-semibold mt-1 ${shipmentsDelta > 0 ? 'text-emerald-400' : shipmentsDelta < 0 ? 'text-amber-400' : 'text-white/30'}`}>
+                        {shipmentsDelta > 0 ? '↑' : shipmentsDelta < 0 ? '↓' : '—'} {Math.abs(shipmentsDelta)} vs prev
+                      </p>
+                    )}
+                  </div>
+                  {/* Risk Level */}
+                  <div className="bg-white/5 rounded-2xl border border-white/5 p-4 md:p-6">
+                    <p className="text-[9px] md:text-[10px] text-white/40 uppercase tracking-[0.2em] font-bold mb-1">Risk Level</p>
+                    <h3 className={`text-2xl md:text-3xl font-bold tracking-tighter ${riskLevel === 'HIGH' ? 'text-red-500' : riskLevel === 'MED' ? 'text-amber-400' : 'text-white'}`}>{riskLevel}</h3>
+                    <p className="text-[10px] text-white/30 mt-1">Supply chain status</p>
+                  </div>
+                  {/* Nodes at Risk */}
+                  <div className={`rounded-2xl border p-4 md:p-6 ${nodesAtRisk > 0 ? 'bg-red-500/10 border-red-500/20' : 'bg-white/5 border-white/5'}`}>
+                    <p className="text-[9px] md:text-[10px] text-white/40 uppercase tracking-[0.2em] font-bold mb-1">Nodes at Risk</p>
+                    <h3 className={`text-2xl md:text-3xl font-bold tracking-tighter ${nodesAtRisk > 0 ? 'text-red-400' : 'text-white'}`}>{nodesAtRisk}</h3>
+                    <p className="text-[10px] text-white/30 mt-1">{nodesAtRisk === 0 ? 'All nodes healthy' : `of ${nodes.length} nodes`}</p>
+                  </div>
+                </div>
+                {/* Selected Node Detail Panel */}
+                {selectedNode && (
+                  <div className="bg-white/5 border border-white/10 rounded-2xl p-4 md:p-5 flex flex-col gap-3 animate-in fade-in slide-in-from-top-2 duration-300">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <h4 className="text-white font-semibold text-sm">{selectedNode.name}</h4>
+                        <p className="text-[10px] text-white/40 uppercase tracking-widest mt-0.5">{selectedNode.type}</p>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                          selectedNode.status === NodeStatus.OPTIMAL ? 'bg-emerald-500/20 text-emerald-400' :
+                          selectedNode.status === NodeStatus.WARNING ? 'bg-amber-500/20 text-amber-400' :
+                          selectedNode.status === NodeStatus.CRITICAL ? 'bg-red-500/20 text-red-400' :
+                          'bg-white/10 text-white/40'
+                        }`}>{selectedNode.status}</span>
+                        <button onClick={() => setSelectedNode(null)} className="text-white/30 hover:text-white/70 text-lg leading-none transition-colors">×</button>
+                      </div>
+                    </div>
+                    {/* Inventory fill bar */}
+                    <div>
+                      <div className="flex justify-between text-[10px] text-white/40 mb-1">
+                        <span>Inventory</span>
+                        <span>{selectedNode.inventoryLevel.toLocaleString()} / {selectedNode.maxCapacity.toLocaleString()} units</span>
+                      </div>
+                      <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full rounded-full transition-all ${
+                            selectedNode.inventoryLevel < (selectedNode.reorderPoint || 0)
+                              ? 'bg-red-500'
+                              : selectedNode.inventoryLevel / selectedNode.maxCapacity > 0.8
+                              ? 'bg-emerald-500'
+                              : 'bg-amber-400'
+                          }`}
+                          style={{ width: `${Math.min(100, Math.round((selectedNode.inventoryLevel / selectedNode.maxCapacity) * 100))}%` }}
+                        />
+                      </div>
+                    </div>
+                    {/* Quick stats row */}
+                    <div className="flex gap-4 text-[10px]">
+                      <span className="text-white/40">Reorder pt: <span className="text-white/70">{selectedNode.reorderPoint ?? '—'}</span></span>
+                      <span className="text-white/40">Capacity: <span className="text-white/70">{Math.round((selectedNode.inventoryLevel / selectedNode.maxCapacity) * 100)}%</span></span>
+                      {selectedNode.supplierLeadTime != null && (
+                        <span className="text-white/40">Lead time: <span className="text-white/70">{selectedNode.supplierLeadTime}d</span></span>
+                      )}
+                      {selectedNode.supplierReliability != null && (
+                        <span className="text-white/40">Reliability: <span className="text-white/70">{selectedNode.supplierReliability}%</span></span>
+                      )}
+                    </div>
+                  </div>
+                )}
                 <div ref={globeRef} className="min-h-[250px] sm:min-h-[350px] md:min-h-[500px] relative">
                   <Globe nodes={nodes} routes={routes} onNodeSelect={setSelectedNode} selectedNodeId={selectedNode?.id || null} />
                 </div>
               </div>
-              <div className="col-span-12 lg:col-span-4 overflow-hidden">
-                 <div className="bg-[#050505] rounded-3xl border border-white/5 p-8 h-full flex flex-col">
-                    <h3 className="text-white font-semibold flex items-center gap-2 mb-8"><Activity className="w-5 h-5" /> Telemetry</h3>
-                    <p className="text-[10px] text-white/30 uppercase tracking-widest mb-4">{industryConfig.name}</p>
-                    <div className="flex-1 overflow-y-auto space-y-3 custom-scrollbar">
-                      {nodes.map(node => (
-                        <div key={node.id} onClick={() => { setSelectedNode(node); if (window.innerWidth < 1024 && globeRef.current) { globeRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' }); } }} className="bg-white/5 border border-white/10 rounded-2xl p-4 cursor-pointer">
-                          <div className="flex justify-between items-center"><span className="text-sm font-bold text-white">{node.name}</span><div className={`w-2 h-2 rounded-full ${node.status === NodeStatus.OPTIMAL ? 'bg-emerald-500' : node.status === NodeStatus.OFFLINE ? 'bg-gray-500' : 'bg-red-500'}`} /></div>
-                          <p className="text-xs text-white/40">{node.type} • {node.inventoryLevel} units</p>
-                        </div>
-                      ))}
+              <div className="col-span-12 lg:col-span-4 overflow-hidden lg:max-h-[700px]">
+                 <div className="bg-[#050505] rounded-3xl border border-white/5 p-5 h-full flex flex-col gap-3">
+                    {/* Header + tab switcher */}
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-white font-semibold flex items-center gap-2 text-sm"><Activity className="w-4 h-4" /> Telemetry</h3>
+                      <div className="flex bg-white/5 rounded-lg p-0.5 text-[10px] font-semibold">
+                        <button
+                          onClick={() => setTelemetryTab('nodes')}
+                          className={`px-3 py-1 rounded-md transition-colors ${telemetryTab === 'nodes' ? 'bg-white/10 text-white' : 'text-white/40 hover:text-white/70'}`}
+                        >Nodes</button>
+                        <button
+                          onClick={() => setTelemetryTab('log')}
+                          className={`px-3 py-1 rounded-md transition-colors relative ${telemetryTab === 'log' ? 'bg-white/10 text-white' : 'text-white/40 hover:text-white/70'}`}
+                        >
+                          Log
+                          {logs.length > 0 && <span className="absolute -top-1 -right-1 w-1.5 h-1.5 bg-emerald-400 rounded-full" />}
+                        </button>
+                      </div>
                     </div>
+
+                    {telemetryTab === 'nodes' ? (
+                      <>
+                        {/* Status filter chips */}
+                        <div className="flex gap-1.5 flex-wrap">
+                          {(['ALL', 'CRITICAL', 'WARNING', 'OFFLINE'] as const).map(f => {
+                            const count = f === 'ALL' ? nodes.length : nodes.filter(n => n.status === f).length;
+                            const active = telemetryFilter === f;
+                            const color = f === 'CRITICAL' ? 'text-red-400 border-red-500/40' : f === 'WARNING' ? 'text-amber-400 border-amber-500/40' : f === 'OFFLINE' ? 'text-white/40 border-white/20' : 'text-white/60 border-white/20';
+                            return (
+                              <button
+                                key={f}
+                                onClick={() => setTelemetryFilter(f)}
+                                className={`text-[10px] font-semibold uppercase tracking-widest px-3 py-1 rounded-full border transition-all ${color} ${active ? 'bg-white/10 opacity-100' : 'bg-transparent opacity-40 hover:opacity-70'}`}
+                              >{f}{count > 0 && count !== nodes.length ? <span className="ml-1 font-bold tabular-nums">({count})</span> : ''}</button>
+                            );
+                          })}
+                        </div>
+                        {/* Search */}
+                        <div className="relative">
+                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-white/30 pointer-events-none" />
+                          <input
+                            type="text"
+                            placeholder="Search nodes..."
+                            value={telemetrySearch}
+                            onChange={e => setTelemetrySearch(e.target.value)}
+                            className="w-full bg-white/5 border border-white/10 rounded-xl pl-8 pr-3 py-2 text-xs text-white placeholder-white/25 outline-none focus:border-white/20"
+                          />
+                        </div>
+                        {/* Node list */}
+                        <div className="flex-1 overflow-y-auto space-y-2 custom-scrollbar">
+                          {nodes
+                            .filter(n => {
+                              const matchesSearch = n.name.toLowerCase().includes(telemetrySearch.toLowerCase());
+                              const matchesFilter = telemetryFilter === 'ALL' || n.status === telemetryFilter;
+                              return matchesSearch && matchesFilter;
+                            })
+                            .map(node => {
+                              const fillPct = Math.min(100, Math.round((node.inventoryLevel / node.maxCapacity) * 100));
+                              const isBelowReorder = node.inventoryLevel < (node.reorderPoint || 0);
+                              const barColor = node.status === NodeStatus.OFFLINE ? 'bg-white/20' : isBelowReorder ? 'bg-red-500' : fillPct > 80 ? 'bg-emerald-500' : 'bg-amber-400';
+                              const dotColor = node.status === NodeStatus.OPTIMAL ? 'bg-emerald-500' : node.status === NodeStatus.OFFLINE ? 'bg-gray-500' : node.status === NodeStatus.WARNING ? 'bg-amber-400' : 'bg-red-500';
+                              return (
+                                <div
+                                  key={node.id}
+                                  onClick={() => { setSelectedNode(node); if (window.innerWidth < 1024 && globeRef.current) globeRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' }); }}
+                                  className={`border rounded-xl p-3 cursor-pointer transition-all hover:border-white/20 ${selectedNode?.id === node.id ? 'bg-white/10 border-white/20' : 'bg-white/5 border-white/10'}`}
+                                >
+                                  <div className="flex justify-between items-center mb-1.5">
+                                    <span className="text-xs font-bold text-white truncate pr-2">{node.name}</span>
+                                    <div className={`w-2 h-2 rounded-full shrink-0 ${dotColor}`} />
+                                  </div>
+                                  <p className="text-[10px] text-white/40 mb-2">
+                                    {node.type} • <span className="text-[11px] font-semibold text-white/70 tabular-nums">{node.inventoryLevel.toLocaleString()}</span> units
+                                  </p>
+                                  {/* Inventory bar */}
+                                  <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
+                                    <div className={`h-full rounded-full ${barColor}`} style={{ width: `${fillPct}%` }} />
+                                  </div>
+                                  <div className="flex justify-between mt-1">
+                                    <span className={`text-[10px] font-medium tabular-nums ${isBelowReorder ? 'text-red-400' : 'text-white/40'}`}>
+                                      {isBelowReorder ? '⚠ below reorder' : `${fillPct}% full`}
+                                    </span>
+                                    <span className="text-[10px] text-white/30 tabular-nums">{node.maxCapacity.toLocaleString()} max</span>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          {nodes.filter(n => (telemetryFilter === 'ALL' || n.status === telemetryFilter) && n.name.toLowerCase().includes(telemetrySearch.toLowerCase())).length === 0 && (
+                            <p className="text-center text-white/20 text-xs py-8">No nodes match this filter</p>
+                          )}
+                        </div>
+                      </>
+                    ) : (
+                      /* Activity log tab */
+                      <div className="flex-1 overflow-y-auto custom-scrollbar">
+                        {logs.length === 0 ? (
+                          <div className="flex flex-col items-center justify-center h-full gap-2 text-center py-12">
+                            <Activity className="w-8 h-8 text-white/10" />
+                            <p className="text-white/30 text-xs">Run the simulation to see activity logs</p>
+                          </div>
+                        ) : (
+                          <div className="space-y-1">
+                            {logs.map((log, i) => {
+                              const isDelay = log.includes('DELAY') || log.includes('DISRUPTION') || log.includes('OFFLINE');
+                              const isPool = log.includes('POOL');
+                              return (
+                                <div key={i} className={`text-[10px] px-3 py-2 rounded-lg border ${
+                                  isDelay ? 'bg-red-500/5 border-red-500/15 text-red-400/80' :
+                                  isPool ? 'bg-blue-500/5 border-blue-500/15 text-blue-400/80' :
+                                  'bg-white/3 border-white/5 text-white/50'
+                                }`}>
+                                  {log}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    )}
                  </div>
               </div>
             </div>
@@ -1524,7 +1759,7 @@ function AppContent() {
                 className={`w-full flex items-center justify-center lg:justify-start gap-4 px-2 lg:px-4 py-3 lg:py-4 rounded-2xl transition-all min-h-[44px] ${activeTab === item.id ? 'text-white' : 'text-white/40'}`}
                 style={activeTab === item.id ? { backgroundColor: currentTheme.accentLight, borderLeft: `3px solid ${currentTheme.accent}` } : {}}
               >
-                <item.icon className="w-5 h-5 shrink-0" /><span className="hidden lg:block text-[10px] font-bold uppercase">{item.label}</span>
+                <item.icon className="w-6 h-6 shrink-0" /><span className="hidden lg:block text-sm font-bold uppercase">{item.label}</span>
               </button>
             ))}
           </div>
@@ -1540,9 +1775,23 @@ function AppContent() {
               <span className="text-white font-black tracking-tighter text-base">CHAIN<span className="text-white/40 font-light">SIM</span></span>
             </div>
             {/* Session info — hidden on mobile to avoid clutter */}
-            <p className="hidden md:block text-[10px] text-white/40 uppercase tracking-[0.3em] font-bold">
-              {user?.name || user?.email} • <span style={{ color: currentTheme.accent }}>{industryConfig.name}</span>
-            </p>
+            <div className="hidden md:flex items-center gap-2">
+              {/* User pill */}
+              <div className="flex items-center gap-2 bg-white/8 border border-white/10 rounded-full px-3 py-1.5">
+                <div className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-black text-white shrink-0" style={{ background: currentTheme.accent }}>
+                  {(user?.name || user?.email || 'U')[0].toUpperCase()}
+                </div>
+                <span className="text-sm text-white/80 font-semibold tracking-wide">
+                  {user?.name || user?.email}
+                </span>
+              </div>
+              {/* Separator */}
+              <span className="text-white/20 text-base">›</span>
+              {/* Industry badge */}
+              <div className="flex items-center gap-1 rounded-full px-3 py-1.5 text-sm font-bold uppercase tracking-widest" style={{ background: `${currentTheme.accent}18`, color: currentTheme.accent, border: `1px solid ${currentTheme.accent}30` }}>
+                {industryConfig.name}
+              </div>
+            </div>
             <div className="flex items-center gap-2">
               <DeployMenu
                 nodes={nodes}
@@ -1561,7 +1810,7 @@ function AppContent() {
               </button>
             </div>
           </header>
-          <div ref={contentRef} className="flex-1 overflow-y-auto p-4 md:p-8 lg:p-12 pb-24 md:pb-8 lg:pb-12 custom-scrollbar">{renderContent()}</div>
+          <div ref={contentRef} className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8 pb-24 md:pb-6 lg:pb-8 custom-scrollbar">{renderContent()}</div>
         </main>
 
         {/* Bottom nav — visible below md (768px): phones + small tablets in portrait */}

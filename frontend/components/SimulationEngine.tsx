@@ -145,14 +145,14 @@ const SimulationEngine: React.FC<SimulationEngineProps> = ({
           <div className={`w-0.5 h-5 rounded-full shrink-0 transition-all duration-500 ${isPlaying ? 'bg-emerald-500' : 'bg-white/10'}`} />
 
           <div className="flex-1 min-w-0">
-            <span className="text-sm font-bold text-white tracking-tight">Simulation Monitor</span>
-            <span className="hidden sm:inline text-white/25 text-xs ml-2">{industryConfig.name}</span>
+            <span className="text-sm md:text-base font-bold text-white tracking-tight">Simulation Monitor</span>
+            <span className="hidden sm:inline text-white/25 text-xs md:text-sm ml-2">{industryConfig.name}</span>
           </div>
 
           {/* Day counter */}
           <div className="flex items-center gap-1.5 shrink-0">
-            <span className="text-[8px] text-white/25 uppercase tracking-widest font-bold">Day</span>
-            <span className={`text-lg font-mono font-black tabular-nums leading-none transition-colors duration-300 ${
+            <span className="text-[8px] md:text-[10px] text-white/25 uppercase tracking-widest font-bold">Day</span>
+            <span className={`text-lg md:text-2xl lg:text-3xl font-mono font-black tabular-nums leading-none transition-colors duration-300 ${
               isPlaying ? 'text-emerald-400' : 'text-white'
             }`}>
               {String(day).padStart(3, '0')}
@@ -257,10 +257,10 @@ const SimulationEngine: React.FC<SimulationEngineProps> = ({
       {/* ── KPI strip ────────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
         {kpis.map(({ label, value, sub, accent }) => (
-          <div key={label} className="bg-white/[0.03] border border-white/[0.06] rounded-xl px-4 py-3">
-            <p className="text-[8px] text-white/30 uppercase tracking-[0.18em] font-bold mb-1.5">{label}</p>
-            <p className={`text-xl font-bold tracking-tight leading-none mb-1 ${accent}`}>{value}</p>
-            <p className="text-[10px] text-white/25">{sub}</p>
+          <div key={label} className="bg-white/[0.03] border border-white/[0.06] rounded-xl px-4 py-3 md:px-5 md:py-4 lg:py-5">
+            <p className="text-[8px] md:text-[9px] lg:text-[10px] text-white/30 uppercase tracking-[0.18em] font-bold mb-1.5">{label}</p>
+            <p className={`text-xl md:text-2xl lg:text-3xl font-bold tracking-tight leading-none mb-1 ${accent}`}>{value}</p>
+            <p className="text-[10px] md:text-xs text-white/25">{sub}</p>
           </div>
         ))}
       </div>
@@ -269,29 +269,29 @@ const SimulationEngine: React.FC<SimulationEngineProps> = ({
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
 
         {/* Node Inventory */}
-        <div className="bg-[#050505] border border-white/[0.05] rounded-xl p-4 flex flex-col h-52">
-          <p className="text-[9px] text-white/30 uppercase tracking-widest font-bold mb-3 flex items-center gap-1.5">
+        <div className="bg-[#050505] border border-white/[0.05] rounded-xl p-4 flex flex-col h-52 md:h-64 lg:h-80">
+          <p className="text-[9px] md:text-[10px] text-white/30 uppercase tracking-widest font-bold mb-3 flex items-center gap-1.5">
             <span className="w-1.5 h-1.5 rounded-full bg-blue-500 inline-block" />
             Node Inventory
           </p>
-          <div className="flex-1 overflow-y-auto space-y-1.5 custom-scrollbar pr-1">
+          <div className="flex-1 overflow-y-auto space-y-1.5 md:space-y-2 custom-scrollbar pr-1">
             {nodes.map(node => {
               const pct = Math.round((node.inventoryLevel / node.maxCapacity) * 100);
               const low = node.inventoryLevel < (node.reorderPoint || 20);
               const offline = node.status === NodeStatus.OFFLINE;
               return (
                 <div key={node.id} className="flex items-center gap-2 min-w-0">
-                  <span className={`text-[10px] truncate flex-1 min-w-0 ${offline ? 'text-white/20' : 'text-white/50'}`}>
+                  <span className={`text-[10px] md:text-xs truncate flex-1 min-w-0 ${offline ? 'text-white/20' : 'text-white/50'}`}>
                     {node.name}
                   </span>
                   {offline ? (
-                    <span className="text-[9px] text-white/20 font-mono shrink-0">OFFLINE</span>
+                    <span className="text-[9px] md:text-[10px] text-white/20 font-mono shrink-0">OFFLINE</span>
                   ) : (
                     <>
-                      <span className={`text-[9px] font-mono shrink-0 w-7 text-right ${low ? 'text-amber-400' : 'text-white/30'}`}>
+                      <span className={`text-[9px] md:text-[10px] font-mono shrink-0 w-7 md:w-8 text-right ${low ? 'text-amber-400' : 'text-white/30'}`}>
                         {pct}%
                       </span>
-                      <div className="w-16 h-1 bg-white/5 rounded-full overflow-hidden shrink-0">
+                      <div className="w-16 md:w-24 h-1 bg-white/5 rounded-full overflow-hidden shrink-0">
                         <div
                           className={`h-full rounded-full transition-all duration-500 ${
                             offline ? 'bg-white/10' : low ? 'bg-amber-500' : 'bg-emerald-500'
@@ -308,21 +308,21 @@ const SimulationEngine: React.FC<SimulationEngineProps> = ({
         </div>
 
         {/* Operational Log */}
-        <div className="bg-[#050505] border border-white/[0.05] rounded-xl p-4 flex flex-col h-52">
-          <p className="text-[9px] text-white/30 uppercase tracking-widest font-bold mb-3 flex items-center gap-1.5">
-            <Activity className="w-3 h-3" />
+        <div className="bg-[#050505] border border-white/[0.05] rounded-xl p-4 flex flex-col h-52 md:h-64 lg:h-80">
+          <p className="text-[9px] md:text-[10px] text-white/30 uppercase tracking-widest font-bold mb-3 flex items-center gap-1.5">
+            <Activity className="w-3 h-3 md:w-3.5 md:h-3.5" />
             Operational Log
           </p>
-          <div className="flex-1 overflow-y-auto space-y-1.5 custom-scrollbar pr-1">
+          <div className="flex-1 overflow-y-auto space-y-1.5 md:space-y-2 custom-scrollbar pr-1">
             {logs.length === 0 ? (
               <div className="h-full flex items-center justify-center opacity-20">
-                <p className="text-xs font-mono">No active events</p>
+                <p className="text-xs md:text-sm font-mono">No active events</p>
               </div>
             ) : (
               logs.map((log, i) => (
                 <div
                   key={i}
-                  className={`text-[9px] font-mono border-l pl-2 py-0.5 leading-relaxed ${
+                  className={`text-[9px] md:text-[10px] font-mono border-l pl-2 py-0.5 leading-relaxed ${
                     log.includes('STOCKOUT') || log.includes('DISASTER') || log.includes('FAILURE')
                       ? 'text-red-400/70 border-red-500/30'
                       : log.includes('STRIKE') || log.includes('CYBER') || log.includes('RECALL')
