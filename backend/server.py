@@ -396,7 +396,7 @@ Return JSON:
   "quantitativeRiskScore": number
 }}"""
 
-        model = genai.GenerativeModel('gemini-2.0-flash')
+        model = genai.GenerativeModel('gemini-2.0-flash-lite')
         response = model.generate_content(
             prompt,
             generation_config=genai.GenerationConfig(
