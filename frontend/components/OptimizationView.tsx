@@ -91,7 +91,7 @@ const OptimizationView: React.FC<OptimizationViewProps> = ({
       const response = await fetch('/api/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nodes, routes, params, industryConfig, historySummary })
+        body: JSON.stringify({ nodes, routes, params, industryName: industryConfig.name, historySummary })
       });
 
       if (!response.ok) {

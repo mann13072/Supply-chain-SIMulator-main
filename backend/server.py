@@ -260,57 +260,76 @@ class AnalysisRequest(BaseModel):
     routes: List[Any]
     params: Dict[str, Any]
     historySummary: Optional[Dict[str, Any]] = None
-    industryConfig: Optional[Dict[str, Any]] = None
+    industryName: Optional[str] = None       # preferred — just the name string
+    industryConfig: Optional[Dict[str, Any]] = None  # legacy fallback
 
 
-# Fields kept per node for AI analysis — drops UI-only and redundant fields
-NODE_ANALYSIS_FIELDS = {
-    "id", "name", "type", "status",
-    "inventoryLevel", "maxCapacity", "reorderPoint", "safetyStock",
-    "holdingCost", "obsolescenceRate", "shelfLife",
-    "supplierLeadTime", "supplierReliability", "supplierCostPerUnit",
-    "yieldRate", "throughputCapacity", "automationLevel",
-    "demandVolume", "demandVariability", "priceElasticity",
-}
+# Columnar node format — (field_name, abbreviation). Drops UI/runtime-only fields.
+_NODE_COLS = [
+    ("id", "id"), ("name", "name"), ("type", "type"), ("status", "st"),
+    ("inventoryLevel", "inv"), ("maxCapacity", "cap"), ("reorderPoint", "rop"),
+    ("safetyStock", "ss"), ("holdingCost", "hc"),
+    ("supplierLeadTime", "slt"), ("supplierReliability", "srel"), ("supplierCostPerUnit", "scost"),
+    ("yieldRate", "yr"), ("throughputCapacity", "tcp"),
+    ("demandVolume", "dv"), ("demandVariability", "dvar"), ("priceElasticity", "pe"),
+]
+_NODE_HDR = ",".join(a for _, a in _NODE_COLS)
 
-# Fields kept per route for AI analysis
-ROUTE_ANALYSIS_FIELDS = {
-    "fromId", "toId", "mode", "distance", "baseLeadTime",
-    "leadTimeVariability", "costPerUnitDistance", "vehicleCapacity",
-    "customsTime", "disruptionProb",
-}
+# Columnar route format — (field_name, abbreviation)
+_ROUTE_COLS = [
+    ("fromId", "from"), ("toId", "to"), ("mode", "mode"), ("distance", "dist"),
+    ("baseLeadTime", "lt"), ("leadTimeVariability", "ltv"),
+    ("costPerUnitDistance", "cost"), ("vehicleCapacity", "cap"),
+    ("customsTime", "cust"), ("disruptionProb", "dp"),
+]
+_ROUTE_HDR = ",".join(a for _, a in _ROUTE_COLS)
 
-# Params that are zero/false by default and boring when unchanged
+# Params that are zero/false by default and uninteresting when unchanged
 PARAM_SKIP_IF_ZERO_OR_FALSE = {
     "naturalDisasterProb", "laborStrikeProb", "cyberRisk", "qualityRecallProb",
     "demandShockProb", "pandemicFactor", "demandSurge", "subsidyLevel",
     "interestRateChange", "tariffImposition", "weatherEvent",
     "geopoliticalTension", "postponementEnabled", "inventoryPooling",
     "nearshoring", "dynamicPricing", "logisticDisruption",
+    "seasonalityAmplitude", "tariffRate",
 }
 
 
-def _compact_nodes(nodes: List[Any]) -> List[Dict]:
-    result = []
+def _compact_nodes(nodes: List[Any]) -> tuple:
+    """Returns (csv_string, row_count) — one header row + one row per node."""
+    rows = []
     for n in nodes:
-        if isinstance(n, dict):
-            result.append({k: v for k, v in n.items() if k in NODE_ANALYSIS_FIELDS})
-    return result
+        if not isinstance(n, dict):
+            continue
+        row = [str(n.get(f, "") if n.get(f) is not None else "") for f, _ in _NODE_COLS]
+        rows.append(",".join(row))
+    csv = (_NODE_HDR + "\n" + "\n".join(rows)) if rows else _NODE_HDR
+    return csv, len(rows)
 
 
-def _compact_routes(routes: List[Any]) -> List[Dict]:
-    result = []
+def _compact_routes(routes: List[Any]) -> tuple:
+    """Returns (csv_string, row_count) — one header row + one row per route."""
+    rows = []
     for r in routes:
-        if isinstance(r, dict):
-            result.append({k: v for k, v in r.items() if k in ROUTE_ANALYSIS_FIELDS})
-    return result
+        if not isinstance(r, dict):
+            continue
+        row = [str(r.get(f, "") if r.get(f) is not None else "") for f, _ in _ROUTE_COLS]
+        rows.append(",".join(row))
+    csv = (_ROUTE_HDR + "\n" + "\n".join(rows)) if rows else _ROUTE_HDR
+    return csv, len(rows)
 
 
 def _compact_params(params: Dict[str, Any]) -> Dict[str, Any]:
     result = {}
     for k, v in params.items():
+        if k == "commodityPriceChanges":
+            # Only include commodities with non-zero price changes
+            if isinstance(v, dict):
+                nonzero = {ck: cv for ck, cv in v.items() if cv}
+                if nonzero:
+                    result[k] = nonzero
+            continue
         if k in PARAM_SKIP_IF_ZERO_OR_FALSE:
-            # Only include if non-zero / true
             if v:
                 result[k] = v
         else:
@@ -337,36 +356,31 @@ async def analyze_supply_chain(req: AnalysisRequest):
         genai.configure(api_key=api_key)
 
         # Compact the payload to reduce token usage
-        compact_nodes = _compact_nodes(req.nodes)
-        compact_routes = _compact_routes(req.routes)
+        node_csv, node_count = _compact_nodes(req.nodes)
+        route_csv, route_count = _compact_routes(req.routes)
         compact_params = _compact_params(req.params)
 
-        industry_name = (req.industryConfig or {}).get("name", "General")
+        # industryName preferred; fall back to legacy industryConfig.name
+        industry_name = req.industryName or (req.industryConfig or {}).get("name", "General")
+
         history_block = ""
         if req.historySummary:
             h = req.historySummary
-            history_block = f"""
-Simulation History ({h.get('totalDays', 0)} days):
-- Stockout events: {h.get('stockoutCount', 0)}
-- Avg inventory utilization: {h.get('avgInventoryUtilization', 0)}%
-- Most critical nodes: {json.dumps(h.get('worstNodeId', {}))}
-"""
+            history_block = (
+                f"\nHistory ({h.get('totalDays',0)}d): "
+                f"stockouts={h.get('stockoutCount',0)}, "
+                f"avg_inv_util={h.get('avgInventoryUtilization',0)}%, "
+                f"critical={json.dumps(h.get('worstNodeId',{}))}\n"
+            )
 
-        prompt = f"""You are a supply chain digital-twin AI for a {industry_name} network.
-Analyze the network and return strategic insights.
-{history_block}
-Nodes ({len(compact_nodes)}): {json.dumps(compact_nodes)}
-Routes ({len(compact_routes)}): {json.dumps(compact_routes)}
-Active params: {json.dumps(compact_params)}
+        prompt = f"""Supply chain digital-twin AI — {industry_name} network.{history_block}
+Nodes ({node_count}) [id,name,type,st,inv,cap,rop,ss,hc,slt,srel,scost,yr,tcp,dv,dvar,pe]:
+{node_csv}
+Routes ({route_count}) [from,to,mode,dist,lt,ltv,cost,cap,cust,dp]:
+{route_csv}
+Params: {json.dumps(compact_params)}
 
-Analyze:
-- Inventory: reorder points, safety stock, holding cost, shelf life, obsolescence risk
-- Suppliers: lead time variability, reliability %, disruption probability, recovery time
-- Production: capacity utilization, yield rates, throughput vs demand
-- Logistics: route costs, lead times, disruption exposure, modal mix
-- Market: demand variability, price elasticity, demand surges
-
-Return JSON with exactly:
+Return JSON:
 {{
   "narrative": "string",
   "kpiImpact": {{
