@@ -1655,7 +1655,7 @@ function AppContent() {
           </div>
         );
       case 'builder':
-        return <NetworkBuilder nodes={nodes} routes={routes} setNodes={setNodes} setRoutes={setRoutes} industryConfig={industryConfig} bom={bom} setBom={setBom} />;
+        return <NetworkBuilder nodes={nodes} routes={routes} setNodes={setNodes} setRoutes={setRoutes} industryConfig={industryConfig} setIndustryConfig={setIndustryConfig} bom={bom} setBom={setBom} />;
       case 'bom':
         return <BOMView bom={bom} setBom={setBom} nodes={nodes} setNodes={setNodes} history={history} industryId={industryConfig.id} accentColor={currentTheme.accent} industryConfig={industryConfig} />;
       case 'simulation':
@@ -1775,22 +1775,17 @@ function AppContent() {
               <span className="text-white font-black tracking-tighter text-base">CHAIN<span className="text-white/40 font-light">SIM</span></span>
             </div>
             {/* Session info — hidden on mobile to avoid clutter */}
-            <div className="hidden md:flex items-center gap-2">
-              {/* User pill */}
-              <div className="flex items-center gap-2 bg-white/8 border border-white/10 rounded-full px-3 py-1.5">
-                <div className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-black text-white shrink-0" style={{ background: currentTheme.accent }}>
-                  {(user?.name || user?.email || 'U')[0].toUpperCase()}
-                </div>
-                <span className="text-sm text-white/80 font-semibold tracking-wide">
-                  {user?.name || user?.email}
-                </span>
+            <div className="hidden md:flex items-center gap-3 min-w-0">
+              {/* User avatar */}
+              <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0" style={{ background: currentTheme.accent }}>
+                {(user?.name || user?.email || 'U')[0].toUpperCase()}
               </div>
               {/* Separator */}
-              <span className="text-white/20 text-base">›</span>
-              {/* Industry badge */}
-              <div className="flex items-center gap-1 rounded-full px-3 py-1.5 text-sm font-bold uppercase tracking-widest" style={{ background: `${currentTheme.accent}18`, color: currentTheme.accent, border: `1px solid ${currentTheme.accent}30` }}>
+              <span className="text-white/15 text-sm select-none">/</span>
+              {/* Project name */}
+              <span className="text-sm font-medium text-white/70 truncate max-w-xs">
                 {industryConfig.name}
-              </div>
+              </span>
             </div>
             <div className="flex items-center gap-2">
               <DeployMenu

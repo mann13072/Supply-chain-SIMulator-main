@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Plus, Trash2, Link as LinkIcon, MapPin, Factory, Warehouse, Truck, ShoppingCart, Layers, Globe as GlobeIcon, Zap, Loader2, Upload, FileSpreadsheet, CheckCircle, AlertTriangle, XCircle, X } from 'lucide-react';
 import { SupplyNode, NodeType, NodeStatus, Route, TransportMode, IndustryConfig, BillOfMaterials } from '../types';
-import { autoMapNodesToBOM, getIndustryBOM, inferIndustryFromNodes } from '../utils/industryBOMs';
+import { buildDynamicBOM, applyBOMTiers, inferIndustryFromNodes, getIndustryBOM } from '../utils/industryBOMs';
+import { PRESET_INDUSTRIES } from '../utils/industries';
 import { motion, AnimatePresence } from 'framer-motion';
 import { geocode } from '../utils/geocoding';
 import { routingService, Hub } from '../services/routingService';
@@ -23,11 +24,12 @@ interface NetworkBuilderProps {
   setNodes: React.Dispatch<React.SetStateAction<SupplyNode[]>>;
   setRoutes: React.Dispatch<React.SetStateAction<Route[]>>;
   industryConfig?: IndustryConfig;
+  setIndustryConfig?: (config: IndustryConfig) => void;
   bom?: BillOfMaterials | null;
   setBom?: (bom: BillOfMaterials | null) => void;
 }
 
-const NetworkBuilder: React.FC<NetworkBuilderProps> = ({ nodes, routes, setNodes, setRoutes, industryConfig, bom, setBom }) => {
+const NetworkBuilder: React.FC<NetworkBuilderProps> = ({ nodes, routes, setNodes, setRoutes, industryConfig, setIndustryConfig, bom, setBom }) => {
   const [selectedNode, setSelectedNode] = useState<SupplyNode | null>(null);
   const [selectedRoute, setSelectedRoute] = useState<Route | null>(null);
   const [isAddingNode, setIsAddingNode] = useState(false);
@@ -78,16 +80,37 @@ const NetworkBuilder: React.FC<NetworkBuilderProps> = ({ nodes, routes, setNodes
           ...r,
           mode: r.mode as TransportMode,
         }));
-        // Auto-detect the industry from imported node names and load its BOM.
-        // If no industry matches, clear the BOM so stale data is never shown.
-        if (setBom) {
-          const detectedIndustry = inferIndustryFromNodes(mappedNodes);
-          const detectedBOM = detectedIndustry ? getIndustryBOM(detectedIndustry) : null;
-          if (detectedBOM) {
-            mappedNodes = autoMapNodesToBOM(mappedNodes, detectedBOM);
+        // ── Industry config: use commodities from the file if present,
+        //    otherwise fall back to keyword-based preset detection.
+        if (setIndustryConfig) {
+          if (data.commodities?.length > 0) {
+            setIndustryConfig({
+              id: 'custom',
+              name: file.name.replace(/\.[^.]+$/, '').replace(/[_-]/g, ' '),
+              baseCurrency: 'USD',
+              currencySymbol: '$',
+              exchangeRates: { EUR: 0.92, GBP: 0.79, JPY: 149.5 },
+              commodities: data.commodities,
+            });
+          } else {
+            const detectedIndustry = inferIndustryFromNodes(mappedNodes);
+            const presetMatch = detectedIndustry
+              ? PRESET_INDUSTRIES.find(p => p.id === detectedIndustry)
+              : null;
+            if (presetMatch) setIndustryConfig(presetMatch);
           }
-          setBom(detectedBOM);
         }
+
+        // ── BOM: use the BOM from the file if provided, otherwise build dynamically ──
+        const networkName = file.name.replace(/\.[^.]+$/, '').replace(/[_-]/g, ' ');
+        const fileBOM: BillOfMaterials | null = data.bom ?? null;
+        const activeBOM = fileBOM ?? buildDynamicBOM(mappedNodes, networkName);
+        // Only re-assign bomProductId if the file didn't already specify it on nodes
+        const nodesHaveBOMIds = mappedNodes.some(n => n.bomProductId);
+        if (!nodesHaveBOMIds) {
+          mappedNodes = applyBOMTiers(mappedNodes, activeBOM);
+        }
+        if (setBom) setBom(activeBOM);
         setNodes(mappedNodes);
         setRoutes(mappedRoutes);
       }

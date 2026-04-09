@@ -13,6 +13,7 @@ from .fuzzy import (
     SHEET_ALIASES_NODES,
     SHEET_ALIASES_ROUTES,
     SHEET_ALIASES_COMMODITIES,
+    SHEET_ALIASES_BOM,
 )
 
 # Map sheet names to node types (for per-type template format)
@@ -72,7 +73,7 @@ def read_excel(filepath: str) -> dict[str, list[dict]]:
     wb = openpyxl.load_workbook(filepath, read_only=True, data_only=True)
     sheet_names = wb.sheetnames
 
-    result: dict[str, list[dict]] = {"nodes": [], "routes": [], "commodities": []}
+    result: dict[str, list[dict]] = {"nodes": [], "routes": [], "commodities": [], "bom": []}
 
     skip_sheets = {"instructions", "help", "readme", "guide"}
 
@@ -120,6 +121,11 @@ def read_excel(filepath: str) -> dict[str, list[dict]]:
     commod_sheet = resolve_sheet_name(sheet_names, SHEET_ALIASES_COMMODITIES)
     if commod_sheet:
         result["commodities"] = _read_sheet(wb[commod_sheet])
+
+    # ── BOM sheet ──
+    bom_sheet = resolve_sheet_name(sheet_names, SHEET_ALIASES_BOM)
+    if bom_sheet:
+        result["bom"] = _read_sheet(wb[bom_sheet])
 
     wb.close()
     return result

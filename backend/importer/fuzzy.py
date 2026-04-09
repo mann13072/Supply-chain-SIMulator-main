@@ -91,6 +91,18 @@ HEADER_ALIASES = {
     "is_focal_company": "isFocalCompany", "focal_company": "isFocalCompany",
     "focal": "isFocalCompany", "is_focal": "isFocalCompany", "oem": "isFocalCompany",
     "tier_locked": "tierLocked", "locked_tier": "tierLocked", "lock_tier": "tierLocked",
+    # BOM linkage (node sheets)
+    "bom_product_id": "bomProductId", "bom_product": "bomProductId", "bom product id": "bomProductId",
+    "material_id": "materialId", "material": "materialId",
+    "output_product": "outputProduct", "output product": "outputProduct",
+    # BOM sheet columns
+    "product_id": "productId", "prod_id": "productId",
+    "product_name": "productName", "prod_name": "productName",
+    "parent_product_id": "parentProductId", "parent_id": "parentProductId",
+    "parent": "parentProductId", "parent product id": "parentProductId",
+    "qty_per": "quantityPer", "quantity_per": "quantityPer", "quantity": "quantityPer",
+    "lead_time_days": "defaultLeadTimeDays", "default_lead_time": "defaultLeadTimeDays",
+    "base_price": "basePrice",
     # Route headers
     "from_node": "from", "source": "from", "origin": "from", "start": "from",
     "to_node": "to", "destination": "to", "target": "to", "end": "to",
@@ -110,6 +122,8 @@ HEADER_ALIASES = {
 SHEET_ALIASES_NODES = {"nodes", "node", "supply nodes", "locations", "facilities", "sites"}
 SHEET_ALIASES_ROUTES = {"routes", "route", "connections", "edges", "links", "transport", "shipments"}
 SHEET_ALIASES_COMMODITIES = {"commodities", "commodity", "materials", "products", "items", "goods"}
+SHEET_ALIASES_BOM = {"bom", "bill of materials", "bill_of_materials", "product structure",
+                     "product_structure", "bom products", "bom_products", "bom data", "bom_data"}
 
 
 def _similarity(a: str, b: str) -> float:

@@ -283,6 +283,12 @@ def transform_nodes(raw_nodes: list[dict]) -> tuple[list[dict], dict[str, str], 
         if tier_locked is not None:
             node["tierLocked"] = bool(tier_locked)
 
+        # ── BOM linkage fields (optional, pass through if provided) ──
+        for str_field in ("bomProductId", "materialId", "outputProduct"):
+            val = raw.get(str_field)
+            if val is not None:
+                node[str_field] = str(val).strip()
+
         nodes.append(node)
 
     return nodes, name_to_id, warnings
@@ -382,3 +388,93 @@ def transform_commodities(raw_commodities: list[dict]) -> list[dict]:
             "color": raw.get("color", default_colors[i % len(default_colors)]),
         })
     return commodities
+
+
+def transform_bom(raw_bom_rows: list[dict]) -> dict | None:
+    """
+    Transform flat BOM rows from the BOM sheet into a BillOfMaterials-compatible dict.
+
+    Each row represents one BOM product. Rows with a parentProductId also generate
+    a BOM entry linking child → parent.
+
+    Expected columns (all optional except productId + productName):
+      productId, productName, tier, category, parentProductId,
+      quantityPer, unit, critical, basePrice, defaultLeadTimeDays
+    """
+    if not raw_bom_rows:
+        return None
+
+    VALID_CATEGORIES = {"finished-good", "assembly", "component", "sub-component", "raw-material"}
+
+    products = []
+    entries = []
+
+    for row in raw_bom_rows:
+        pid = str(row.get("productId") or "").strip()
+        name = str(row.get("productName") or row.get("name") or "").strip()
+        if not pid or not name:
+            continue  # skip rows without ID or name
+
+        try:
+            tier = int(row.get("supplyChainTier") or row.get("tier") or 2)
+        except (ValueError, TypeError):
+            tier = 2
+
+        raw_cat = str(row.get("category") or "").strip().lower()
+        category = raw_cat if raw_cat in VALID_CATEGORIES else (
+            "finished-good" if tier == 0 else
+            "assembly" if tier == 1 else
+            "raw-material" if tier >= 4 else
+            "component"
+        )
+
+        product: dict[str, Any] = {"id": pid, "name": name, "tier": tier, "category": category}
+        if row.get("basePrice") is not None:
+            product["basePrice"] = float(row["basePrice"])
+        if row.get("defaultLeadTimeDays") is not None:
+            product["defaultLeadTimeDays"] = int(row["defaultLeadTimeDays"])
+        if row.get("commodityId"):
+            product["commodityId"] = str(row["commodityId"]).strip()
+        products.append(product)
+
+        parent_id = str(row.get("parentProductId") or "").strip()
+        if parent_id:
+            try:
+                qty = float(row.get("quantityPer") or 1)
+            except (ValueError, TypeError):
+                qty = 1.0
+            critical_val = row.get("critical")
+            if isinstance(critical_val, bool):
+                critical = critical_val
+            elif isinstance(critical_val, str):
+                critical = critical_val.lower() not in ("false", "no", "0")
+            else:
+                critical = True
+            entries.append({
+                "parentProductId": parent_id,
+                "childProductId": pid,
+                "quantityPer": qty,
+                "unit": str(row.get("unit") or "unit").strip(),
+                "critical": critical,
+                "substitutionDifficulty": str(row.get("substitutionDifficulty") or "moderate").strip(),
+                "source": "user-defined",
+                "confidence": 100,
+                "rationale": str(row.get("rationale") or "").strip() or None,
+            })
+
+    if not products:
+        return None
+
+    # The root product is the one that is never a child (not in any entry's childProductId)
+    child_ids = {e["childProductId"] for e in entries}
+    root_candidates = [p["id"] for p in products if p["id"] not in child_ids]
+    finished_product_id = root_candidates[0] if root_candidates else products[0]["id"]
+
+    return {
+        "id": "imported-bom",
+        "finishedProductId": finished_product_id,
+        "name": "Imported BOM",
+        "industry": "imported",
+        "products": products,
+        "entries": entries,
+    }

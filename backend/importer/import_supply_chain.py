@@ -16,7 +16,7 @@ from typing import Any
 from .reader_excel import read_excel
 from .reader_pdf import read_pdf
 from .validator import validate_nodes, validate_routes
-from .transformer import transform_nodes, transform_routes, transform_commodities
+from .transformer import transform_nodes, transform_routes, transform_commodities, transform_bom
 
 
 def import_file(filepath: str) -> dict[str, Any]:
@@ -83,11 +83,13 @@ def import_file(filepath: str) -> dict[str, Any]:
     all_warnings.extend(transform_route_warnings)
 
     commodities = transform_commodities(raw.get("commodities", []))
+    bom = transform_bom(raw.get("bom", []))
 
     return {
         "nodes": nodes,
         "routes": routes,
         "commodities": commodities,
+        "bom": bom,
         "warnings": all_warnings,
         "errors": all_errors,
         "summary": {

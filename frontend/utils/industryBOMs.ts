@@ -629,3 +629,91 @@ export function autoMapNodesToBOM(
 
   return mapped;
 }
+
+// ---------------------------------------------------------------------------
+// Dynamic BOM — built from imported node tier structure
+// ---------------------------------------------------------------------------
+
+const TIER_META: Record<number, { category: BOMProduct['category']; label: string; leadTime: number }> = {
+  0: { category: 'finished-good',  label: 'Finished Product',  leadTime: 1  },
+  1: { category: 'assembly',       label: 'Major Assembly',     leadTime: 7  },
+  2: { category: 'component',      label: 'Component',          leadTime: 14 },
+  3: { category: 'sub-component',  label: 'Sub-Component',      leadTime: 21 },
+  4: { category: 'raw-material',   label: 'Raw Material',       leadTime: 30 },
+};
+
+function _effectiveTier(n: SupplyNode): number {
+  if (n.supplyChainTier !== undefined) return Math.min(4, Math.max(0, n.supplyChainTier));
+  if (n.isFocalCompany) return 0;
+  switch (n.type) {
+    case 'RETAIL':               return 0;
+    case 'FACTORY':              return 1;
+    case 'WAREHOUSE':
+    case 'DISTRIBUTION_CENTER':  return 2;
+    case 'SUPPLIER':             return 3;
+    default:                     return 2;
+  }
+}
+
+/**
+ * Build a BillOfMaterials dynamically from the tier structure of imported nodes.
+ * Creates one BOMProduct per unique tier level found and links them sequentially.
+ */
+export function buildDynamicBOM(nodes: SupplyNode[], networkName: string): BillOfMaterials {
+  const tierSet = new Set<number>();
+  for (const n of nodes) tierSet.add(_effectiveTier(n));
+
+  const sortedTiers = Array.from(tierSet).sort((a, b) => a - b);
+
+  // Ensure tier 0 always exists as the finished product anchor
+  if (!tierSet.has(0)) sortedTiers.unshift(0);
+
+  const products: BOMProduct[] = sortedTiers.map(tier => {
+    const meta = TIER_META[tier] ?? { category: 'component' as const, label: `Tier ${tier} Item`, leadTime: 14 };
+    return {
+      id: `dyn-tier-${tier}`,
+      name: meta.label,
+      tier,
+      category: meta.category,
+      defaultLeadTimeDays: meta.leadTime,
+    };
+  });
+
+  const entries: BOMEntry[] = [];
+  for (let i = 0; i < sortedTiers.length - 1; i++) {
+    entries.push({
+      parentProductId: `dyn-tier-${sortedTiers[i]}`,
+      childProductId:  `dyn-tier-${sortedTiers[i + 1]}`,
+      quantityPer: 1,
+      unit: 'unit',
+      critical: true,
+      substitutionDifficulty: 'moderate',
+      source: 'template-default',
+      confidence: 80,
+      rationale: 'Auto-generated from imported supply chain tier structure',
+    });
+  }
+
+  return {
+    id: 'imported-bom',
+    finishedProductId: 'dyn-tier-0',
+    name: `${networkName} BOM`,
+    industry: 'imported',
+    products,
+    entries,
+  };
+}
+
+/**
+ * Assign bomProductId and tier to every node based on their effective tier,
+ * mapping them onto the dynamic BOM created by buildDynamicBOM.
+ */
+export function applyBOMTiers(nodes: SupplyNode[], bom: BillOfMaterials): SupplyNode[] {
+  const productIds = new Set(bom.products.map(p => p.id));
+  return nodes.map(n => {
+    const tier = _effectiveTier(n);
+    const productId = `dyn-tier-${tier}`;
+    if (!productIds.has(productId)) return n;
+    return { ...n, bomProductId: productId, tier };
+  });
+}

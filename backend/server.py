@@ -992,6 +992,7 @@ async def import_network_file(file: UploadFile = File(...)):
         "nodes": result["nodes"],
         "routes": result["routes"],
         "commodities": result["commodities"],
+        "bom": result.get("bom"),
         "warnings": result["warnings"],
         "summary": result["summary"],
     }
@@ -1049,7 +1050,8 @@ def download_import_template():
     common_cols = ["name", "location", "lat", "lng",
                    "inventoryLevel", "maxCapacity", "reorderPoint", "orderQuantity",
                    "safetyStock", "holdingCost", "shelfLife",
-                   "supplyChainTier", "isFocalCompany", "tierLocked"]
+                   "supplyChainTier", "isFocalCompany", "tierLocked",
+                   "bomProductId"]
     min_cols = {"name"}
 
     # ── Per-type specific columns ──
@@ -1057,7 +1059,8 @@ def download_import_template():
         "Suppliers": {
             "tab_color": "E65100",
             "type_value": "SUPPLIER",
-            "specific": ["supplierLeadTime", "supplierLeadTimeVariability",
+            "specific": ["materialId",
+                         "supplierLeadTime", "supplierLeadTimeVariability",
                          "supplierCapacity", "supplierReliability",
                          "supplierCostPerUnit", "supplierMinOrderQuantity",
                          "supplierDisruptionProb", "supplierRecoveryTime"],
@@ -1065,7 +1068,8 @@ def download_import_template():
         "Factories": {
             "tab_color": "1565C0",
             "type_value": "FACTORY",
-            "specific": ["productionCapacity", "yieldRate", "defectRate",
+            "specific": ["outputProduct",
+                         "productionCapacity", "yieldRate", "defectRate",
                          "batchSize", "setupTime", "setupCost",
                          "cycleTime", "reworkRate", "schedulingRule",
                          "overtimeCapacity"],
@@ -1132,7 +1136,29 @@ def download_import_template():
 
     # ── Commodities sheet ──
     ws_comm = wb.create_sheet("Commodities")
+    ws_comm.sheet_properties.tabColor = "00897B"
     _write_headers(ws_comm, ["name", "unit", "basePrice", "color"], {"name", "unit", "basePrice"})
+
+    # ── BOM sheet ──
+    ws_bom = wb.create_sheet("BOM")
+    ws_bom.sheet_properties.tabColor = "4527A0"
+    _write_headers(ws_bom, [
+        "productId", "productName", "tier", "category",
+        "parentProductId", "quantityPer", "unit",
+        "critical", "basePrice", "defaultLeadTimeDays",
+    ], {"productId", "productName", "tier"})
+    # Add example rows
+    example_rows = [
+        ("p-finished",  "Finished Product",     0, "finished-good",    "",            "",   "",    "",     "", ""),
+        ("p-assembly1", "Major Assembly",        1, "assembly",         "p-finished",  1,    "pcs", "TRUE", "", 7),
+        ("p-component1","Component A",           2, "component",        "p-assembly1", 2,    "pcs", "TRUE", "", 14),
+        ("p-subcomp1",  "Sub-Component X",       3, "sub-component",    "p-component1",4,    "pcs", "FALSE","", 21),
+        ("p-rawmat1",   "Raw Material Y",        4, "raw-material",     "p-subcomp1",  10,   "kg",  "TRUE", "", 30),
+    ]
+    for r_idx, row_vals in enumerate(example_rows, 3):
+        for c_idx, val in enumerate(row_vals, 1):
+            cell = ws_bom.cell(row=r_idx, column=c_idx, value=val if val != "" else None)
+            cell.font = Font(italic=True, color="666666", size=9)
 
     # ── Instructions sheet ──
     ws_help = wb.create_sheet("Instructions")
@@ -1170,6 +1196,24 @@ def download_import_template():
         ("supplyChainTier:", "0=OEM/Focal, 1/2/3+=upstream suppliers, -1/-2/-3=downstream customers (leave blank for auto-detect from routes)"),
         ("isFocalCompany:", "TRUE for the one OEM/manufacturer node (Tier 0). Only one node should be TRUE."),
         ("tierLocked:", "TRUE to lock a manually-set tier and prevent auto-recalculation"),
+        ("", ""),
+        ("BOM (BILL OF MATERIALS):", ""),
+        ("BOM sheet:", "Define your product hierarchy — one row per product/component"),
+        ("productId:", "Unique ID for this BOM product (e.g. 'p-airframe', 'p-engine'). You choose the IDs."),
+        ("productName:", "Display name for this product in the BOM view"),
+        ("tier:", "0=Finished Good, 1=Major Assembly, 2=Component, 3=Sub-Component, 4=Raw Material"),
+        ("category:", "finished-good | assembly | component | sub-component | raw-material"),
+        ("parentProductId:", "ID of the parent product this is a child of. Leave blank for the top-level finished product."),
+        ("quantityPer:", "How many units of this product go into one unit of the parent (e.g. 2 engines per aircraft)"),
+        ("unit:", "Unit of measure: pcs, kg, liters, m2, etc."),
+        ("critical:", "TRUE if this component is critical (any shortage stops production)"),
+        ("", ""),
+        ("NODE BOM LINKAGE:", ""),
+        ("bomProductId:", "In any node sheet — enter the productId from the BOM sheet to link this node to that BOM product"),
+        ("materialId:", "Suppliers only — enter a Commodity ID from the Commodities sheet (links this supplier to a raw material)"),
+        ("outputProduct:", "Factories only — enter a label for what this factory produces (e.g. 'Airframe Assembly')"),
+        ("", ""),
+        ("TIP:", "If you leave BOM blank, the app auto-generates a BOM from the node tiers in your network."),
     ]
     for r, (a, b) in enumerate(instructions, 1):
         ca = ws_help.cell(row=r, column=1, value=a)

@@ -140,10 +140,10 @@ const IndustryView: React.FC<IndustryViewProps> = ({
   return (
     <div className="max-w-4xl mx-auto space-y-10 animate-in fade-in duration-500">
       {/* Header */}
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex items-start justify-between gap-3">
         <div>
-          <h2 className="text-4xl font-bold text-white tracking-tight flex items-center gap-3">
-            <Factory className="w-9 h-9" style={{ color: theme.accent }} />
+          <h2 className="text-2xl md:text-4xl font-bold text-white tracking-tight flex items-center gap-2 md:gap-3">
+            <Factory className="w-6 h-6 md:w-9 md:h-9 shrink-0" style={{ color: theme.accent }} />
             Industry Setup
           </h2>
           <p className="text-white/40 text-sm mt-2">
@@ -152,10 +152,10 @@ const IndustryView: React.FC<IndustryViewProps> = ({
         </div>
         <button
           onClick={onOpenWizard}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all shrink-0"
+          className="flex items-center gap-2 px-3 py-2 md:px-4 md:py-2.5 rounded-xl text-xs md:text-sm font-medium transition-all shrink-0 mt-1"
           style={{ backgroundColor: theme.accentLight, color: theme.accent, border: `1px solid ${theme.accentMuted}` }}
         >
-          <Sparkles className="w-4 h-4" />
+          <Sparkles className="w-3.5 h-3.5 md:w-4 md:h-4" />
           Run Wizard
         </button>
       </div>
@@ -169,7 +169,7 @@ const IndustryView: React.FC<IndustryViewProps> = ({
         <p className="text-white/30 text-xs mb-5">
           Switch presets to load default commodities and currency. Use "Switch & Load Network" to also replace your current nodes.
         </p>
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
           {PRESET_INDUSTRIES.map(preset => {
             const t = INDUSTRY_THEMES[preset.id];
             const isActive = industryConfig.id === preset.id;
@@ -209,7 +209,7 @@ const IndustryView: React.FC<IndustryViewProps> = ({
                       </button>
                       <button
                         onClick={() => switchIndustryWithNetwork(preset)}
-                        className="flex-1 px-3 py-1.5 rounded-lg text-[10px] font-semibold transition-all"
+                        className="flex-1 px-3 py-1.5 rounded-lg text-[10px] font-semibold transition-all whitespace-nowrap"
                         style={{ background: t.accent, color: '#000' }}
                       >
                         Switch & Load
