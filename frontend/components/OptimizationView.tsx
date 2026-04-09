@@ -98,7 +98,7 @@ const OptimizationView: React.FC<OptimizationViewProps> = ({
         const err = await response.json().catch(() => ({ detail: 'Server error' }));
         const detail = err.detail || `Server error ${response.status}`;
         // If AI service is unavailable (missing module or no API key) or quota exceeded, use fallback
-        if (response.status === 503 || response.status === 500 || response.status === 429) {
+        if (response.status === 503 || response.status === 500 || response.status === 429 || response.status === 502) {
           console.warn(`AI analysis unavailable: ${detail}. Using fallback data.`);
           const isQuota = response.status === 429;
           setResult({

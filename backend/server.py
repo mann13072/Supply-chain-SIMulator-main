@@ -396,12 +396,13 @@ Return JSON:
   "quantitativeRiskScore": number
 }}"""
 
-        model = genai.GenerativeModel('gemini-2.5-flash')
+        model = genai.GenerativeModel('gemini-2.0-flash')
         response = model.generate_content(
             prompt,
             generation_config=genai.GenerationConfig(
                 response_mime_type="application/json"
-            )
+            ),
+            request_options={"timeout": 55}
         )
         return json.loads(response.text)
 
