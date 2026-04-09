@@ -683,26 +683,8 @@ const BOMView: React.FC<BOMViewProps> = ({
               </div>
             )}
 
-            {/* Actions */}
-            {!bom ? (
-              <div className="flex gap-2 shrink-0">
-                <button
-                  onClick={loadTemplate}
-                  className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all"
-                  style={{ backgroundColor: accentColor, color: '#000', boxShadow: `0 0 20px ${accentColor}33` }}
-                >
-                  <Package className="w-3.5 h-3.5" />
-                  Load Template
-                </button>
-                <button
-                  onClick={() => setShowCreateBOM(true)}
-                  className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-white/[0.06] text-white hover:bg-white/10 border border-white/10 transition-colors"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  Custom BOM
-                </button>
-              </div>
-            ) : (
+            {/* Actions — only shown when BOM is loaded; empty state below handles the no-BOM CTAs */}
+            {bom && (
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => setShowAddProduct(true)}
@@ -757,6 +739,53 @@ const BOMView: React.FC<BOMViewProps> = ({
           </div>
         )}
       </div>
+
+      {/* ============================================================ */}
+      {/*  Empty state                                                  */}
+      {/* ============================================================ */}
+      {!bom && (
+        <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
+          <div
+            className="w-16 h-16 rounded-2xl flex items-center justify-center mb-5"
+            style={{ backgroundColor: `${accentColor}18`, border: `1px solid ${accentColor}25` }}
+          >
+            <Layers className="w-7 h-7" style={{ color: accentColor }} />
+          </div>
+          <h3 className="text-white font-bold text-lg mb-2">No Bill of Materials</h3>
+          <p className="text-white/40 text-sm max-w-xs mb-8 leading-relaxed">
+            A BOM defines your product structure — from finished goods down to raw materials — and links each component to a supplier node.
+          </p>
+          <div className="flex flex-col sm:flex-row gap-3">
+            <button
+              onClick={loadTemplate}
+              className="flex items-center justify-center gap-2 px-6 py-3 rounded-xl text-sm font-bold transition-all"
+              style={{ backgroundColor: accentColor, color: '#000', boxShadow: `0 0 24px ${accentColor}40` }}
+            >
+              <Package className="w-4 h-4" />
+              Load Industry Template
+            </button>
+            <button
+              onClick={() => setShowCreateBOM(true)}
+              className="flex items-center justify-center gap-2 px-6 py-3 rounded-xl text-sm font-bold bg-white/[0.06] text-white hover:bg-white/10 border border-white/10 transition-colors"
+            >
+              <Plus className="w-4 h-4" />
+              Create Custom BOM
+            </button>
+          </div>
+          <div className="mt-10 grid grid-cols-3 gap-4 max-w-sm w-full">
+            {[
+              { label: 'Product Tiers', desc: 'T0 → T4 hierarchy' },
+              { label: 'Node Mapping', desc: 'Link suppliers to parts' },
+              { label: 'Risk Coverage', desc: 'Confidence scoring' },
+            ].map(({ label, desc }) => (
+              <div key={label} className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-3 text-left">
+                <p className="text-white/70 text-[11px] font-semibold">{label}</p>
+                <p className="text-white/25 text-[10px] mt-0.5">{desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* ============================================================ */}
       {/*  Section 2: BOM Tree                                         */}
