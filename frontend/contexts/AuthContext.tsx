@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { DISABLE_AUTH } from '../config';
 
 const API_BASE = import.meta.env.VITE_API_URL || '';
 
@@ -24,12 +25,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // In dev mode, skip login and use a local dev user automatically
-  // In production, restore session from localStorage
+  // When auth is disabled (see config.ts), skip login entirely and use a guest user.
+  // Otherwise, restore any existing session from localStorage.
   useEffect(() => {
-    if (import.meta.env.DEV) {
-      setUser({ id: 'dev', email: 'dev@localhost', name: 'Dev User' });
-      setToken('dev-mode');
+    if (DISABLE_AUTH) {
+      setUser({ id: 'guest', email: 'guest@localhost', name: 'Guest' });
+      setToken('guest-mode');
       setIsLoading(false);
       return;
     }

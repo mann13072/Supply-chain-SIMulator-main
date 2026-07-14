@@ -23,6 +23,8 @@ import { LayoutDashboard, Network, PlayCircle, BarChart3, Settings, Zap, Activit
 import { useAuth } from './contexts/AuthContext';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
+import LandingPage from './pages/LandingPage';
+import { DISABLE_AUTH } from './config';
 
 const INITIAL_NODES: SupplyNode[] = [];
 const INITIAL_ROUTES: Route[] = [];
@@ -1005,7 +1007,10 @@ function computeTierAlerts(
 // Auth gate — rendered by App, wraps AppContent when authenticated
 function App() {
   const { user, isLoading } = useAuth();
-  const [authPage, setAuthPage] = useState<'login' | 'register'>('login');
+  const [authPage, setAuthPage] = useState<'landing' | 'login' | 'register'>('landing');
+  // When auth is disabled, the landing page is still the entry point — "Get Started"
+  // takes the visitor straight into the app (no login). This flag tracks that.
+  const [entered, setEntered] = useState(false);
 
   if (isLoading) {
     return (
@@ -1015,7 +1020,29 @@ function App() {
     );
   }
 
+  // ── Auth disabled: Landing → (Get Started) → App, skipping login entirely ──
+  if (DISABLE_AUTH) {
+    if (!entered) {
+      return (
+        <LandingPage
+          onGetStarted={() => setEntered(true)}
+          onSignIn={() => setEntered(true)}
+        />
+      );
+    }
+    return <AppContent />;
+  }
+
+  // ── Auth enabled: Landing → Login/Register → App ──
   if (!user) {
+    if (authPage === 'landing') {
+      return (
+        <LandingPage
+          onGetStarted={() => setAuthPage('register')}
+          onSignIn={() => setAuthPage('login')}
+        />
+      );
+    }
     return authPage === 'login'
       ? <LoginPage onSwitchToRegister={() => setAuthPage('register')} />
       : <RegisterPage onSwitchToLogin={() => setAuthPage('login')} />;
@@ -1325,8 +1352,10 @@ function AppContent() {
         }
       } catch {}
 
-      // 2. Show industry wizard only for users who haven't completed it
-      const wizardDone = user?.id && localStorage.getItem(`sc_wizard_done_${user.id}`);
+      // 2. Show industry wizard only for users who haven't completed it.
+      //    With auth disabled (guest mode) nothing is persisted between sessions,
+      //    so always onboard: entering via "Get Started" asks to pick a preset industry.
+      const wizardDone = !DISABLE_AUTH && user?.id && localStorage.getItem(`sc_wizard_done_${user.id}`);
       if (!wizardDone) setShowWizard(true);
       initialLoadDone.current = true;
     };
@@ -1796,13 +1825,15 @@ function AppContent() {
                 history={history}
                 day={day}
               />
-              <button
-                onClick={logout}
-                title="Sign out"
-                className="p-2 text-white/40 hover:text-white transition-colors"
-              >
-                <LogOut className="w-4 h-4" />
-              </button>
+              {!DISABLE_AUTH && (
+                <button
+                  onClick={logout}
+                  title="Sign out"
+                  className="p-2 text-white/40 hover:text-white transition-colors"
+                >
+                  <LogOut className="w-4 h-4" />
+                </button>
+              )}
             </div>
           </header>
           <div ref={contentRef} className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8 pb-24 md:pb-6 lg:pb-8 custom-scrollbar">{renderContent()}</div>
