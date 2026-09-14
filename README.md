@@ -2,6 +2,10 @@
 
 # SolarChain Twin: High-Performance Supply Chain Simulator
 
+> **Author:** [Mann D. Shah](https://github.com/mann13072) · Financial Controller & Systems Architect  
+> **Portfolio & Related Repositories:** [recon-platform](https://github.com/mann13072/recon-platform) · [NordWerk Close Lab](https://github.com/mann13072/nordwerk-close-lab) · [Cash-Flow Risk Simulator](https://github.com/mann13072/project-cash-flow-risk-simulator) · [Full Portfolio](https://github.com/mann13072)
+
+
 SolarChain Twin is a professional-grade logistics digital twin and simulation engine. It combines a modern React frontend with a high-fidelity Python routing backend to provide real-world supply chain topology modeling, pathfinding, and lead-time analysis.
 
 ## 🚀 Key Features
