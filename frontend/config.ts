@@ -13,4 +13,6 @@
  *
  * Flip this one value to add or remove the login page whenever you need it.
  */
-export const DISABLE_AUTH = true;
+export const DISABLE_AUTH = false;
+
+export const AI_ANALYSIS_ENABLED = false;

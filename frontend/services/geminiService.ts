@@ -1,4 +1,5 @@
 import { SimulationParams, SimulationResult, SupplyNode, Route } from "../types";
+import { AI_ANALYSIS_ENABLED } from '../config';
 
 const MOCK_RESULT: SimulationResult = {
   narrative: "Simulation completed using fallback logic. The complex interaction of rising silver prices and logistics bottlenecks has created a bullwhip effect. While module assembly is resilient, the cost basis has shifted significantly, threatening project IRRs in the EU region.",
@@ -24,6 +25,7 @@ export const runSimulationAnalysis = async (
   routes: Route[],
   params: SimulationParams
 ): Promise<SimulationResult> => {
+  if (!AI_ANALYSIS_ENABLED) throw new Error('AI analysis is disabled for this deployment.');
   try {
     const response = await fetch('/api/analyze', {
       method: 'POST',

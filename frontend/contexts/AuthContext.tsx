@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { DISABLE_AUTH } from '../config';
 
-const API_BASE = import.meta.env.VITE_API_URL || '';
+const API_BASE = '';
 
 export interface AuthUser {
   id: string;
@@ -34,23 +34,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setIsLoading(false);
       return;
     }
-    const storedToken = localStorage.getItem('sc_token');
-    const storedUser = localStorage.getItem('sc_user');
+    const storedToken = localStorage.getItem('sc_cloud_token');
+    const storedUser = localStorage.getItem('sc_cloud_user');
     if (storedToken && storedUser) {
       try {
         setToken(storedToken);
         setUser(JSON.parse(storedUser));
       } catch {
-        localStorage.removeItem('sc_token');
-        localStorage.removeItem('sc_user');
+        localStorage.removeItem('sc_cloud_token');
+        localStorage.removeItem('sc_cloud_user');
       }
     }
     setIsLoading(false);
   }, []);
 
   const persistSession = (newToken: string, newUser: AuthUser) => {
-    localStorage.setItem('sc_token', newToken);
-    localStorage.setItem('sc_user', JSON.stringify(newUser));
+    localStorage.setItem('sc_cloud_token', newToken);
+    localStorage.setItem('sc_cloud_user', JSON.stringify(newUser));
     setToken(newToken);
     setUser(newUser);
   };
@@ -85,8 +85,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = useCallback(() => {
     if (import.meta.env.DEV) return; // no-op in dev mode
-    localStorage.removeItem('sc_token');
-    localStorage.removeItem('sc_user');
+    localStorage.removeItem('sc_cloud_token');
+    localStorage.removeItem('sc_cloud_user');
     setToken(null);
     setUser(null);
   }, []);

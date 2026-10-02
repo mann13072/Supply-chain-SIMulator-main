@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Zap, TrendingUp, ArrowRight, CheckCircle2, AlertCircle, Loader2, Lock } from 'lucide-react';
 import { SupplyNode, Route, HistorySnapshot, SimulationParams, IndustryConfig } from '../types';
 import { motion } from 'framer-motion';
+import { AI_ANALYSIS_ENABLED } from '../config';
 
 interface OptimizationViewProps {
   nodes: SupplyNode[];
@@ -66,6 +67,15 @@ const OptimizationView: React.FC<OptimizationViewProps> = ({
     }
     return () => { if (progressIntervalRef.current) clearInterval(progressIntervalRef.current); };
   }, [isAnalyzing]);
+
+  if (!AI_ANALYSIS_ENABLED) {
+    return (
+      <div className="p-8 bg-white/5 rounded-3xl border border-white/10">
+        <h2 className="text-2xl font-bold text-white">AI Network Optimization</h2>
+        <p className="mt-3 text-white/60">AI analysis is disabled for this deployment. Simulation, charts, and saved runs remain available.</p>
+      </div>
+    );
+  }
 
   const runAnalysis = async () => {
     setIsAnalyzing(true);

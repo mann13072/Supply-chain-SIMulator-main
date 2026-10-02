@@ -60,7 +60,7 @@ const NetworkBuilder: React.FC<NetworkBuilderProps> = ({ nodes, routes, setNodes
     formData.append('file', file);
 
     try {
-      const API_BASE = import.meta.env.VITE_API_URL || '';
+      const API_BASE = '';
       const res = await fetch(`${API_BASE}/api/networks/import`, {
         method: 'POST',
         body: formData,
@@ -555,7 +555,7 @@ const NetworkBuilder: React.FC<NetworkBuilderProps> = ({ nodes, routes, setNodes
           <button
             onClick={async () => {
               try {
-                const API_BASE = import.meta.env.VITE_API_URL || '';
+                const API_BASE = '';
                 const res = await fetch(`${API_BASE}/api/networks/import/template`);
                 if (!res.ok) throw new Error('Failed to download template');
                 const blob = await res.blob();

@@ -20,11 +20,11 @@ export interface HubsResponse {
   Sea: Hub[];
 }
 
-const API_BASE = import.meta.env.VITE_API_URL || '';
+const API_BASE = '';
 
 /** Returns stored JWT token for authenticated requests. */
 function authHeaders(): Record<string, string> {
-  const token = localStorage.getItem('sc_token');
+  const token = localStorage.getItem('sc_cloud_token');
   return token
     ? { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
     : { 'Content-Type': 'application/json' };

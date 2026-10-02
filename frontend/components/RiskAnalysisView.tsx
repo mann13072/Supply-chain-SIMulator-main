@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import { Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
 import SimulationPanel from './SimulationPanel';
 import { runSimulationAnalysis } from '../services/geminiService';
+import { AI_ANALYSIS_ENABLED } from '../config';
 
 interface RiskAnalysisViewProps {
   nodes: SupplyNode[];
@@ -16,6 +17,15 @@ interface RiskAnalysisViewProps {
 const RiskAnalysisView: React.FC<RiskAnalysisViewProps> = ({ nodes, routes, params, setParams }) => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysis, setAnalysis] = useState<SimulationResult | null>(null);
+
+  if (!AI_ANALYSIS_ENABLED) {
+    return (
+      <div className="p-8 bg-white/5 rounded-3xl border border-white/10">
+        <h2 className="text-2xl font-bold text-white">AI Risk Analysis</h2>
+        <p className="mt-3 text-white/60">AI analysis is disabled for this deployment. Simulation, charts, and saved runs remain available.</p>
+      </div>
+    );
+  }
 
   const runRiskAnalysis = async () => {
     setIsAnalyzing(true);

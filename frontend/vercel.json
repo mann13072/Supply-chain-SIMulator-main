@@ -2,11 +2,11 @@
   "rewrites": [
     {
       "source": "/auth/:path*",
-      "destination": "https://supply-chain-simulator-main-production.up.railway.app/auth/:path*"
+      "destination": "https://solarchain-backend.upply-chain----ulator-cloudflare-backend.workers.dev/auth/:path*"
     },
     {
       "source": "/api/:path*",
-      "destination": "https://supply-chain-simulator-main-production.up.railway.app/api/:path*"
+      "destination": "https://solarchain-backend.upply-chain----ulator-cloudflare-backend.workers.dev/api/:path*"
     },
     {
       "source": "/(.*)",
