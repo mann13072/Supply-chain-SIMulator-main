@@ -5,7 +5,6 @@ from fastapi import FastAPI, HTTPException, Query, Depends, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
-from dataclasses import asdict
 from sqlalchemy.orm import Session
 
 try:
@@ -178,33 +177,8 @@ async def get_nearby_hubs(lat: float, lon: float):
     return engine.get_nearby_hubs(lat, lon)
 
 
-class NodeCreate(BaseModel):
-    id: str
-    name: str
-    lat: float
-    lon: float
-    type: str
-    is_hub: bool = False
-
-
-class RouteCreate(BaseModel):
-    u: str
-    v: str
-    mode: str
-
-
-@app.post("/api/nodes")
-async def add_node(node: NodeCreate):
-    engine.add_node(node.id, node.name, node.lat, node.lon, node.type, is_hub=node.is_hub)
-    return {"status": "success"}
-
-
-@app.post("/api/routes")
-async def add_route(route: RouteCreate):
-    if route.u.upper() not in engine._nodes or route.v.upper() not in engine._nodes:
-        raise HTTPException(status_code=404, detail=f"One or both nodes not found: {route.u}, {route.v}")
-    engine.add_route(route.u, route.v, route.mode)
-    return {"status": "success"}
+# User networks live in each user's saved networks, not in the shared routing
+# graph — so there are no endpoints that add nodes/routes to it.
 
 
 @app.get("/api/route", response_model=RouteResponse)
@@ -235,26 +209,6 @@ async def get_shortest_path(
     except Exception as e:
         print(f"Error: {e}")
         raise HTTPException(status_code=500, detail="Internal routing engine error.")
-
-
-@app.get("/api/state")
-async def get_state():
-    """Returns the current simulation state (nodes and routes)."""
-    nodes = []
-    for node in engine._nodes.values():
-        if not node.is_hub:
-            nodes.append(asdict(node))
-
-    routes = []
-    processed_routes = set()
-    for u, edges in engine._adj.items():
-        for edge in edges:
-            route_key = tuple(sorted([u, edge.to_node]) + [edge.mode])
-            if route_key not in processed_routes:
-                routes.append({"fromId": u, "toId": edge.to_node, "mode": edge.mode, "distance": edge.distance})
-                processed_routes.add(route_key)
-
-    return {"nodes": nodes, "routes": routes}
 
 
 class AnalysisRequest(BaseModel):

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { HistorySnapshot, SupplyNode, IndustryConfig, NodeType, NodeStatus, TierMetrics, TierAlert } from '../types';
 import { getTierColor, getTierLabel } from '../utils/tierClassifier';
 import { formatCurrencyCompact, formatCurrency } from '../utils/formatting';
+import MonteCarloPanel, { MonteCarloRunner } from './MonteCarloPanel';
 import {
   CostTrendChart, InventoryChart,
   FillRateTrendChart, DemandAreaChart,
@@ -15,6 +16,8 @@ interface AnalyticsViewProps {
   history: HistorySnapshot[];
   nodes: SupplyNode[];
   industryConfig: IndustryConfig;
+  /** When provided, shows the Monte Carlo tab. */
+  runMonteCarlo?: MonteCarloRunner;
 }
 
 const TABS = [
@@ -25,6 +28,7 @@ const TABS = [
   { id: 'throughput', label: 'Throughput',          color: '#8b5cf6' },
   { id: 'nodes',      label: 'Node Details',        color: '#94a3b8' },
   { id: 'tiers',      label: 'Tier Analysis',       color: '#6366f1' },
+  { id: 'montecarlo', label: 'Monte Carlo',         color: '#ec4899' },
 ] as const;
 
 type TabId = typeof TABS[number]['id'];
@@ -66,7 +70,7 @@ const ChartCard: React.FC<{ title: string; sub: string; children: React.ReactNod
   </div>
 );
 
-const AnalyticsView: React.FC<AnalyticsViewProps> = ({ history, nodes, industryConfig }) => {
+const AnalyticsView: React.FC<AnalyticsViewProps> = ({ history, nodes, industryConfig, runMonteCarlo }) => {
   const [activeTab, setActiveTab] = useState<TabId>('service');
 
   const noData = history.length === 0;
@@ -586,7 +590,7 @@ const AnalyticsView: React.FC<AnalyticsViewProps> = ({ history, nodes, industryC
 
       {/* Tab Bar */}
       <div className="flex gap-1 bg-white/5 p-1 rounded-2xl border border-white/5 overflow-x-auto">
-        {TABS.map(tab => (
+        {TABS.filter(tab => tab.id !== 'montecarlo' || runMonteCarlo).map(tab => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
@@ -600,9 +604,17 @@ const AnalyticsView: React.FC<AnalyticsViewProps> = ({ history, nodes, industryC
       </div>
 
       {/* Tab Content */}
-      <div key={activeTab} className="animate-in fade-in slide-in-from-bottom-2 duration-300">
-        {renderTab()}
-      </div>
+      {activeTab !== 'montecarlo' && (
+        <div key={activeTab} className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+          {renderTab()}
+        </div>
+      )}
+      {/* Kept mounted so results survive switching tabs */}
+      {runMonteCarlo && (
+        <div hidden={activeTab !== 'montecarlo'}>
+          <MonteCarloPanel run={runMonteCarlo} industryConfig={industryConfig} />
+        </div>
+      )}
     </div>
   );
 };

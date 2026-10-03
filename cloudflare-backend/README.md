@@ -11,8 +11,11 @@ Health: `/health`. API documentation: `/docs`.
 
 Cloudflare runs the Python FastAPI app in one SQLite-backed Durable Object.
 User accounts, saved networks, and compressed simulation histories are stored
-in its durable SQLite database. Routing topology uses the same object's durable
-key-value storage. The cloud database starts fresh; local users and saved data
+in its durable SQLite database. The shared routing graph (default scenario plus
+hub atlas) is rebuilt in memory on each start and never stores user nodes; the
+old `/api/nodes`, `/api/routes` and `/api/state` endpoints were removed. An older
+`network_state` key may remain in the object's key-value storage but is no longer
+read. The cloud database starts fresh; local users and saved data
 have not been migrated. Create a cloud account to save private networks and runs.
 
 AI analysis is disabled. No Gemini key was uploaded. Only a newly generated
