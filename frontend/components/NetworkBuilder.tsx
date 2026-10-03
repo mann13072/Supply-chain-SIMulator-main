@@ -462,15 +462,7 @@ const NetworkBuilder: React.FC<NetworkBuilderProps> = ({ nodes, routes, setNodes
     };
 
     setNodes([...nodes, node]);
-    routingService.persistNode({ 
-      id: node.id, 
-      name: node.name, 
-      lat: node.coordinates.lat, 
-      lon: node.coordinates.lng, 
-      type: 'Air',
-      is_hub: false 
-    });
-    
+
     // RESET FORM
     setNewNode({
       type: NodeType.SUPPLIER,
@@ -514,7 +506,6 @@ const NetworkBuilder: React.FC<NetworkBuilderProps> = ({ nodes, routes, setNodes
     };
 
     setRoutes([...routes, route]);
-    routingService.persistRoute(route.fromId, route.toId, route.mode === TransportMode.AIR ? 'Air' : 'Sea');
     setIsAddingRoute(false);
   };
 

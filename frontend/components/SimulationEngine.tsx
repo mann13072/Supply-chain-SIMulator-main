@@ -103,7 +103,8 @@ const SimulationEngine: React.FC<SimulationEngineProps> = ({
   const avgUnitCost = nodes.length > 0
     ? nodes.reduce((sum, n) => sum + (n.supplierCostPerUnit || 10), 0) / nodes.length
     : 10;
-  const transitValue = shipments.reduce((acc, s) => acc + (s.quantity * avgUnitCost), 0);
+  const networkShipments = shipments.filter(s => !s.external);
+  const transitValue = networkShipments.reduce((acc, s) => acc + (s.quantity * avgUnitCost), 0);
   const warnings = nodes.filter(n => n.status !== NodeStatus.OPTIMAL).length;
 
   const kpis = [
@@ -122,7 +123,7 @@ const SimulationEngine: React.FC<SimulationEngineProps> = ({
     {
       label: 'Chain Value',
       value: formatCurrencyCompact(inventoryValue + transitValue, industryConfig),
-      sub: `${shipments.length} shipments`,
+      sub: `${networkShipments.length} shipments`,
       accent: 'text-white',
     },
     {

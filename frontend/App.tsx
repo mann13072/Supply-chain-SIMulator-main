@@ -3,6 +3,8 @@ import Globe from './components/Globe';
 import NetworkBuilder from './components/NetworkBuilder';
 import SimulationEngine from './components/SimulationEngine';
 import AnalyticsView from './components/AnalyticsView';
+import { MonteCarloRunner } from './components/MonteCarloPanel';
+import { runMonteCarlo } from './utils/monteCarlo';
 import SettingsView from './components/SettingsView';
 import OptimizationView from './components/OptimizationView';
 import { SupplyNode, NodeType, NodeStatus, Route, TransportMode, SimulationParams, InTransitShipment, HistorySnapshot, IndustryConfig, WorkflowState, BillOfMaterials, RouteIntelligenceState } from './types';
@@ -220,7 +222,12 @@ function computeNextSimulationState(
   // Subsidy reduces production cost
   const subsidyMult = Math.max(0, 1 - (params.subsidyLevel || 0) / 100);
 
-  const nextNodes = prevNodes.map(n => ({ ...n }));
+  // Copy material bins too — they are mutated below, and must not leak back into
+  // the previous state (reset snapshot, Monte Carlo start state).
+  const nextNodes = prevNodes.map(n => ({
+    ...n,
+    ...(n.materialInventory ? { materialInventory: { ...n.materialInventory } } : {}),
+  }));
   const newLogs: string[] = [];
   const nextShipments: InTransitShipment[] = [];
 
@@ -530,6 +537,12 @@ function computeNextSimulationState(
       const spaceAvailable = node.maxCapacity - node.inventoryLevel;
       const actualProduced = Math.min(netProduction, spaceAvailable);
 
+      // Status reflects material starvation: halted → WARNING, producing again → OPTIMAL
+      if (bomInputs.length > 0) {
+        if (materialCap === 0 && node.status === NodeStatus.OPTIMAL) node.status = NodeStatus.WARNING;
+        else if (actualProduced > 0 && node.status === NodeStatus.WARNING) node.status = NodeStatus.OPTIMAL;
+      }
+
       // BOM: consume input materials after production
       if (bomInputs.length > 0 && node.materialInventory && actualProduced > 0) {
         for (const input of bomInputs) {
@@ -632,15 +645,47 @@ function computeNextSimulationState(
         const onHand = node.materialInventory[input.childProductId] || 0;
         const dailyUsage = (node.productionCapacity || 100) * input.quantityPer;
         const bufferDays = 2;
-        const materialReorderPoint = dailyUsage * bufferDays;
-        if (onHand > materialReorderPoint) continue;
+        // Inventory position = on hand + already on the way, so we don't re-order every day of the lead time
+        const inTransit = nextShipments
+          .filter(s => s.toId === node.id && s.materialId === input.childProductId)
+          .reduce((sum, s) => sum + s.quantity, 0);
+        const position = onHand + inTransit;
+        const matProduct = bom.products.find(p => p.id === input.childProductId);
+        const matName = matProduct?.name || input.childProductId;
 
         // Find routes from suppliers that provide this specific material
         const materialRoutes = routes.filter(r => {
           const src = nextNodes.find(n => n.id === r.fromId);
           return r.toId === node.id && src?.bomProductId === input.childProductId;
         });
-        if (materialRoutes.length === 0) continue;
+
+        // No supplier node in the network provides this input: it is bought on the
+        // open market, arriving after the material's default lead time. Supplier
+        // nodes that exist but are offline/empty do NOT fall back to this — that
+        // is a real disruption the factory has to absorb.
+        if (materialRoutes.length === 0) {
+          const leadTimeDays = Math.max(1, matProduct?.defaultLeadTimeDays || 7);
+          if (position > dailyUsage * (leadTimeDays + bufferDays)) continue;
+          const orderQty = Math.ceil(dailyUsage * (leadTimeDays + 2 * bufferDays) - position);
+          if (orderQty <= 0) continue;
+          let delayDays = 0;
+          if (params.geopoliticalTension) delayDays += 5;
+          if (params.logisticDisruption) delayDays += 2;
+          if (params.weatherEvent) delayDays += 3;
+          if (Math.random() < params.portCongestionProb) delayDays += 3;
+          if (Math.random() < params.transportDelayProb) delayDays += 1;
+          const totalLeadTime = Math.max(1, leadTimeDays + delayDays);
+          nextShipments.push({
+            id: Math.random().toString(36).substr(2, 9),
+            toId: node.id,
+            quantity: orderQty,
+            remainingDays: totalLeadTime,
+            materialId: input.childProductId,
+            external: true,
+          });
+          newLogs.push(`Day ${nextDay}: ${node.name} bought ${orderQty} ${matName} on the open market (${totalLeadTime}d)`);
+          continue;
+        }
 
         // Select best route (prefer highest stock)
         const bestRoute = materialRoutes.reduce<Route | null>((best, r) => {
@@ -656,9 +701,12 @@ function computeNextSimulationState(
         const source = nextNodes.find(n => n.id === bestRoute.fromId);
         if (!source || source.status === NodeStatus.OFFLINE || source.inventoryLevel <= 0) continue;
 
-        // Order enough for leadTime + buffer days of production
+        // Reorder when the inventory position can't cover the lead time + buffer;
+        // order up to lead time + two buffers of production.
         const leadTimeDays = Math.max(1, bestRoute.baseLeadTime);
-        let orderQty = Math.ceil(dailyUsage * (leadTimeDays + bufferDays));
+        if (position > dailyUsage * (leadTimeDays + bufferDays)) continue;
+        let orderQty = Math.ceil(dailyUsage * (leadTimeDays + 2 * bufferDays) - position);
+        if (orderQty <= 0) continue;
         const moq = node.moq || 0;
         if (moq > 0 && orderQty < moq) orderQty = moq;
         const vCap = bestRoute.vehicleCapacity || 99999;
@@ -704,7 +752,6 @@ function computeNextSimulationState(
         });
         newShipmentsTotal++;
         if (delayDays > 0) newShipmentsDelayed++;
-        const matName = bom.products.find(p => p.id === input.childProductId)?.name || input.childProductId;
         newLogs.push(`Day ${nextDay}: ${source.name} → ${node.name} (${actualQty} ${matName}, ${totalLeadTime}d)`);
       }
     });
@@ -861,7 +908,10 @@ function computeNextSimulationState(
 
   // ── Step 6: Working capital cost ──────────────────────────────────────────
   const inventoryValue = nextNodes.reduce((s, n) => s + n.inventoryLevel * (n.accumulatedUnitCost || n.supplierCostPerUnit || 10), 0);
-  const transitValue = nextShipments.reduce((s, sh) => s + sh.quantity * (sh.unitCost || 10), 0);
+  // Open-market material deliveries (external) are outside the modeled network: not counted
+  // as network shipments, in-transit units, or in-transit value.
+  const networkShipments = nextShipments.filter(sh => !sh.external);
+  const transitValue = networkShipments.reduce((s, sh) => s + sh.quantity * (sh.unitCost || 10), 0);
   const wcRate = ((params.workingCapitalCost || 8) + (params.interestRateChange || 0)) / 100 / 365;
   const dailyWCCost = (inventoryValue + transitValue) * wcRate;
 
@@ -871,8 +921,8 @@ function computeNextSimulationState(
   const snapshot: HistorySnapshot = {
     day: nextDay,
     nodes: nextNodes.map(n => ({ id: n.id, inv: n.inventoryLevel, status: n.status })),
-    shipmentsInFlight: nextShipments.length,
-    unitsInFlight: nextShipments.reduce((sum, s) => sum + s.quantity, 0),
+    shipmentsInFlight: networkShipments.length,
+    unitsInFlight: networkShipments.reduce((sum, s) => sum + s.quantity, 0),
     demandTotal,
     demandFulfilled,
     newShipmentsTotal,
@@ -901,7 +951,7 @@ function computeNextSimulationState(
     }) : undefined,
     materialBottlenecks: materialBottlenecks.length > 0 ? materialBottlenecks : undefined,
     // Supply chain tier metrics
-    tierMetrics: computeTierMetrics(nextNodes, nextShipments, routes),
+    tierMetrics: computeTierMetrics(nextNodes, networkShipments, routes),
     tierAlerts: computeTierAlerts(nextNodes, routes),
   };
 
@@ -1263,6 +1313,27 @@ function AppContent() {
     }
   };
 
+  // Monte Carlo: replay the network many times from its starting state with the
+  // current settings (and any active route-intelligence events).
+  const runMonteCarloAnalysis = useCallback<MonteCarloRunner>(({ runs, days, onProgress, isCancelled }) => {
+    const activeEvents = routeIntelStateRef.current.events.filter(e => e.active);
+    const startNodes = preSimNodesRef.current ?? nodesRef.current;
+    return runMonteCarlo({
+      step: computeNextSimulationState,
+      startNodes,
+      routes: activeEvents.length > 0
+        ? applyEventEffectsToRoutes(routesRef.current, activeEvents, startNodes)
+        : routesRef.current,
+      params: paramsRef.current,
+      industryConfig: industryConfigRef.current,
+      bom: bomRef.current,
+      runs,
+      days,
+      onProgress,
+      isCancelled,
+    });
+  }, []);
+
   const handleWizardComplete = (config: IndustryConfig) => {
     setIndustryConfig(config);
     const starter = getStarterNetwork(config.id);
@@ -1376,7 +1447,7 @@ function AppContent() {
   const networkHealth = nodes.length === 0 ? 0 : Math.round(
     (nodes.filter(n => n.status === NodeStatus.OPTIMAL).length / nodes.length) * 100
   );
-  const activeShipments = shipments.length;
+  const activeShipments = shipments.filter(s => !s.external).length;
   const riskLevel = nodes.some(n => n.status === NodeStatus.CRITICAL) ? 'HIGH' :
                    nodes.some(n => n.status === NodeStatus.WARNING) ? 'MED' : 'LOW';
   const nodesAtRisk = nodes.filter(n => n.status === NodeStatus.CRITICAL || n.status === NodeStatus.WARNING).length;
@@ -1721,6 +1792,7 @@ function AppContent() {
               history={viewingRun ? viewingRun.history : history}
               nodes={viewingRun ? viewingRun.nodes_snapshot : nodes}
               industryConfig={industryConfig}
+              runMonteCarlo={viewingRun ? undefined : runMonteCarloAnalysis}
             />
           </div>
         );

@@ -286,6 +286,7 @@ export interface InTransitShipment {
   transportCost?: number;  // transport cost for this shipment
   unitCost?: number;       // accumulated cost per unit being shipped
   materialId?: string;     // BOM: which material this shipment carries
+  external?: boolean;      // BOM input bought outside the modeled network (no supplier node)
 }
 
 export interface HistorySnapshot {

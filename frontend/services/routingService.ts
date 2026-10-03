@@ -99,46 +99,6 @@ export const routingService = {
     }
   },
 
-  /**
-   * Fetches the current simulation state from the backend.
-   */
-  async getState(): Promise<{ nodes: any[], routes: any[] }> {
-    try {
-      const response = await fetch(`${API_BASE}/api/state`);
-      if (!response.ok) return { nodes: [], routes: [] };
-      return await response.json();
-    } catch (error) {
-      console.error('Get State Error:', error);
-      return { nodes: [], routes: [] };
-    }
-  },
-
-  /**
-   * Persists a new node to the Python engine.
-   */
-  async persistNode(node: { id: string, name: string, lat: number, lon: number, type: string, is_hub?: boolean }) {
-    try {
-      await fetch(`${API_BASE}/api/nodes`, {
-        method: 'POST',
-        headers: authHeaders(),
-        body: JSON.stringify(node)
-      });
-    } catch (e) { console.error('Persist Node Error', e); }
-  },
-
-  /**
-   * Persists a new route to the Python engine.
-   */
-  async persistRoute(u: string, v: string, mode: string) {
-    try {
-      await fetch(`${API_BASE}/api/routes`, {
-        method: 'POST',
-        headers: authHeaders(),
-        body: JSON.stringify({ u, v, mode })
-      });
-    } catch (e) { console.error('Persist Route Error', e); }
-  },
-
   // ── Port atlas search (14K+ UNLOCODE ports) ────────────────────────
 
   async searchPorts(query: string, type?: string, limit: number = 20): Promise<any[]> {

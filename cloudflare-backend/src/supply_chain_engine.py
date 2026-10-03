@@ -198,8 +198,6 @@ def seed_default_scenario(network: TransitNetwork) -> None:
     ]
     for u, v, m in solar_routes:
         network.add_route(u, v, m, persist=False)
-    
-    network.save_state()
 
 _GLOBAL_HUB_ATLAS = [
     # Air hubs
@@ -237,14 +235,9 @@ def seed_hub_atlas(network: TransitNetwork) -> None:
             network.add_node(hub_id, name, lat, lon, hub_type, is_hub=True, persist=False)
 
 def seed_prototype_data(network: TransitNetwork) -> None:
-    # 1. Saved simulation state (user nodes/routes)
-    state_exists = network.has_saved_state()
-    if state_exists:
-        network.load_state()
-
-    # 2. Seed default scenario if state is new/empty
-    if not state_exists or len(network._nodes) == 0:
-        seed_default_scenario(network)
+    # 1. The routing graph is shared by every user, so it is kept in memory only.
+    #    Saved topology (user nodes from older versions) is not loaded.
+    seed_default_scenario(network)
 
     # 3. Always seed the hub atlas so nearby-hub suggestions work
     seed_hub_atlas(network)
