@@ -19,7 +19,7 @@ import SimulationHistoryView from './components/SimulationHistoryView';
 import BOMView from './components/BOMView';
 import RouteIntelligenceView from './components/RouteIntelligenceView';
 import { applyEventEffectsToRoutes } from './utils/eventRouteMapper';
-import { LayoutDashboard, Network, PlayCircle, BarChart3, Settings, Zap, Activity, CheckCircle2, Circle, LogOut, Factory, Clock, Layers, Radar, Search } from 'lucide-react';
+import { LayoutDashboard, Network, PlayCircle, BarChart3, Settings, Zap, Activity, CheckCircle2, Circle, LogOut, LogIn, Factory, Clock, Layers, Radar, Search } from 'lucide-react';
 import { useAuth } from './contexts/AuthContext';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
@@ -1006,7 +1006,7 @@ function computeTierAlerts(
 
 // Auth gate — rendered by App, wraps AppContent when authenticated
 function App() {
-  const { user, isLoading } = useAuth();
+  const { user, isLoading, continueAsGuest } = useAuth();
   const [authPage, setAuthPage] = useState<'landing' | 'login' | 'register'>('landing');
   // When auth is disabled, the landing page is still the entry point — "Get Started"
   // takes the visitor straight into the app (no login). This flag tracks that.
@@ -1033,26 +1033,27 @@ function App() {
     return <AppContent />;
   }
 
-  // ── Auth enabled: Landing → Login/Register → App ──
+  // ── Auth enabled: Landing → Login/Register or Guest → App ──
   if (!user) {
     if (authPage === 'landing') {
       return (
         <LandingPage
           onGetStarted={() => setAuthPage('register')}
           onSignIn={() => setAuthPage('login')}
+          onContinueAsGuest={continueAsGuest}
         />
       );
     }
     return authPage === 'login'
-      ? <LoginPage onSwitchToRegister={() => setAuthPage('register')} />
-      : <RegisterPage onSwitchToLogin={() => setAuthPage('login')} />;
+      ? <LoginPage onSwitchToRegister={() => setAuthPage('register')} onContinueAsGuest={continueAsGuest} />
+      : <RegisterPage onSwitchToLogin={() => setAuthPage('login')} onContinueAsGuest={continueAsGuest} />;
   }
 
   return <AppContent />;
 }
 
 function AppContent() {
-  const { user, logout } = useAuth();
+  const { user, logout, isGuest } = useAuth();
   const [activeTab, setActiveTab] = useState('dashboard');
   const contentRef = useRef<HTMLDivElement>(null);
   const [nodes, setNodes] = useState<SupplyNode[]>(INITIAL_NODES);
@@ -1184,10 +1185,10 @@ function AppContent() {
   }, []);
 
   // Trigger save on any meaningful state change
-  useEffect(() => { if (user) debouncedSaveToDB(); }, [nodes]);
-  useEffect(() => { if (user) debouncedSaveToDB(); }, [routes]);
-  useEffect(() => { if (user) debouncedSaveToDB(); }, [industryConfig]);
-  useEffect(() => { if (user) debouncedSaveToDB(); }, [params]);
+  useEffect(() => { if (user && !isGuest) debouncedSaveToDB(); }, [nodes]);
+  useEffect(() => { if (user && !isGuest) debouncedSaveToDB(); }, [routes]);
+  useEffect(() => { if (user && !isGuest) debouncedSaveToDB(); }, [industryConfig]);
+  useEffect(() => { if (user && !isGuest) debouncedSaveToDB(); }, [params]);
   useEffect(() => { if (user) debouncedSaveToDB(); }, [lowStockThreshold]);
   useEffect(() => { if (user) debouncedSaveToDB(); }, [costVarianceThreshold]);
   // Save simulation progress when simulation stops or every 30 days
@@ -1287,9 +1288,9 @@ function AppContent() {
 
   useEffect(() => {
     const loadState = async () => {
-      // 1. Try user's saved network from the database first
+      // 1. Try user's saved network from the database first (guests have none)
       try {
-        const networks = await routingService.listNetworks();
+        const networks = isGuest ? [] : await routingService.listNetworks();
         if (networks.length > 0) {
           const latest = networks[0];
           const data = await routingService.loadNetwork(latest.id);
@@ -1355,7 +1356,7 @@ function AppContent() {
       // 2. Show industry wizard only for users who haven't completed it.
       //    With auth disabled (guest mode) nothing is persisted between sessions,
       //    so always onboard: entering via "Get Started" asks to pick a preset industry.
-      const wizardDone = !DISABLE_AUTH && user?.id && localStorage.getItem(`sc_wizard_done_${user.id}`);
+      const wizardDone = !DISABLE_AUTH && !isGuest && user?.id && localStorage.getItem(`sc_wizard_done_${user.id}`);
       if (!wizardDone) setShowWizard(true);
       initialLoadDone.current = true;
     };
@@ -1825,7 +1826,16 @@ function AppContent() {
                 history={history}
                 day={day}
               />
-              {!DISABLE_AUTH && (
+              {!DISABLE_AUTH && isGuest && (
+                <button
+                  onClick={logout}
+                  title="Sign in to save your work. This guest session will not be kept."
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white/70 hover:text-white border border-white/10 hover:border-white/30 rounded-lg transition-colors"
+                >
+                  <LogIn className="w-3.5 h-3.5" /> Guest · Sign in
+                </button>
+              )}
+              {!DISABLE_AUTH && !isGuest && (
                 <button
                   onClick={logout}
                   title="Sign out"

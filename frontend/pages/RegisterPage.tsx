@@ -4,9 +4,10 @@ import { useAuth } from '../contexts/AuthContext';
 
 interface Props {
   onSwitchToLogin: () => void;
+  onContinueAsGuest?: () => void;
 }
 
-const RegisterPage: React.FC<Props> = ({ onSwitchToLogin }) => {
+const RegisterPage: React.FC<Props> = ({ onSwitchToLogin, onContinueAsGuest }) => {
   const { register } = useAuth();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -142,6 +143,14 @@ const RegisterPage: React.FC<Props> = ({ onSwitchToLogin }) => {
               Sign in
             </button>
           </p>
+          {onContinueAsGuest && (
+            <p className="text-center text-white/30 text-sm mt-2">
+              or{' '}
+              <button onClick={onContinueAsGuest} className="text-white/70 hover:text-white font-medium transition-colors">
+                continue as guest
+              </button>
+            </p>
+          )}
         </div>
       </div>
     </div>

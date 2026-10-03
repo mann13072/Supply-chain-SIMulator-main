@@ -11,6 +11,8 @@ import {
 interface Props {
   onGetStarted: () => void;
   onSignIn: () => void;
+  /** When provided, shows "Continue as guest" buttons (no account, nothing saved). */
+  onContinueAsGuest?: () => void;
 }
 
 const FEATURES = [
@@ -218,7 +220,7 @@ function ProductPreview() {
   );
 }
 
-const LandingPage: React.FC<Props> = ({ onGetStarted, onSignIn }) => {
+const LandingPage: React.FC<Props> = ({ onGetStarted, onSignIn, onContinueAsGuest }) => {
   const [openFaq, setOpenFaq] = useState<number | null>(0);
 
   return (
@@ -294,6 +296,14 @@ const LandingPage: React.FC<Props> = ({ onGetStarted, onSignIn }) => {
               Get Started
               <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
             </button>
+            {onContinueAsGuest && (
+              <button
+                onClick={onContinueAsGuest}
+                className="inline-flex items-center gap-2 border border-white/15 text-white/80 font-medium rounded-xl px-6 py-3.5 text-sm hover:border-white/30 hover:text-white transition-colors"
+              >
+                Continue as guest
+              </button>
+            )}
             <a
               href="https://github.com/mann13072"
               target="_blank" rel="noopener noreferrer"
@@ -525,6 +535,15 @@ const LandingPage: React.FC<Props> = ({ onGetStarted, onSignIn }) => {
               Get Started — it's free
               <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
             </button>
+            {onContinueAsGuest && (
+              <p className="mt-5 text-sm text-white/40">
+                Just looking?{' '}
+                <button onClick={onContinueAsGuest} className="text-white/80 hover:text-white font-medium transition-colors">
+                  Continue as guest
+                </button>
+                {' '}— nothing is saved.
+              </p>
+            )}
           </motion.div>
         </section>
 

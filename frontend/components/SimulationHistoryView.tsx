@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { SimulationRunSummary, SimulationRunDetail, HistorySnapshot, IndustryConfig } from '../types';
 import { routingService } from '../services/routingService';
 import { formatCurrencyCompact } from '../utils/formatting';
+import { useAuth } from '../contexts/AuthContext';
 
 interface SimulationHistoryViewProps {
   industryConfig: IndustryConfig;
@@ -19,7 +20,10 @@ const SimulationHistoryView: React.FC<SimulationHistoryViewProps> = ({ industryC
   const [loadingRunId, setLoadingRunId] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
+  const { isGuest } = useAuth();
+
   useEffect(() => {
+    if (isGuest) { setLoading(false); return; }
     fetchRuns();
   }, []);
 
@@ -73,6 +77,20 @@ const SimulationHistoryView: React.FC<SimulationHistoryViewProps> = ({ industryC
     r.name.toLowerCase().includes(search.toLowerCase()) ||
     (r.description || '').toLowerCase().includes(search.toLowerCase())
   );
+
+  if (isGuest) {
+    return (
+      <div className="p-8 bg-white/5 rounded-3xl border border-white/10">
+        <h2 className="text-2xl font-bold text-white flex items-center gap-3">
+          <Clock className="w-7 h-7 text-white/30" />
+          Simulation History
+        </h2>
+        <p className="mt-3 text-white/60">
+          Saved runs need a free account. Use "Guest · Sign in" at the top to create one. Your current guest session won't be kept.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
