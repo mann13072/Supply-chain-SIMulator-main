@@ -13,17 +13,25 @@ interface AuthContextValue {
   user: AuthUser | null;
   token: string | null;
   isLoading: boolean;
+  /** True when the visitor chose "Continue as guest" — nothing is saved to the cloud. */
+  isGuest: boolean;
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string, name?: string) => Promise<void>;
+  continueAsGuest: () => void;
   logout: () => void;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
+// Guest choice lasts for the browser tab (survives refresh, not a new tab).
+const GUEST_KEY = 'sc_guest';
+const GUEST_USER: AuthUser = { id: 'guest', email: 'guest@localhost', name: 'Guest' };
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isGuest, setIsGuest] = useState(false);
 
   // When auth is disabled (see config.ts), skip login entirely and use a guest user.
   // Otherwise, restore any existing session from localStorage.
@@ -44,11 +52,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         localStorage.removeItem('sc_token');
         localStorage.removeItem('sc_user');
       }
+    } else if (sessionStorage.getItem(GUEST_KEY)) {
+      setUser(GUEST_USER);
+      setIsGuest(true);
     }
     setIsLoading(false);
   }, []);
 
   const persistSession = (newToken: string, newUser: AuthUser) => {
+    sessionStorage.removeItem(GUEST_KEY);
+    setIsGuest(false);
     localStorage.setItem('sc_token', newToken);
     localStorage.setItem('sc_user', JSON.stringify(newUser));
     setToken(newToken);
@@ -83,7 +96,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     persistSession(data.access_token, data.user);
   }, []);
 
+  const continueAsGuest = useCallback(() => {
+    sessionStorage.setItem(GUEST_KEY, '1');
+    setUser(GUEST_USER);
+    setIsGuest(true);
+  }, []);
+
   const logout = useCallback(() => {
+    if (sessionStorage.getItem(GUEST_KEY)) {
+      // Leaving guest mode always works, including in dev.
+      sessionStorage.removeItem(GUEST_KEY);
+      setIsGuest(false);
+      setUser(null);
+      return;
+    }
     if (import.meta.env.DEV) return; // no-op in dev mode
     localStorage.removeItem('sc_token');
     localStorage.removeItem('sc_user');
@@ -92,7 +118,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, token, isLoading, login, register, logout }}>
+    <AuthContext.Provider value={{ user, token, isLoading, isGuest, login, register, continueAsGuest, logout }}>
       {children}
     </AuthContext.Provider>
   );

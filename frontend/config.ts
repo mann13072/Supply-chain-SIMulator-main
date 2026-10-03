@@ -8,8 +8,9 @@
  *   true  → login is DISABLED. Visitors go straight into the app as a guest.
  *           The landing, login, and register pages are never shown.
  *
- *   false → login is REQUIRED. Visitors see the landing page first, then must
- *           sign in or create an account before reaching the app.
+ *   false → login is OPTIONAL. Visitors see the landing page first, then
+ *           choose: sign in / create an account (work is saved to the cloud),
+ *           or continue as a guest (nothing is saved).
  *
  * Flip this one value to add or remove the login page whenever you need it.
  */

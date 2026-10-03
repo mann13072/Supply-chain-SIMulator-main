@@ -5,6 +5,7 @@ import { SupplyNode, Route, NodeStatus, NodeType, InTransitShipment, SimulationP
 import SimulationPanel from './SimulationPanel';
 import { formatCurrencyCompact } from '../utils/formatting';
 import { routingService } from '../services/routingService';
+import { useAuth } from '../contexts/AuthContext';
 
 interface SimulationEngineProps {
   nodes: SupplyNode[];
@@ -28,6 +29,7 @@ const SimulationEngine: React.FC<SimulationEngineProps> = ({
   nodes, routes, day, isPlaying, setIsPlaying, speed, setSpeed, logs, shipments, resetSimulation,
   params, setParams, industryConfig, history
 }) => {
+  const { isGuest } = useAuth();
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [saveName, setSaveName] = useState('');
@@ -368,6 +370,11 @@ const SimulationEngine: React.FC<SimulationEngineProps> = ({
                   Save Simulation Run
                 </h3>
                 <p className="text-white/35 text-xs mt-1">Day {day} &middot; {history.length} snapshots &middot; {nodes.length} nodes</p>
+                {isGuest && (
+                  <p className="mt-3 px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs">
+                    Guests can't save runs. Use "Guest · Sign in" at the top to create a free account; this guest session won't be kept.
+                  </p>
+                )}
               </div>
 
               <div className="px-5 pb-4 space-y-3">
@@ -417,7 +424,7 @@ const SimulationEngine: React.FC<SimulationEngineProps> = ({
                 </button>
                 <button
                   onClick={handleSaveRun}
-                  disabled={!saveName.trim() || isSaving}
+                  disabled={isGuest || !saveName.trim() || isSaving}
                   className="flex-1 py-2.5 rounded-xl text-sm font-semibold bg-emerald-500 hover:bg-emerald-600 text-white transition-all flex items-center justify-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   {isSaving ? (

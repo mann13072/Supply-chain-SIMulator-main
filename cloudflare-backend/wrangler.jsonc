@@ -1,0 +1,20 @@
+{
+  "name": "solarchain-backend",
+  "main": "src/worker.py",
+  "base_dir": "src",
+  "account_id": "0a8098bbc00985e82e02496241ad9b60",
+  "compatibility_date": "2026-10-02",
+  "compatibility_flags": ["python_workers"],
+  "workers_dev": true,
+  "vars": {
+    "ALLOWED_ORIGINS": "https://supply-chain-si-mulator-main.vercel.app,http://localhost:3000,http://localhost:5173"
+  },
+  "durable_objects": {
+    "bindings": [{"name": "BACKEND", "class_name": "SupplyChainBackend"}]
+  },
+  "migrations": [{"tag": "v1", "new_sqlite_classes": ["SupplyChainBackend"]}],
+  "rules": [
+    {"type": "Data", "globs": ["ports_atlas.json"], "fallthrough": false},
+    {"type": "Text", "globs": ["__no_text_modules__"], "fallthrough": false}
+  ]
+}
