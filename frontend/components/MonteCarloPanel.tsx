@@ -1,8 +1,8 @@
 import React, { useRef, useState } from 'react';
 import { Dices, Loader2, X } from 'lucide-react';
-import { ResponsiveContainer, ComposedChart, Area, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
+import { ResponsiveContainer, ComposedChart, Area, AreaChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine } from 'recharts';
 import { IndustryConfig } from '../types';
-import { MonteCarloResult, MetricKey } from '../utils/monteCarlo';
+import { MonteCarloResult, MetricKey, Percentiles } from '../utils/monteCarlo';
 import { formatCurrencyCompact } from '../utils/formatting';
 
 export type MonteCarloRunner = (opts: {
@@ -43,6 +43,75 @@ function histogram(values: number[], bins = 20) {
   values.forEach(v => { counts[Math.min(bins - 1, Math.floor((v - min) / width))]++; });
   return counts.map((count, i) => ({ x: min + width * (i + 0.5), count }));
 }
+
+// Key KPIs shown as distribution curves, with natural bounds so the curve isn't drawn past e.g. 100%.
+const CURVE_METRICS: { key: MetricKey; bounds: [number, number] }[] = [
+  { key: 'fillRate',     bounds: [0, 100] },
+  { key: 'netProfit',    bounds: [-Infinity, Infinity] },
+  { key: 'totalCost',    bounds: [0, Infinity] },
+  { key: 'stockoutDays', bounds: [0, Infinity] },
+];
+
+/** Smoothed distribution of the actual runs (Gaussian kernel density, Silverman bandwidth). Null when every run is identical. */
+function densityCurve(values: number[], bounds: [number, number], points = 80) {
+  const n = values.length;
+  const mean = values.reduce((a, b) => a + b, 0) / n;
+  const std = Math.sqrt(values.reduce((a, v) => a + (v - mean) ** 2, 0) / Math.max(1, n - 1));
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  if (std === 0 || max === min) return null;
+  const h = 1.06 * std * Math.pow(n, -0.2);
+  const lo = Math.max(bounds[0], min - 3 * h);
+  const hi = Math.min(bounds[1], max + 3 * h);
+  const norm = 1 / (n * h * Math.sqrt(2 * Math.PI));
+  return Array.from({ length: points }, (_, i) => {
+    const x = lo + ((hi - lo) * i) / (points - 1);
+    const density = values.reduce((a, v) => a + Math.exp(-0.5 * ((x - v) / h) ** 2), 0) * norm;
+    return { x, density };
+  });
+}
+
+const DistributionCurve: React.FC<{
+  label: string;
+  values: number[];
+  stats: Percentiles;
+  bounds: [number, number];
+  format: (v: number) => string;
+}> = ({ label, values, stats, bounds, format }) => {
+  const curve = densityCurve(values, bounds);
+  return (
+    <div className="bg-white/5 p-5 rounded-3xl border border-white/5">
+      <div className="flex items-baseline justify-between gap-2 mb-1">
+        <p className="text-white font-semibold text-sm">{label}</p>
+        <p className="text-xs text-white/50 tabular-nums">median {format(stats.p50)}</p>
+      </div>
+      <p className="text-[10px] text-white/30 uppercase tracking-widest mb-3 tabular-nums">
+        P10 {format(stats.p10)} · P90 {format(stats.p90)}
+      </p>
+      <div className="h-40 w-full">
+        {curve ? (
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={curve} margin={{ top: 5, right: 10, left: 10, bottom: 0 }}>
+              <XAxis dataKey="x" type="number" domain={['dataMin', 'dataMax']} {...AXIS_PROPS}
+                tickCount={4} tickFormatter={v => format(v)} />
+              <YAxis hide domain={[0, 'dataMax']} />
+              <ReferenceLine x={stats.p10} stroke="#ec4899" strokeOpacity={0.7} />
+              <ReferenceLine x={stats.p90} stroke="#ec4899" strokeOpacity={0.7} />
+              <ReferenceLine x={stats.p50} stroke="#ffffff" strokeOpacity={0.6} strokeDasharray="4 3" />
+              <Tooltip contentStyle={CHART_STYLE} labelFormatter={v => format(Number(v))}
+                formatter={(v: any) => [`${(Number(v) * 100 / curve.reduce((m, p) => Math.max(m, p.density), 0)).toFixed(0)}% of peak`, 'Likelihood']} />
+              <Area type="monotone" dataKey="density" stroke="#ec4899" strokeWidth={2} fill="#ec4899" fillOpacity={0.25} isAnimationActive={false} />
+            </AreaChart>
+          </ResponsiveContainer>
+        ) : (
+          <div className="h-full flex items-center justify-center text-xs text-white/30">
+            All runs gave {format(stats.p50)}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
 
 const MonteCarloPanel: React.FC<Props> = ({ run, industryConfig }) => {
   const [runs, setRuns] = useState(100);
@@ -168,6 +237,29 @@ const MonteCarloPanel: React.FC<Props> = ({ run, industryConfig }) => {
                 {(result.stockoutProbability * 100).toFixed(0)}% of runs
               </span> had at least one stockout day.
             </p>
+          </div>
+
+          {/* KPI distribution (bell) curves */}
+          <div>
+            <p className="text-white font-semibold text-sm mb-1">Key KPI distribution curves</p>
+            <p className="text-[10px] text-white/30 uppercase tracking-widest mb-4">
+              Smoothed from the {result.runs} runs · pink lines = P10 and P90 · dashed line = median · taller = more likely
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {CURVE_METRICS.map(({ key, bounds }) => {
+                const meta = METRICS.find(m => m.key === key)!;
+                return (
+                  <DistributionCurve
+                    key={key}
+                    label={meta.label}
+                    values={result.metrics.map(m => m[key])}
+                    stats={result.summary[key]}
+                    bounds={bounds}
+                    format={v => meta.format(v, industryConfig)}
+                  />
+                );
+              })}
+            </div>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
